@@ -1,7 +1,7 @@
 use std::error::Error;
-use byte_unit::Byte;
 use clap::Parser;
 use fs_bench::BenchMode;
+use fs_bench::data_logger::DataLogger;
 use fs_bench::micro::MicroBench;
 
 /// A library for benchmarking filesystem operations
@@ -22,16 +22,29 @@ struct Args {
     size: String,
 
     /// Number of iterations to repeat the operations
-    #[clap(short, long, required_if("benchmark", "behaviour"))] // this argument is required if benchmark = behaviour
-    iterations: Option<u64>
+    #[clap(short, long, required_if_eq("benchmark", "behaviour"))] // this argument is required if benchmark = behaviour
+    iterations: Option<u64>,
+
+    /// The path to the mounted filesystem being benchmarked
+    #[clap(short, long)]
+    mount: String,
+
+    /// Filesystem name that is being benchmarked
+    #[clap(short, long)]
+    fs_name: String,
+
+    /// The path to store benchmark results
+    #[clap(short, long)]
+    log_path: String,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let opt = Args::from_args();
+    let args = Args::parse();
 
-    let micro_bench = MicroBench::new(opt.benchmark, opt.runtime, opt.size, opt.iterations)?;
+    let data_logger = DataLogger::new(args.fs_name, args.log_path)?;
+    let micro_bench = MicroBench::new(args.benchmark, args.runtime, args.size, args.iterations, args.mount, data_logger)?;
 
-    println!("micro_bench: {:?}", micro_bench);
+    micro_bench.run()?;
 
     Ok(())
 }
