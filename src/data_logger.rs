@@ -24,7 +24,7 @@ impl DataLogger {
         let log_file_name = format!("{}/{}_{}.csv", self.log_path, self.fs_name, bench);
         let log_path = Path::new(&log_file_name);
         if log_path.exists() {
-            println!("file {} exist, removing...", log_file_name);
+            // println!("file {} exist, removing...", log_file_name);
             remove_file(log_path).expect("removing the existing log file failed");
         }
 
