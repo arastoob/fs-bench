@@ -40,6 +40,8 @@ pub enum Error {
 
     PlottersError(String),
 
+    CsvError(String),
+
     Unknown(String),
 }
 
@@ -101,6 +103,12 @@ impl From<byte_unit::ByteError> for Error {
     }
 }
 
+impl From<csv::Error> for Error {
+    fn from(err: csv::Error) -> Self {
+        Error::CsvError(err.to_string())
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -120,6 +128,7 @@ impl fmt::Display for Error {
             &Error::ObjNotDirectory => write!(f, "Object is not of type Directory"),
             &Error::ObjNotFile => write!(f, "Object is not of type File"),
             &Error::PlottersError(ref detail) => write!(f, "Plotters error: {}", detail),
+            &Error::CsvError(ref detail) => write!(f, "Csv error: {}", detail),
             &Error::Unknown(ref detail) => write!(f, "Unknown error: {}", detail),
         }
     }
