@@ -1,11 +1,10 @@
 use std::path::Path;
 use byte_unit::Byte;
-use crate::{BenchMode, Error, make_dir, make_file};
+use crate::{BenchMode, BenchResult, Record, Error, make_dir, make_file};
 use crate::data_logger::DataLogger;
 use std::fs::remove_dir_all;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug)]
 pub struct MicroBench {
@@ -17,27 +16,14 @@ pub struct MicroBench {
     logger: DataLogger
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct OpsPerSecondResult {
-    pub runtime: u16,
-    pub ops: u64,
-    pub ops_per_second: f64
-}
 
-impl OpsPerSecondResult {
-    pub fn new(runtime: u16, ops: u64, ops_per_second: f64) -> Self {
-        Self {
-            runtime,
-            ops,
-            ops_per_second
-        }
-    }
-}
 
 impl MicroBench {
-    pub fn new(mode: BenchMode, runtime: u16, io_size: String, iteration: Option<u64>, mount_path: String, logger: DataLogger) -> Result<Self, Error> {
+    pub fn new(mode: BenchMode, runtime: u16, io_size: String, iteration: Option<u64>, mount_path: String, fs_name: String, log_path: String) -> Result<Self, Error> {
         let io_size = Byte::from_str(io_size)?;
         let io_size = io_size.get_bytes() as usize;
+
+        let logger = DataLogger::new(fs_name, log_path)?;
 
         Ok(Self {
             mode,
@@ -53,13 +39,15 @@ impl MicroBench {
 
         match self.mode {
             BenchMode::OpsPerSecond => {
-                let mkdir_results = self.mkdir()?;
-                let mkdir_log_path = self.logger.log("mkdir", mkdir_results)?;
-                println!("results logged to {}\n", mkdir_log_path);
+                let header = ["operation".to_string(), "runtime".to_string(), "ops/s".to_string()].to_vec();
+                let mut results = BenchResult::new(header);
 
-                let mknod_results = self.mknod()?;
-                let mknod_log_path = self.logger.log("mknod", mknod_results)?;
-                println!("results logged to {}\n", mknod_log_path);
+                results.add_record(self.mkdir()?)?;
+                results.add_record(self.mknod()?)?;
+
+                let log_file_name = self.logger.log(results)?;
+
+                println!("results logged to {}\n", log_file_name);
             },
             BenchMode::Throughput => {}
             BenchMode::Behaviour => {}
@@ -69,7 +57,7 @@ impl MicroBench {
     }
 
 
-    fn mkdir(&self) -> Result<OpsPerSecondResult, Error> {
+    fn mkdir(&self) -> Result<Record, Error> {
         println!("mkdir benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "mkdir");
@@ -118,14 +106,17 @@ impl MicroBench {
         let count_result = *count.lock().unwrap();
 
         println!("{:?} mkdir ops in {} seconds", count_result, self.runtime);
-        println!("ops/s: {:?}", count_result / self.runtime);
+        println!("ops/s: {:?}\n", count_result / self.runtime);
 
-        let results = OpsPerSecondResult::new(self.runtime, count_result as u64, (count_result / self.runtime) as f64);
-        Ok(results)
+        let record = Record {
+            fields: ["mkdir".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
+        };
+
+        Ok(record)
     }
 
 
-    fn mknod(&self) -> Result<OpsPerSecondResult, Error> {
+    fn mknod(&self) -> Result<Record, Error> {
         println!("mknod benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "mknod");
@@ -174,9 +165,12 @@ impl MicroBench {
         let count_result = *count.lock().unwrap();
 
         println!("{:?} mknod ops in {} seconds", count_result, self.runtime);
-        println!("ops/s: {:?}", count_result / self.runtime);
+        println!("ops/s: {:?}\n", count_result / self.runtime);
 
-        let results = OpsPerSecondResult::new(self.runtime, count_result as u64, (count_result / self.runtime) as f64);
-        Ok(results)
+        let record = Record {
+            fields: ["mknod".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
+        };
+
+        Ok(record)
     }
 }

@@ -1,7 +1,6 @@
 use std::error::Error;
 use clap::Parser;
 use fs_bench::BenchMode;
-use fs_bench::data_logger::DataLogger;
 use fs_bench::micro::MicroBench;
 
 /// A library for benchmarking filesystem operations
@@ -41,8 +40,7 @@ struct Args {
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    let data_logger = DataLogger::new(args.fs_name, args.log_path)?;
-    let micro_bench = MicroBench::new(args.benchmark, args.runtime, args.size, args.iterations, args.mount, data_logger)?;
+    let micro_bench = MicroBench::new(args.benchmark, args.runtime, args.size, args.iterations, args.mount, args.fs_name, args.log_path)?;
 
     micro_bench.run()?;
 
