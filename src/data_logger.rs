@@ -1,7 +1,6 @@
 use std::fs::{OpenOptions, remove_file};
 use std::path::Path;
-use crate::Error;
-use crate::micro::OpsPerSecondResult;
+use crate::{BenchResult, Error};
 
 #[derive(Debug)]
 pub struct DataLogger {
@@ -15,26 +14,29 @@ impl DataLogger {
         let (log_path, _) = log_path.rsplit_once("/").unwrap(); // remove / at the end
         Ok(Self {
             fs_name,
-            log_path: log_path.to_string()
+            log_path: log_path.to_string(),
         })
     }
 
-    pub fn log(&self, bench: &str, results: OpsPerSecondResult) -> Result<String, Error> {
+    pub fn log(&self, results: BenchResult) -> Result<String, Error> {
         // remove the log file if exist
-        let log_file_name = format!("{}/{}_{}.csv", self.log_path, self.fs_name, bench);
+        let log_file_name = format!("{}/{}_bench.csv", self.log_path, self.fs_name);
         let log_path = Path::new(&log_file_name);
         if log_path.exists() {
             remove_file(log_path).expect("removing the existing log file failed");
         }
 
-        let mut file = OpenOptions::new()
+        let file = OpenOptions::new()
             .create(true)
             .write(true)
             .append(true)
             .open(log_path)?;
 
         let mut writer = csv::Writer::from_writer(file);
-        writer.serialize(results)?;
+        writer.write_record(results.header)?;
+        for record in results.records {
+            writer.write_record(record.fields)?;
+        }
 
         writer.flush()?;
 

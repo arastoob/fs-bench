@@ -32,6 +32,35 @@ impl FromStr for BenchMode {
     }
 }
 
+#[derive(Debug)]
+pub struct BenchResult {
+    pub header: Vec<String>,
+    pub records: Vec<Record>
+}
+
+impl BenchResult {
+    pub fn new(header: Vec<String>) -> Self {
+        BenchResult {
+            header,
+            records: vec![]
+        }
+    }
+
+    pub fn add_record(&mut self, record: Record) -> Result<(), Error> {
+        if record.fields.len() != self.header.len() {
+            return Err(Error::Unknown("the record and header should be of the same length".to_string()));
+        }
+        self.records.push(record);
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct Record {
+    pub fields: Vec<String>
+}
+
 pub fn make_dir(dir: &str) -> Result<(), Error> {
     let path = Path::new(&dir);
 
