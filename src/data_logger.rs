@@ -23,7 +23,7 @@ impl DataLogger {
         let log_file_name = format!("{}/{}_{}.csv", self.log_path, self.fs_name, bench_name);
         let log_path = Path::new(&log_file_name);
         if log_path.exists() {
-            remove_file(log_path).expect("removing the existing log file failed");
+            remove_file(log_path)?;
         }
 
         let file = OpenOptions::new()
