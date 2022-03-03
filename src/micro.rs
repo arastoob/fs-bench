@@ -6,7 +6,9 @@ use std::fs::remove_dir_all;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 use rand::{thread_rng, Rng, RngCore};
+use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(Debug)]
 pub struct MicroBench {
@@ -41,9 +43,6 @@ impl MicroBench {
 
         match self.mode {
             BenchMode::OpsPerSecond => {
-                // remove the existing files/directories from the previous runs
-                self.cleanup()?;
-
                 let header = ["operation".to_string(), "runtime(s)".to_string(), "ops/s".to_string()].to_vec();
                 let mut results = BenchResult::new(header);
 
@@ -53,7 +52,6 @@ impl MicroBench {
                 results.add_record(self.write()?)?;
 
                 let log_file_name = self.logger.log(results, "ops_s")?;
-
                 println!("results logged to {}\n", log_file_name);
             },
             BenchMode::Throughput => {}
@@ -65,7 +63,8 @@ impl MicroBench {
 
 
     fn mkdir(&self) -> Result<Record, Error> {
-        println!("mkdir benchmark...");
+        self.cleanup("mkdir")?;
+        // println!("mkdir benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "mkdir");
 
@@ -88,7 +87,6 @@ impl MicroBench {
                     Ok(()) => {
                         *count.lock().unwrap() += 1;
                         dir = dir + 1;
-                        //let path = Path::new(&dir_name);
                     }
                     Err(e) => {
                         println!("error: {:?}", e);
@@ -97,16 +95,24 @@ impl MicroBench {
             })
         };
 
-        // Sleep running_time seconds
-        thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
+        let bar = ProgressBar::new((self.runtime as u64) * 10);
+        bar.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] mkdir {bar:40.cyan/blue} {spinner}")
+            .progress_chars("##-"));
+
+        for _ in 0..(self.runtime as u64) * 10 {
+            bar.inc(1);
+            thread::sleep(Duration::from_millis(100));
+        }
+        bar.finish();
 
         // Now drop the guard. This should stop the timer.
         drop(guard);
 
         let count_result = *count.lock().unwrap();
 
-        println!("{:?} mkdir ops in {} seconds", count_result, self.runtime);
-        println!("ops/s: {:?}\n", count_result / self.runtime);
+        // println!("{:?} mkdir ops in {} seconds", count_result, self.runtime);
+        // println!("ops/s: {:?}\n", count_result / self.runtime);
 
         let record = Record {
             fields: ["mkdir".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
@@ -116,7 +122,8 @@ impl MicroBench {
     }
 
     fn mknod(&self) -> Result<Record, Error> {
-        println!("mknod benchmark...");
+        self.cleanup("mknod")?;
+        // println!("mknod benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "mknod");
 
@@ -149,15 +156,25 @@ impl MicroBench {
         };
 
         // Sleep running_time seconds
-        thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
+        // thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
+        let bar = ProgressBar::new((self.runtime as u64) * 10);
+        bar.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] mknod {bar:40.cyan/blue} {spinner}")
+            .progress_chars("##-"));
+
+        for _ in 0..(self.runtime as u64) * 10 {
+            bar.inc(1);
+            thread::sleep(Duration::from_millis(100));
+        }
+        bar.finish();
 
         // Now drop the guard. This should stop the timer.
         drop(guard);
 
         let count_result = *count.lock().unwrap();
 
-        println!("{:?} mknod ops in {} seconds", count_result, self.runtime);
-        println!("ops/s: {:?}\n", count_result / self.runtime);
+        // println!("{:?} mknod ops in {} seconds", count_result, self.runtime);
+        // println!("ops/s: {:?}\n", count_result / self.runtime);
 
         let record = Record {
             fields: ["mknod".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
@@ -167,14 +184,15 @@ impl MicroBench {
     }
 
     fn read(&self) -> Result<Record, Error> {
-        println!("read benchmark...");
+        self.cleanup("read")?;
+        // println!("read benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "read");
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
 
-        println!("pre-allocating...");
+        // println!("pre-allocating...");
         let size = self.io_size;
         for file in 1..1001 {
             let file_name = format!("{}/{}", root_path, file);
@@ -213,15 +231,25 @@ impl MicroBench {
         };
 
         // Sleep running_time seconds
-        thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
+        // thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
+        let bar = ProgressBar::new((self.runtime as u64) * 10);
+        bar.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] read  {bar:40.cyan/blue} {spinner}")
+            .progress_chars("##-"));
+
+        for _ in 0..(self.runtime as u64) * 10 {
+            bar.inc(1);
+            thread::sleep(Duration::from_millis(100));
+        }
+        bar.finish();
 
         // Now drop the guard. This should stop the timer.
         drop(guard);
 
         let count_result = *count.lock().unwrap();
 
-        println!("{:?} read ops in {} seconds", count_result, self.runtime);
-        println!("ops/s: {:?}\n", count_result / self.runtime);
+        // println!("{:?} read ops in {} seconds", count_result, self.runtime);
+        // println!("ops/s: {:?}\n", count_result / self.runtime);
 
         let record = Record {
             fields: ["read".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
@@ -231,14 +259,15 @@ impl MicroBench {
     }
 
     fn write(&self) -> Result<Record, Error> {
-        println!("write benchmark...");
+        self.cleanup("write")?;
+        // println!("write benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "write");
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
 
-        println!("pre-allocation...");
+        // println!("pre-allocation...");
         for file in 1..1001 {
             let file_name = format!("{}/{}", root_path, file);
             make_file(&file_name).expect("pre-allocation failed.");
@@ -279,15 +308,25 @@ impl MicroBench {
         };
 
         // Sleep running_time seconds
-        thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
+        // thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
+        let bar = ProgressBar::new((self.runtime as u64) * 10);
+        bar.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] write {bar:40.cyan/blue} {spinner}")
+            .progress_chars("##-"));
+
+        for _ in 0..(self.runtime as u64) * 10 {
+            bar.inc(1);
+            thread::sleep(Duration::from_millis(100));
+        }
+        bar.finish();
 
         // Now drop the guard. This should stop the timer.
         drop(guard);
 
         let count_result = *count.lock().unwrap();
 
-        println!("{:?} write ops in {} seconds", count_result, self.runtime);
-        println!("ops/s: {:?}\n", count_result / self.runtime);
+        // println!("{:?} write ops in {} seconds", count_result, self.runtime);
+        // println!("ops/s: {:?}\n", count_result / self.runtime);
 
         let record = Record {
             fields: ["write".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
@@ -296,32 +335,14 @@ impl MicroBench {
         Ok(record)
     }
 
-    fn cleanup(&self) -> Result<(), Error> {
-        println!("cleanup...");
+    fn cleanup(&self, bench_name: &str) -> Result<(), Error> {
+        println!("cleaning up...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
 
-        let mkdir_path = format!("{}/{}", mount_path, "mkdir");
-        let mkdir_path = Path::new(&mkdir_path);
-        if mkdir_path.exists() {
-            remove_dir_all(mkdir_path)?;
-        }
-
-        let mknod_path = format!("{}/{}", mount_path, "mknod");
-        let mknod_path = Path::new(&mknod_path);
-        if mknod_path.exists() {
-            remove_dir_all(mknod_path)?;
-        }
-
-        let read_path = format!("{}/{}", mount_path, "read");
-        let read_path = Path::new(&read_path);
-        if read_path.exists() {
-            remove_dir_all(read_path)?;
-        }
-
-        let write_path = format!("{}/{}", mount_path, "write");
-        let write_path = Path::new(&write_path);
-        if write_path.exists() {
-            remove_dir_all(write_path)?;
+        let path = format!("{}/{}", mount_path, bench_name);
+        let path = Path::new(&path);
+        if path.exists() {
+            remove_dir_all(path)?;
         }
 
         Ok(())
