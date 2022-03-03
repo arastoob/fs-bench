@@ -18,9 +18,9 @@ impl DataLogger {
         })
     }
 
-    pub fn log(&self, results: BenchResult) -> Result<String, Error> {
+    pub fn log(&self, results: BenchResult, bench_name: &str) -> Result<String, Error> {
         // remove the log file if exist
-        let log_file_name = format!("{}/{}_bench.csv", self.log_path, self.fs_name);
+        let log_file_name = format!("{}/{}_{}.csv", self.log_path, self.fs_name, bench_name);
         let log_path = Path::new(&log_file_name);
         if log_path.exists() {
             remove_file(log_path).expect("removing the existing log file failed");

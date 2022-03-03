@@ -52,7 +52,7 @@ impl MicroBench {
                 results.add_record(self.read()?)?;
                 results.add_record(self.write()?)?;
 
-                let log_file_name = self.logger.log(results)?;
+                let log_file_name = self.logger.log(results, "ops_s")?;
 
                 println!("results logged to {}\n", log_file_name);
             },
