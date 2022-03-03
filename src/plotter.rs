@@ -5,13 +5,13 @@ use plotters::prelude::*;
 use crate::Error;
 
 pub struct Plotter {
-    x_axis: Vec<f64>,
+    x_axis: Vec<String>,
     y_axis: Vec<f64>,
     path: PathBuf
 }
 
 impl Plotter {
-    pub fn new(x_axis: Vec<f64>, y_axis: Vec<f64>, path: PathBuf) -> Result<Self, Error> {
+    pub fn new(x_axis: Vec<String>, y_axis: Vec<f64>, path: PathBuf) -> Result<Self, Error> {
 
         if x_axis.len() != y_axis.len() {
             return Err(Error::InvalidConfig("The X and Y axes should be of the same size".to_string()));
@@ -31,7 +31,7 @@ impl Plotter {
 
         let mut points = vec![];
         for i in 0..self.x_axis.len() {
-            points.push((self.x_axis[i], self.y_axis[i]));
+            points.push((self.x_axis[i].clone(), self.y_axis[i]));
         }
 
         let custom_x_axes = CustomXAxis::new(self.x_axis.clone());
@@ -52,7 +52,7 @@ impl Plotter {
 
         ctx.draw_series(
             LineSeries::new(
-                points.iter().map(|(x, y)| (*x, *y)), // The data iter
+                points.iter().map(|(x, y)| (x.clone(), *y)), // The data iter
                 &BLACK,
             )
         )?;
@@ -62,36 +62,36 @@ impl Plotter {
             filled: true,
             stroke_width: 1
         };
-        ctx.draw_series(points.iter().map(|point| Circle::new(*point, 3, style.clone())))?;
+        ctx.draw_series(points.iter().map(|(x, y)| Circle::new((x.clone(), *y), 3, style.clone())))?;
 
         Ok(())
     }
 }
 
 struct CustomXAxis {
-    ticks: Vec<f64>
+    ticks: Vec<String>
 }
 
 impl CustomXAxis {
-    fn new(ticks: Vec<f64>) -> Self {
+    fn new(ticks: Vec<String>) -> Self {
         Self { ticks }
     }
 }
 
 impl Ranged for CustomXAxis {
-    type ValueType = f64;
+    type ValueType = String;
     type FormatOption = DefaultFormatting;
 
-    fn map(&self, &v: &f64, pixel_range: (i32, i32)) -> i32 {
+    fn map(&self, v: &String, pixel_range: (i32, i32)) -> i32 {
 
         let plot_pixel_range = (pixel_range.1 - pixel_range.0) as usize;
         let tick_distance = plot_pixel_range / self.ticks.len();
-        let index = self.ticks.iter().position(|tick| *tick == v).unwrap() + 1;
+        let index = self.ticks.iter().position(|tick| tick == v).unwrap() + 1;
 
         (index * tick_distance) as i32 + 50
     }
 
-    fn key_points<Hint:KeyPointHint>(&self, hint: Hint) -> Vec<f64> {
+    fn key_points<Hint:KeyPointHint>(&self, hint: Hint) -> Vec<String> {
         if hint.max_num_points() < 3 {
             vec![]
         } else {
@@ -99,7 +99,7 @@ impl Ranged for CustomXAxis {
         }
     }
 
-    fn range(&self) -> Range<f64> {
-        self.ticks[0]..self.ticks[self.ticks.len() - 1]
+    fn range(&self) -> Range<String> {
+        self.ticks[0].clone()..self.ticks[self.ticks.len() - 1].clone()
     }
 }
