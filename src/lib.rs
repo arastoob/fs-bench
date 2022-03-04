@@ -5,6 +5,7 @@ pub mod micro;
 pub mod error;
 
 
+use std::fmt::{Display, Formatter};
 use crate::error::Error;
 use std::fs::{create_dir, File, OpenOptions};
 use std::io::{Read, Write};
@@ -28,6 +29,16 @@ impl FromStr for BenchMode {
             "throughput" => Ok(BenchMode::Throughput),
             "behaviour" => Ok(BenchMode::Behaviour),
             _ => Err("valid benckmark modes are: ops_per_second, throughput, behaviour".to_string())
+        }
+    }
+}
+
+impl Display for BenchMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BenchMode::OpsPerSecond => write!(f, "ops_per_second"),
+            BenchMode::Behaviour => write!(f, "behaviour"),
+            BenchMode::Throughput => write!(f, "throughput"),
         }
     }
 }
