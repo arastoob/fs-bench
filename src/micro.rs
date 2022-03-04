@@ -19,7 +19,8 @@ pub struct MicroBench {
     io_size: usize,
     iteration: Option<u64>,
     mount_path: PathBuf,
-    logger: DataLogger
+    fs_name: String,
+    log_path: PathBuf
 }
 
 
@@ -29,15 +30,14 @@ impl MicroBench {
         let io_size = Byte::from_str(io_size)?;
         let io_size = io_size.get_bytes() as usize;
 
-        let logger = DataLogger::new(fs_name, log_path)?;
-
         Ok(Self {
             mode,
             runtime,
             io_size,
             iteration,
             mount_path,
-            logger
+            fs_name,
+            log_path
         })
     }
 
@@ -46,6 +46,8 @@ impl MicroBench {
         let progress_style = ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {msg} {bar:40.cyan/blue}")
             .progress_chars("##-");
+
+        let logger = DataLogger::new(self.fs_name.clone(), self.log_path.clone())?;
 
         match self.mode {
             BenchMode::OpsPerSecond => {
@@ -57,11 +59,11 @@ impl MicroBench {
                 results.add_record(self.read(progress_style.clone())?)?;
                 results.add_record(self.write(progress_style)?)?;
 
-                let log_file_name = self.logger.log(results, &self.mode)?;
+                let log_file_name = logger.log(results, &self.mode)?;
 
                 let plotter = Plotter::parse(log_file_name.clone(), &self.mode)?;
                 plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
-                println!("results logged to {}", path_to_str(&self.logger.log_path));
+                println!("results logged to {}", path_to_str(&self.log_path));
             },
             BenchMode::Throughput => {}
             BenchMode::Behaviour => {}
