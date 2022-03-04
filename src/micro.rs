@@ -5,6 +5,7 @@ use crate::data_logger::DataLogger;
 use std::fs::remove_dir_all;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 use rand::{thread_rng, Rng, RngCore};
@@ -42,21 +43,25 @@ impl MicroBench {
 
     pub fn run(&self) -> Result<(), Error> {
 
+        let progress_style = ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] {msg} {bar:40.cyan/blue}")
+            .progress_chars("##-");
+
         match self.mode {
             BenchMode::OpsPerSecond => {
                 let header = ["operation".to_string(), "runtime(s)".to_string(), "ops/s".to_string()].to_vec();
                 let mut results = BenchResult::new(header);
 
-                results.add_record(self.mkdir()?)?;
-                results.add_record(self.mknod()?)?;
-                results.add_record(self.read()?)?;
-                results.add_record(self.write()?)?;
+                results.add_record(self.mkdir(progress_style.clone())?);
+                results.add_record(self.mknod(progress_style.clone())?);
+                results.add_record(self.read(progress_style.clone())?);
+                results.add_record(self.write(progress_style)?);
 
                 let log_file_name = self.logger.log(results, "ops_s")?;
-                println!("results logged to {}\n", log_file_name);
 
-                let plotter = Plotter::parse_ops_per_second(log_file_name)?;
+                let plotter = Plotter::parse_ops_per_second(log_file_name.clone())?;
                 plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
+                println!("results logged to {}\n", log_file_name);
             },
             BenchMode::Throughput => {}
             BenchMode::Behaviour => {}
@@ -66,9 +71,8 @@ impl MicroBench {
     }
 
 
-    fn mkdir(&self) -> Result<Record, Error> {
+    fn mkdir(&self, style: ProgressStyle) -> Result<Record, Error> {
         self.cleanup("mkdir")?;
-        // println!("mkdir benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "mkdir");
 
@@ -100,9 +104,8 @@ impl MicroBench {
         };
 
         let bar = ProgressBar::new((self.runtime as u64) * 10);
-        bar.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] mkdir {bar:40.cyan/blue} {spinner}")
-            .progress_chars("##-"));
+        bar.set_style(style);
+        bar.set_message(format!("{:10}", "mkdir"));
 
         for _ in 0..(self.runtime as u64) * 10 {
             bar.inc(1);
@@ -115,9 +118,6 @@ impl MicroBench {
 
         let count_result = *count.lock().unwrap();
 
-        // println!("{:?} mkdir ops in {} seconds", count_result, self.runtime);
-        // println!("ops/s: {:?}\n", count_result / self.runtime);
-
         let record = Record {
             fields: ["mkdir".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
         };
@@ -125,9 +125,8 @@ impl MicroBench {
         Ok(record)
     }
 
-    fn mknod(&self) -> Result<Record, Error> {
+    fn mknod(&self, style: ProgressStyle) -> Result<Record, Error> {
         self.cleanup("mknod")?;
-        // println!("mknod benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "mknod");
 
@@ -159,12 +158,9 @@ impl MicroBench {
             })
         };
 
-        // Sleep running_time seconds
-        // thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
         let bar = ProgressBar::new((self.runtime as u64) * 10);
-        bar.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] mknod {bar:40.cyan/blue} {spinner}")
-            .progress_chars("##-"));
+        bar.set_style(style);
+        bar.set_message(format!("{:10}", "mknod"));
 
         for _ in 0..(self.runtime as u64) * 10 {
             bar.inc(1);
@@ -177,9 +173,6 @@ impl MicroBench {
 
         let count_result = *count.lock().unwrap();
 
-        // println!("{:?} mknod ops in {} seconds", count_result, self.runtime);
-        // println!("ops/s: {:?}\n", count_result / self.runtime);
-
         let record = Record {
             fields: ["mknod".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
         };
@@ -187,9 +180,8 @@ impl MicroBench {
         Ok(record)
     }
 
-    fn read(&self) -> Result<Record, Error> {
+    fn read(&self, style: ProgressStyle) -> Result<Record, Error> {
         self.cleanup("read")?;
-        // println!("read benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "read");
 
@@ -234,12 +226,9 @@ impl MicroBench {
             })
         };
 
-        // Sleep running_time seconds
-        // thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
         let bar = ProgressBar::new((self.runtime as u64) * 10);
-        bar.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] read  {bar:40.cyan/blue} {spinner}")
-            .progress_chars("##-"));
+        bar.set_style(style);
+        bar.set_message(format!("{:10}", "read"));
 
         for _ in 0..(self.runtime as u64) * 10 {
             bar.inc(1);
@@ -252,9 +241,6 @@ impl MicroBench {
 
         let count_result = *count.lock().unwrap();
 
-        // println!("{:?} read ops in {} seconds", count_result, self.runtime);
-        // println!("ops/s: {:?}\n", count_result / self.runtime);
-
         let record = Record {
             fields: ["read".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
         };
@@ -262,9 +248,8 @@ impl MicroBench {
         Ok(record)
     }
 
-    fn write(&self) -> Result<Record, Error> {
+    fn write(&self, style: ProgressStyle) -> Result<Record, Error> {
         self.cleanup("write")?;
-        // println!("write benchmark...");
         let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
         let root_path = format!("{}/{}", mount_path, "write");
 
@@ -311,12 +296,9 @@ impl MicroBench {
             })
         };
 
-        // Sleep running_time seconds
-        // thread::sleep(std::time::Duration::new(self.runtime as u64, 0));
         let bar = ProgressBar::new((self.runtime as u64) * 10);
-        bar.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] write {bar:40.cyan/blue} {spinner}")
-            .progress_chars("##-"));
+        bar.set_style(style);
+        bar.set_message(format!("{:10}", "write"));
 
         for _ in 0..(self.runtime as u64) * 10 {
             bar.inc(1);
@@ -329,9 +311,6 @@ impl MicroBench {
 
         let count_result = *count.lock().unwrap();
 
-        // println!("{:?} write ops in {} seconds", count_result, self.runtime);
-        // println!("ops/s: {:?}\n", count_result / self.runtime);
-
         let record = Record {
             fields: ["write".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
         };
@@ -340,13 +319,39 @@ impl MicroBench {
     }
 
     fn cleanup(&self, bench_name: &str) -> Result<(), Error> {
-        println!("cleaning up...");
-        let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
+        let bench_name = bench_name.to_string();
+        let spinner = ProgressBar::new_spinner();
+        spinner.set_style(ProgressStyle::default_spinner()
+            .template("{msg} {spinner}"));
+        spinner.set_message(format!("{} clean up", bench_name));
 
-        let path = format!("{}/{}", mount_path, bench_name);
-        let path = Path::new(&path);
-        if path.exists() {
-            remove_dir_all(path)?;
+
+        let (sender, receiver) = channel();
+        let mp = self.mount_path.clone();
+
+        thread::spawn(move || {
+            let (mount_path, _) = mp.rsplit_once("/").unwrap(); // remove / at the end
+            let path = format!("{}/{}", mount_path, bench_name);
+            let path = Path::new(&path);
+            if path.exists() {
+                remove_dir_all(path).unwrap();
+            }
+            // notify the receiver about finishing the clean up
+            sender.send(true).unwrap();
+        });
+
+        // spin the spinner until the clean up is done
+        loop {
+            match receiver.try_recv() {
+                Ok(_done) => {
+                    spinner.finish_and_clear();
+                    break;
+                },
+                _ => {
+                    thread::sleep(Duration::from_millis(50));
+                    spinner.inc(1);
+                }
+            }
         }
 
         Ok(())
