@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::path::PathBuf;
 use clap::Parser;
 use fs_bench::BenchMode;
 use fs_bench::micro::MicroBench;
@@ -26,7 +27,7 @@ struct Args {
 
     /// The path to the mounted filesystem being benchmarked
     #[clap(short, long)]
-    mount: String,
+    mount: PathBuf,
 
     /// Filesystem name that is being benchmarked
     #[clap(short, long)]
@@ -34,7 +35,7 @@ struct Args {
 
     /// The path to store benchmark results
     #[clap(short, long)]
-    log_path: String,
+    log_path: PathBuf,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {

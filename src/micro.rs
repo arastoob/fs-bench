@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use byte_unit::Byte;
 use crate::{BenchMode, BenchResult, Record, Error, make_dir, make_file, write_file, read_file};
 use crate::data_logger::DataLogger;
@@ -18,14 +18,14 @@ pub struct MicroBench {
     runtime: u16,
     io_size: usize,
     iteration: Option<u64>,
-    mount_path: String,
+    mount_path: PathBuf,
     logger: DataLogger
 }
 
 
 
 impl MicroBench {
-    pub fn new(mode: BenchMode, runtime: u16, io_size: String, iteration: Option<u64>, mount_path: String, fs_name: String, log_path: String) -> Result<Self, Error> {
+    pub fn new(mode: BenchMode, runtime: u16, io_size: String, iteration: Option<u64>, mount_path: PathBuf, fs_name: String, log_path: PathBuf) -> Result<Self, Error> {
         let io_size = Byte::from_str(io_size)?;
         let io_size = io_size.get_bytes() as usize;
 
@@ -61,7 +61,7 @@ impl MicroBench {
 
                 let plotter = Plotter::parse(log_file_name.clone(), &self.mode)?;
                 plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
-                println!("results logged to {}", self.logger.log_path);
+                println!("results logged to {}", path_to_str(&self.logger.log_path));
             },
             BenchMode::Throughput => {}
             BenchMode::Behaviour => {}
@@ -73,8 +73,7 @@ impl MicroBench {
 
     fn mkdir(&self, style: ProgressStyle) -> Result<Record, Error> {
         self.cleanup("mkdir")?;
-        let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
-        let root_path = format!("{}/{}", mount_path, "mkdir");
+        let root_path = format!("{}/{}", path_to_str(&self.mount_path), "mkdir");
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
@@ -127,8 +126,7 @@ impl MicroBench {
 
     fn mknod(&self, style: ProgressStyle) -> Result<Record, Error> {
         self.cleanup("mknod")?;
-        let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
-        let root_path = format!("{}/{}", mount_path, "mknod");
+        let root_path = format!("{}/{}", path_to_str(&self.mount_path), "mknod");
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
@@ -182,8 +180,7 @@ impl MicroBench {
 
     fn read(&self, style: ProgressStyle) -> Result<Record, Error> {
         self.cleanup("read")?;
-        let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
-        let root_path = format!("{}/{}", mount_path, "read");
+        let root_path = format!("{}/{}", path_to_str(&self.mount_path), "read");
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
@@ -250,8 +247,7 @@ impl MicroBench {
 
     fn write(&self, style: ProgressStyle) -> Result<Record, Error> {
         self.cleanup("write")?;
-        let (mount_path, _) = self.mount_path.rsplit_once("/").unwrap(); // remove / at the end
-        let root_path = format!("{}/{}", mount_path, "write");
+        let root_path = format!("{}/{}", path_to_str(&self.mount_path), "write");
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
@@ -327,10 +323,8 @@ impl MicroBench {
 
 
         let (sender, receiver) = channel();
-        let mp = self.mount_path.clone();
-
+        let mount_path = path_to_str(&self.mount_path).to_string();
         thread::spawn(move || {
-            let (mount_path, _) = mp.rsplit_once("/").unwrap(); // remove / at the end
             let path = format!("{}/{}", mount_path, bench_name);
             let path = Path::new(&path);
             if path.exists() {
@@ -356,4 +350,8 @@ impl MicroBench {
 
         Ok(())
     }
+}
+
+fn path_to_str(path: &PathBuf) -> &str {
+    path.as_os_str().to_str().unwrap()
 }
