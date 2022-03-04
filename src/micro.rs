@@ -9,6 +9,7 @@ use std::thread;
 use std::time::Duration;
 use rand::{thread_rng, Rng, RngCore};
 use indicatif::{ProgressBar, ProgressStyle};
+use crate::plotter::Plotter;
 
 #[derive(Debug)]
 pub struct MicroBench {
@@ -53,6 +54,9 @@ impl MicroBench {
 
                 let log_file_name = self.logger.log(results, "ops_s")?;
                 println!("results logged to {}\n", log_file_name);
+
+                let plotter = Plotter::parse_ops_per_second(log_file_name)?;
+                plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
             },
             BenchMode::Throughput => {}
             BenchMode::Behaviour => {}

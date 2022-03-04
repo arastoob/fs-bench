@@ -1,6 +1,8 @@
+use std::fs::File;
 use std::path::PathBuf;
 use std::ops::Range;
-use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint};
+use csv::StringRecord;
+use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint, ReversibleRanged};
 use plotters::prelude::*;
 use crate::Error;
 
@@ -24,15 +26,38 @@ impl Plotter {
         })
     }
 
+    pub fn parse_ops_per_second(path: String) -> Result<Self, Error> {
+        let file = File::open(path.clone())?;
+        let mut reader = csv::Reader::from_reader(file);
+
+        let mut x_axis = vec![];
+        let mut y_axis = vec![];
+
+        // find the operation and ops/s columns
+        let operation_idx = reader.headers()?.iter().position(|header| header == "operation").unwrap();
+        let ops_per_second_idx = reader.headers()?.iter().position(|header| header == "ops/s").unwrap();
+
+        for record in reader.records() {
+            let record = record?;
+            x_axis.push(record.get(operation_idx).unwrap().to_string());
+            y_axis.push(record.get(ops_per_second_idx).unwrap().parse::<f64>().unwrap());
+        }
+
+        assert_eq!(x_axis.len(), y_axis.len());
+
+        let (path, _) = path.rsplit_once("/").unwrap();
+
+        Ok(Self {
+            x_axis,
+            y_axis,
+            path: PathBuf::from(format!("{}/ops_s.svg", path))
+        })
+    }
+
     pub fn line_chart(&self, x_label: Option<&str>, y_label: Option<&str>, caption: Option<&str>) -> Result<(), Error> {
         let root_area = SVGBackend::new(self.path.as_os_str(), (800, 500))
             .into_drawing_area();
         root_area.fill(&WHITE)?;
-
-        let mut points = vec![];
-        for i in 0..self.x_axis.len() {
-            points.push((self.x_axis[i].clone(), self.y_axis[i]));
-        }
 
         let custom_x_axes = CustomXAxis::new(self.x_axis.clone());
         let y_start = self.y_axis[0] - (self.y_axis[0] / 5.0); // y starts bellow the first y-axis value
@@ -42,7 +67,7 @@ impl Plotter {
             .set_label_area_size(LabelAreaPosition::Left, 100.0)
             .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
             .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
-            .build_cartesian_2d(custom_x_axes, y_start..y_end)?;
+            .build_cartesian_2d(custom_x_axes.clone(), y_start..y_end)?;
 
         ctx.configure_mesh()
             .axis_desc_style(("sans-serif", 20.0))
@@ -52,7 +77,7 @@ impl Plotter {
 
         ctx.draw_series(
             LineSeries::new(
-                points.iter().map(|(x, y)| (x.clone(), *y)), // The data iter
+                custom_x_axes.ticks.iter().zip(self.y_axis.iter()).map(|(x, y)| (x.clone(), *y)), // The data iter
                 &BLACK,
             )
         )?;
@@ -62,12 +87,60 @@ impl Plotter {
             filled: true,
             stroke_width: 1
         };
-        ctx.draw_series(points.iter().map(|(x, y)| Circle::new((x.clone(), *y), 3, style.clone())))?;
+        ctx.draw_series(custom_x_axes.ticks.iter().zip(self.y_axis.iter()).map(|(x, y)| Circle::new((x.clone(), *y), 3, style.clone())))?;
+
+        Ok(())
+    }
+
+    pub fn bar_chart(&self, x_label: Option<&str>, y_label: Option<&str>, caption: Option<&str>) -> Result<(), Error> {
+        let root_area = SVGBackend::new(self.path.as_os_str(), (800, 500))
+            .into_drawing_area();
+        root_area.fill(&WHITE)?;
+
+        let custom_x_axes = CustomXAxis::new(self.x_axis.clone());
+        let y_min = self.y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let y_max = self.y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
+        let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
+
+        let mut ctx = ChartBuilder::on(&root_area)
+            .set_label_area_size(LabelAreaPosition::Left, 100.0)
+            .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
+            .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+            .build_cartesian_2d(custom_x_axes.clone(), y_start..y_end)?;
+
+
+        ctx.configure_mesh()
+            .axis_desc_style(("sans-serif", 20.0))
+            .x_desc(x_label.unwrap_or(""))
+            .y_desc(y_label.unwrap_or(""))
+            .draw()?;
+
+        // draw labels on bars
+        ctx.draw_series(PointSeries::of_element(
+            custom_x_axes.ticks.iter().zip(self.y_axis.iter()).map(|(x, y)| {
+                (x.clone(), *y)
+            } ),
+            5,
+            ShapeStyle::from(&RED).filled(),
+            &|(x, y), size, style| {
+                EmptyElement::at((x.clone(), y))
+                    + Text::new(format!("{:?}", y), (-20, -10), ("sans-serif", 15))
+            },
+        ))?;
+
+        // draw the bars
+        ctx.draw_series(custom_x_axes.ticks.iter().zip(self.y_axis.iter()).map(|(x, y)| {
+            let x_before = format!("{}_before", x);
+            let x_after = format!("{}_after", x);
+            Rectangle::new([(x_before, 0.0), (x_after, *y)], RED.filled())
+        }))?;
 
         Ok(())
     }
 }
 
+#[derive(Clone)]
 struct CustomXAxis {
     ticks: Vec<String>
 }
@@ -86,9 +159,25 @@ impl Ranged for CustomXAxis {
 
         let plot_pixel_range = (pixel_range.1 - pixel_range.0) as usize;
         let tick_distance = plot_pixel_range / self.ticks.len();
-        let index = self.ticks.iter().position(|tick| tick == v).unwrap() + 1;
 
-        (index * tick_distance) as i32 + 50
+        // this case if for calculating the tick position on the plot and for line and point plots
+        let pos  = self.ticks.iter().position(|tick| tick == v);
+        if pos.is_some() {
+            return (pos.unwrap() * tick_distance) as i32 + pixel_range.0 + 50;
+        }
+
+        // this case and the next one if for calculating the start and end position of a rectangle for bar plot
+        let after_pos  = self.ticks.iter().position(|tick| format!("{}_before", tick) == *v);
+        if after_pos.is_some() {
+            return (after_pos.unwrap() * tick_distance) as i32 + pixel_range.0 + 70;
+        }
+
+        let before_pos  = self.ticks.iter().position(|tick| format!("{}_after", tick) == *v);
+        if before_pos.is_some() {
+            return (before_pos.unwrap() * tick_distance) as i32 + pixel_range.0 + 30;
+        }
+
+        return 0;
     }
 
     fn key_points<Hint:KeyPointHint>(&self, hint: Hint) -> Vec<String> {
