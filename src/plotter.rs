@@ -1,8 +1,7 @@
 use std::fs::File;
 use std::path::PathBuf;
 use std::ops::Range;
-use csv::StringRecord;
-use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint, ReversibleRanged};
+use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint};
 use plotters::prelude::*;
 use crate::Error;
 
@@ -123,7 +122,7 @@ impl Plotter {
             } ),
             5,
             ShapeStyle::from(&RED).filled(),
-            &|(x, y), size, style| {
+            &|(x, y), _size, _style| {
                 EmptyElement::at((x.clone(), y))
                     + Text::new(format!("{:?}", y), (-20, -10), ("sans-serif", 15))
             },
