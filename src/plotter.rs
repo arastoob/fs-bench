@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::ops::Range;
 use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint};
 use plotters::prelude::*;
-use crate::Error;
+use crate::{BenchMode, Error};
 
 pub struct Plotter {
     x_axis: Vec<String>,
@@ -12,31 +12,23 @@ pub struct Plotter {
 }
 
 impl Plotter {
-    pub fn parse_ops_per_second(path: String) -> Result<Self, Error> {
+    pub fn parse(path: String, mode: &BenchMode) -> Result<Self, Error> {
         let file = File::open(path.clone())?;
-        let mut reader = csv::Reader::from_reader(file);
+        let (x_axis, y_axis) = match mode {
+            BenchMode::OpsPerSecond => {
+                Plotter::parse_ops_per_second(&file)?
+            },
+            _ => unimplemented!()
+        };
 
-        let mut x_axis = vec![];
-        let mut y_axis = vec![];
-
-        // find the operation and ops/s columns
-        let operation_idx = reader.headers()?.iter().position(|header| header == "operation").unwrap();
-        let ops_per_second_idx = reader.headers()?.iter().position(|header| header == "ops/s").unwrap();
-
-        for record in reader.records() {
-            let record = record?;
-            x_axis.push(record.get(operation_idx).unwrap().to_string());
-            y_axis.push(record.get(ops_per_second_idx).unwrap().parse::<f64>().unwrap());
-        }
-
-        assert_eq!(x_axis.len(), y_axis.len());
-
-        let (path, _) = path.rsplit_once("/").unwrap();
+        // change the filename extension
+        let (path, _) = path.rsplit_once(".").unwrap();
+        let path = PathBuf::from(format!("{}.svg", path));
 
         Ok(Self {
             x_axis,
             y_axis,
-            path: PathBuf::from(format!("{}/ops_s.svg", path))
+            path
         })
     }
 
@@ -123,6 +115,26 @@ impl Plotter {
         }))?;
 
         Ok(())
+    }
+
+    fn parse_ops_per_second(file: &File) -> Result<(Vec<String>, Vec<f64>), Error> {
+        let mut reader = csv::Reader::from_reader(file);
+        let mut x_axis = vec![];
+        let mut y_axis = vec![];
+
+        // find the operation and ops/s columns
+        let operation_idx = reader.headers()?.iter().position(|header| header == "operation").unwrap();
+        let ops_per_second_idx = reader.headers()?.iter().position(|header| header == "ops/s").unwrap();
+
+        for record in reader.records() {
+            let record = record?;
+            x_axis.push(record.get(operation_idx).unwrap().to_string());
+            y_axis.push(record.get(ops_per_second_idx).unwrap().parse::<f64>().unwrap());
+        }
+
+        assert_eq!(x_axis.len(), y_axis.len());
+
+        Ok((x_axis, y_axis))
     }
 }
 

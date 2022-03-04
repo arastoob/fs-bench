@@ -52,16 +52,16 @@ impl MicroBench {
                 let header = ["operation".to_string(), "runtime(s)".to_string(), "ops/s".to_string()].to_vec();
                 let mut results = BenchResult::new(header);
 
-                results.add_record(self.mkdir(progress_style.clone())?);
-                results.add_record(self.mknod(progress_style.clone())?);
-                results.add_record(self.read(progress_style.clone())?);
-                results.add_record(self.write(progress_style)?);
+                results.add_record(self.mkdir(progress_style.clone())?)?;
+                results.add_record(self.mknod(progress_style.clone())?)?;
+                results.add_record(self.read(progress_style.clone())?)?;
+                results.add_record(self.write(progress_style)?)?;
 
-                let log_file_name = self.logger.log(results, "ops_s")?;
+                let log_file_name = self.logger.log(results, &self.mode)?;
 
-                let plotter = Plotter::parse_ops_per_second(log_file_name.clone())?;
+                let plotter = Plotter::parse(log_file_name.clone(), &self.mode)?;
                 plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
-                println!("results logged to {}\n", log_file_name);
+                println!("results logged to {}", self.logger.log_path);
             },
             BenchMode::Throughput => {}
             BenchMode::Behaviour => {}
