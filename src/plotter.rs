@@ -12,19 +12,6 @@ pub struct Plotter {
 }
 
 impl Plotter {
-    pub fn new(x_axis: Vec<String>, y_axis: Vec<f64>, path: PathBuf) -> Result<Self, Error> {
-
-        if x_axis.len() != y_axis.len() {
-            return Err(Error::InvalidConfig("The X and Y axes should be of the same size".to_string()));
-        }
-
-        Ok(Self {
-            x_axis,
-            y_axis,
-            path
-        })
-    }
-
     pub fn parse_ops_per_second(path: String) -> Result<Self, Error> {
         let file = File::open(path.clone())?;
         let mut reader = csv::Reader::from_reader(file);
