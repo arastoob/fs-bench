@@ -1,14 +1,13 @@
+use clap::Parser;
+use fs_bench::micro::MicroBench;
+use fs_bench::BenchMode;
 use std::error::Error;
 use std::path::PathBuf;
-use clap::Parser;
-use fs_bench::BenchMode;
-use fs_bench::micro::MicroBench;
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-
     /// Type of benchmark to run
     #[clap(short, long)]
     benchmark: BenchMode,
@@ -22,7 +21,8 @@ struct Args {
     size: String,
 
     /// Number of iterations to repeat the operations
-    #[clap(short, long, required_if_eq("benchmark", "behaviour"))] // this argument is required if benchmark = behaviour
+    #[clap(short, long, required_if_eq("benchmark", "behaviour"))]
+    // this argument is required if benchmark = behaviour
     iterations: Option<u64>,
 
     /// The path to the mounted filesystem being benchmarked
@@ -41,7 +41,15 @@ struct Args {
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    let micro_bench = MicroBench::new(args.benchmark, args.runtime, args.size, args.iterations, args.mount, args.fs_name, args.log_path)?;
+    let micro_bench = MicroBench::new(
+        args.benchmark,
+        args.runtime,
+        args.size,
+        args.iterations,
+        args.mount,
+        args.fs_name,
+        args.log_path,
+    )?;
 
     micro_bench.run()?;
 

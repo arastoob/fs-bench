@@ -1,6 +1,6 @@
-use std::fs::{OpenOptions, remove_file};
-use std::path::{Path, PathBuf};
 use crate::{BenchMode, BenchResult, Error};
+use std::fs::{remove_file, OpenOptions};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
 pub struct DataLogger {
@@ -10,16 +10,17 @@ pub struct DataLogger {
 
 impl DataLogger {
     pub fn new(fs_name: String, log_path: PathBuf) -> Result<Self, Error> {
-
-        Ok(Self {
-            fs_name,
-            log_path
-        })
+        Ok(Self { fs_name, log_path })
     }
 
     pub fn log(&self, results: BenchResult, mode: &BenchMode) -> Result<String, Error> {
         // remove the log file if exist
-        let log_file_name = format!("{}/{}_{}.csv", self.log_path.as_os_str().to_str().unwrap(), self.fs_name, mode.to_string());
+        let log_file_name = format!(
+            "{}/{}_{}.csv",
+            self.log_path.as_os_str().to_str().unwrap(),
+            self.fs_name,
+            mode.to_string()
+        );
         let log_path = Path::new(&log_file_name);
         if log_path.exists() {
             remove_file(log_path)?;

@@ -1,9 +1,7 @@
-
-
-use std::fmt;
-use std::io::ErrorKind;
 use byte_unit::ByteError;
 use plotters::drawing::DrawingAreaErrorKind;
+use std::fmt;
+use std::io::ErrorKind;
 
 ///
 /// Problems that can arise in fs-bench.
@@ -46,7 +44,6 @@ pub enum Error {
 }
 
 impl Error {
-
     pub fn format<S1, S2>(format_of: S1, detail: S2) -> Error
     where
         S1: Into<String>,

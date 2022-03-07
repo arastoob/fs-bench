@@ -1,16 +1,16 @@
-use std::path::{Path, PathBuf};
-use byte_unit::Byte;
-use crate::{BenchMode, BenchResult, Record, Error, make_dir, make_file, write_file, read_file};
 use crate::data_logger::DataLogger;
+use crate::plotter::Plotter;
+use crate::{make_dir, make_file, read_file, write_file, BenchMode, BenchResult, Error, Record};
+use byte_unit::Byte;
+use indicatif::{ProgressBar, ProgressStyle};
+use rand::{thread_rng, Rng, RngCore};
 use std::fs::remove_dir_all;
 use std::io::Write;
-use std::sync::{Arc, Mutex};
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::channel;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use rand::{thread_rng, Rng, RngCore};
-use indicatif::{ProgressBar, ProgressStyle};
-use crate::plotter::Plotter;
 
 #[derive(Debug)]
 pub struct MicroBench {
@@ -20,13 +20,19 @@ pub struct MicroBench {
     iteration: Option<u64>,
     mount_path: PathBuf,
     fs_name: String,
-    log_path: PathBuf
+    log_path: PathBuf,
 }
 
-
-
 impl MicroBench {
-    pub fn new(mode: BenchMode, runtime: u16, io_size: String, iteration: Option<u64>, mount_path: PathBuf, fs_name: String, log_path: PathBuf) -> Result<Self, Error> {
+    pub fn new(
+        mode: BenchMode,
+        runtime: u16,
+        io_size: String,
+        iteration: Option<u64>,
+        mount_path: PathBuf,
+        fs_name: String,
+        log_path: PathBuf,
+    ) -> Result<Self, Error> {
         let io_size = Byte::from_str(io_size)?;
         let io_size = io_size.get_bytes() as usize;
 
@@ -37,12 +43,11 @@ impl MicroBench {
             iteration,
             mount_path,
             fs_name,
-            log_path
+            log_path,
         })
     }
 
     pub fn run(&self) -> Result<(), Error> {
-
         let progress_style = ProgressStyle::default_bar()
             .template("[{elapsed_precise}] {msg} {bar:40.cyan/blue}")
             .progress_chars("##-");
@@ -51,7 +56,12 @@ impl MicroBench {
 
         match self.mode {
             BenchMode::OpsPerSecond => {
-                let header = ["operation".to_string(), "runtime(s)".to_string(), "ops/s".to_string()].to_vec();
+                let header = [
+                    "operation".to_string(),
+                    "runtime(s)".to_string(),
+                    "ops/s".to_string(),
+                ]
+                .to_vec();
                 let mut results = BenchResult::new(header);
 
                 results.add_record(self.mkdir(progress_style.clone())?)?;
@@ -64,14 +74,13 @@ impl MicroBench {
                 let plotter = Plotter::parse(log_file_name.clone(), &self.mode)?;
                 plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
                 println!("results logged to {}", path_to_str(&self.log_path));
-            },
+            }
             BenchMode::Throughput => {}
             BenchMode::Behaviour => {}
         }
 
         Ok(())
     }
-
 
     fn mkdir(&self, style: ProgressStyle) -> Result<Record, Error> {
         self.cleanup("mkdir")?;
@@ -120,7 +129,12 @@ impl MicroBench {
         let count_result = *count.lock().unwrap();
 
         let record = Record {
-            fields: ["mkdir".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
+            fields: [
+                "mkdir".to_string(),
+                self.runtime.to_string(),
+                (count_result / self.runtime).to_string(),
+            ]
+            .to_vec(),
         };
 
         Ok(record)
@@ -174,7 +188,12 @@ impl MicroBench {
         let count_result = *count.lock().unwrap();
 
         let record = Record {
-            fields: ["mknod".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
+            fields: [
+                "mknod".to_string(),
+                self.runtime.to_string(),
+                (count_result / self.runtime).to_string(),
+            ]
+            .to_vec(),
         };
 
         Ok(record)
@@ -241,7 +260,12 @@ impl MicroBench {
         let count_result = *count.lock().unwrap();
 
         let record = Record {
-            fields: ["read".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
+            fields: [
+                "read".to_string(),
+                self.runtime.to_string(),
+                (count_result / self.runtime).to_string(),
+            ]
+            .to_vec(),
         };
 
         Ok(record)
@@ -275,8 +299,7 @@ impl MicroBench {
             let count = count.clone();
 
             timer.schedule_repeating(chrono::Duration::milliseconds(0), move || {
-                let rand_content_index =
-                    thread_rng().gen_range(0..(8192 * size) - size - 1);
+                let rand_content_index = thread_rng().gen_range(0..(8192 * size) - size - 1);
                 let mut content =
                     rand_content[rand_content_index..(rand_content_index + size)].to_vec();
 
@@ -310,7 +333,12 @@ impl MicroBench {
         let count_result = *count.lock().unwrap();
 
         let record = Record {
-            fields: ["write".to_string(), self.runtime.to_string(), (count_result / self.runtime).to_string()].to_vec()
+            fields: [
+                "write".to_string(),
+                self.runtime.to_string(),
+                (count_result / self.runtime).to_string(),
+            ]
+            .to_vec(),
         };
 
         Ok(record)
@@ -319,10 +347,8 @@ impl MicroBench {
     fn cleanup(&self, bench_name: &str) -> Result<(), Error> {
         let bench_name = bench_name.to_string();
         let spinner = ProgressBar::new_spinner();
-        spinner.set_style(ProgressStyle::default_spinner()
-            .template("{msg} {spinner}"));
+        spinner.set_style(ProgressStyle::default_spinner().template("{msg} {spinner}"));
         spinner.set_message(format!("{} clean up", bench_name));
-
 
         let (sender, receiver) = channel();
         let mount_path = path_to_str(&self.mount_path).to_string();
@@ -342,7 +368,7 @@ impl MicroBench {
                 Ok(_done) => {
                     spinner.finish_and_clear();
                     break;
-                },
+                }
                 _ => {
                     thread::sleep(Duration::from_millis(50));
                     spinner.inc(1);
