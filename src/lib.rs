@@ -1,22 +1,20 @@
-
-pub mod plotter;
 pub mod data_logger;
-pub mod micro;
 pub mod error;
-
+pub mod micro;
+pub mod plotter;
 
 use crate::error::Error;
+use std::fmt::{Display, Formatter};
 use std::fs::{create_dir, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::Path;
 use std::str::FromStr;
 
-
 #[derive(Debug)]
 pub enum BenchMode {
     OpsPerSecond,
     Throughput,
-    Behaviour
+    Behaviour,
 }
 
 impl FromStr for BenchMode {
@@ -27,7 +25,19 @@ impl FromStr for BenchMode {
             "ops_per_second" => Ok(BenchMode::OpsPerSecond),
             "throughput" => Ok(BenchMode::Throughput),
             "behaviour" => Ok(BenchMode::Behaviour),
-            _ => Err("valid benckmark modes are: ops_per_second, throughput, behaviour".to_string())
+            _ => {
+                Err("valid benckmark modes are: ops_per_second, throughput, behaviour".to_string())
+            }
+        }
+    }
+}
+
+impl Display for BenchMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BenchMode::OpsPerSecond => write!(f, "ops_per_second"),
+            BenchMode::Behaviour => write!(f, "behaviour"),
+            BenchMode::Throughput => write!(f, "throughput"),
         }
     }
 }
@@ -35,20 +45,22 @@ impl FromStr for BenchMode {
 #[derive(Debug)]
 pub struct BenchResult {
     pub header: Vec<String>,
-    pub records: Vec<Record>
+    pub records: Vec<Record>,
 }
 
 impl BenchResult {
     pub fn new(header: Vec<String>) -> Self {
         BenchResult {
             header,
-            records: vec![]
+            records: vec![],
         }
     }
 
     pub fn add_record(&mut self, record: Record) -> Result<(), Error> {
         if record.fields.len() != self.header.len() {
-            return Err(Error::Unknown("the record and header should be of the same length".to_string()));
+            return Err(Error::Unknown(
+                "the record and header should be of the same length".to_string(),
+            ));
         }
         self.records.push(record);
 
@@ -58,7 +70,7 @@ impl BenchResult {
 
 #[derive(Debug)]
 pub struct Record {
-    pub fields: Vec<String>
+    pub fields: Vec<String>,
 }
 
 pub fn make_dir(dir: &str) -> Result<(), Error> {
