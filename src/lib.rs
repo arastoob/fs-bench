@@ -5,10 +5,14 @@ pub mod plotter;
 
 use crate::error::Error;
 use std::fmt::{Display, Formatter};
-use std::fs::{create_dir, File, OpenOptions};
+use std::fs::{create_dir, File, OpenOptions, remove_dir_all};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::sync::mpsc::channel;
+use std::thread;
+use std::time::Duration;
+use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(Debug)]
 pub enum BenchMode {
@@ -73,22 +77,20 @@ pub struct Record {
     pub fields: Vec<String>,
 }
 
-pub fn make_dir(dir: &str) -> Result<(), Error> {
-    let path = Path::new(&dir);
+pub fn make_dir(path: &PathBuf) -> Result<(), Error> {
 
     create_dir(path)?;
 
     Ok(())
 }
 
-pub fn make_file(file: &str) -> Result<File, Error> {
-    let path = Path::new(&file);
+pub fn make_file(path: &PathBuf) -> Result<File, Error> {
 
     Ok(File::create(path)?)
 }
 
-pub fn write_file(file: &str, content: &mut Vec<u8>) -> Result<usize, Error> {
-    let mut file = OpenOptions::new().write(true).append(false).open(file)?;
+pub fn write_file(path: &PathBuf, content: &mut Vec<u8>) -> Result<usize, Error> {
+    let mut file = OpenOptions::new().write(true).append(false).open(path)?;
 
     match file.write(&content) {
         Ok(size) => Ok(size),
@@ -96,11 +98,50 @@ pub fn write_file(file: &str, content: &mut Vec<u8>) -> Result<usize, Error> {
     }
 }
 
-pub fn read_file(file: &str, read_buffer: &mut Vec<u8>) -> Result<usize, Error> {
-    let mut file = OpenOptions::new().read(true).open(file)?;
+pub fn read_file(path: &PathBuf, read_buffer: &mut Vec<u8>) -> Result<usize, Error> {
+    let mut file = OpenOptions::new().read(true).open(path)?;
 
     match file.read(read_buffer) {
         Ok(size) => Ok(size),
         Err(error) => Err(Error::IO(error)),
     }
+}
+
+pub fn cleanup(path: &PathBuf) -> Result<(), Error> {
+    // let bench_name = bench_name.to_string();
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}"));
+    spinner.set_message(format!("clean up {}", path.to_str().unwrap()));
+
+    let (sender, receiver) = channel();
+    let path = path.clone();
+    thread::spawn(move || {
+        let path = Path::new(&path);
+        if path.exists() {
+            remove_dir_all(path).unwrap();
+        }
+        // notify the receiver about finishing the clean up
+        sender.send(true).unwrap();
+    });
+
+    // spin the spinner until the clean up is done
+    loop {
+        match receiver.try_recv() {
+            Ok(_done) => {
+                // wait another 2 seconds
+                for _ in 0..40 {
+                    thread::sleep(Duration::from_millis(50));
+                    spinner.inc(1);
+                }
+                spinner.finish_and_clear();
+                break;
+            }
+            _ => {
+                thread::sleep(Duration::from_millis(50));
+                spinner.inc(1);
+            }
+        }
+    }
+
+    Ok(())
 }
