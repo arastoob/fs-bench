@@ -12,7 +12,7 @@ pub struct Plotter {
 }
 
 impl Plotter {
-    pub fn parse(path: String, mode: &BenchMode) -> Result<Self, Error> {
+    pub fn parse(mut path: PathBuf, mode: &BenchMode) -> Result<Self, Error> {
         let file = File::open(path.clone())?;
         let (x_axis, y_axis) = match mode {
             BenchMode::OpsPerSecond => Plotter::parse_ops_per_second(&file)?,
@@ -20,8 +20,7 @@ impl Plotter {
         };
 
         // change the filename extension
-        let (path, _) = path.rsplit_once(".").unwrap();
-        let path = PathBuf::from(format!("{}.svg", path));
+        path.set_extension("svg");
 
         Ok(Self {
             x_axis,

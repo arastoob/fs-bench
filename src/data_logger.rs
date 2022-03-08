@@ -13,24 +13,24 @@ impl DataLogger {
         Ok(Self { fs_name, log_path })
     }
 
-    pub fn log(&self, results: BenchResult, mode: &BenchMode) -> Result<String, Error> {
+    pub fn log(&self, results: BenchResult, mode: &BenchMode) -> Result<PathBuf, Error> {
         // remove the log file if exist
-        let log_file_name = format!(
-            "{}/{}_{}.csv",
-            self.log_path.as_os_str().to_str().unwrap(),
+        let file_name = format!(
+            "{}_{}.csv",
             self.fs_name,
             mode.to_string()
         );
-        let log_path = Path::new(&log_file_name);
+        let mut log_path = self.log_path.clone();
+        log_path.push(file_name);
         if log_path.exists() {
-            remove_file(log_path)?;
+            remove_file(log_path.clone())?;
         }
 
         let file = OpenOptions::new()
             .create(true)
             .write(true)
             .append(true)
-            .open(log_path)?;
+            .open(log_path.clone())?;
 
         let mut writer = csv::Writer::from_writer(file);
         writer.write_record(results.header)?;
@@ -40,6 +40,6 @@ impl DataLogger {
 
         writer.flush()?;
 
-        Ok(log_file_name)
+        Ok(log_path)
     }
 }
