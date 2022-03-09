@@ -1,5 +1,3 @@
-use std::cmp::Ordering;
-use std::fmt::{Debug, Formatter};
 use crate::{BenchMode, Error};
 use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint};
 use plotters::prelude::*;

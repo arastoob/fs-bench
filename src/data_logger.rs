@@ -1,6 +1,6 @@
 use crate::{BenchMode, BenchResult, Error};
 use std::fs::{remove_file, OpenOptions};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct DataLogger {
