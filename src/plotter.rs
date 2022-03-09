@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+use std::fmt::{Debug, Formatter};
 use crate::{BenchMode, Error};
 use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint};
 use plotters::prelude::*;
@@ -6,27 +8,72 @@ use std::ops::Range;
 use std::path::PathBuf;
 
 pub struct Plotter {
-    x_axis: Vec<String>,
+    x_axis: Vec<XAxis>,
     y_axis: Vec<f64>,
     path: PathBuf,
+}
+
+/// The x axis values could be of type float or string
+#[derive(Clone)]
+enum XAxis {
+    STR(String),
+    F64(f64),
+}
+
+impl From<&str> for XAxis {
+    fn from(s: &str) -> Self {
+        XAxis::STR(s.to_string())
+    }
+}
+
+impl From<f64> for XAxis {
+    fn from(f: f64) -> Self {
+        XAxis::F64(f)
+    }
+}
+
+impl XAxis {
+    pub fn get_str(&self) -> Result<String, Error> {
+        match self {
+            XAxis::STR(s) => Ok(s.clone()),
+            _ => Err(Error::format("x axis", "value is not a string"))
+        }
+    }
+
+    pub fn get_float(&self) -> Result<f64, Error> {
+        match self {
+            XAxis::F64(f) => Ok(*f),
+            _ => Err(Error::format("x axis", "value is not a float"))
+        }
+    }
 }
 
 impl Plotter {
     pub fn parse(mut path: PathBuf, mode: &BenchMode) -> Result<Self, Error> {
         let file = File::open(path.clone())?;
-        let (x_axis, y_axis) = match mode {
-            BenchMode::OpsPerSecond => Plotter::parse_ops_per_second(&file)?,
-            _ => unimplemented!(),
-        };
 
         // change the filename extension
         path.set_extension("svg");
 
-        Ok(Self {
-            x_axis,
-            y_axis,
-            path,
-        })
+        match mode {
+            BenchMode::OpsPerSecond => {
+                let (x_axis, y_axis) = Plotter::parse_ops_per_second(&file)?;
+                Ok(Self {
+                    x_axis,
+                    y_axis,
+                    path,
+                })
+            },
+            BenchMode::Behaviour => {
+                let (x_axis, y_axis) = Plotter::parse_timestamps(&file)?;
+                Ok(Self {
+                    x_axis,
+                    y_axis,
+                    path,
+                })
+            },
+            _ => unimplemented!(),
+        }
     }
 
     pub fn line_chart(
@@ -38,15 +85,22 @@ impl Plotter {
         let root_area = SVGBackend::new(self.path.as_os_str(), (800, 500)).into_drawing_area();
         root_area.fill(&WHITE)?;
 
-        let custom_x_axes = CustomXAxis::new(self.x_axis.clone());
-        let y_start = self.y_axis[0] - (self.y_axis[0] / 5.0); // y starts bellow the first y-axis value
-        let y_end = self.y_axis[self.y_axis.len() - 1] + (self.y_axis[self.y_axis.len() - 1] / 5.0); // and ends after the last y-axis value
+        // let custom_x_axes = CustomXAxis::new(self.x_axis.clone());
+        let y_min = self.y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let y_max = self.y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
+        let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
+
+        // for the line chart, we need the float values of the x axis
+        let x_axis = self.x_axis.iter().map(|x| {
+           x.get_float()
+        }).collect::<Result<Vec<f64>, Error>>()?;
 
         let mut ctx = ChartBuilder::on(&root_area)
             .set_label_area_size(LabelAreaPosition::Left, 100.0)
             .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
             .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
-            .build_cartesian_2d(custom_x_axes.clone(), y_start..y_end)?;
+            .build_cartesian_2d(x_axis[0]..x_axis[x_axis.len() - 1], y_start..y_end)?;
 
         ctx.configure_mesh()
             .axis_desc_style(("sans-serif", 20.0))
@@ -55,11 +109,10 @@ impl Plotter {
             .draw()?;
 
         ctx.draw_series(LineSeries::new(
-            custom_x_axes
-                .ticks
+            x_axis
                 .iter()
                 .zip(self.y_axis.iter())
-                .map(|(x, y)| (x.clone(), *y)), // The data iter
+                .map(|(x, y)| (*x, *y)), // The data iter
             &BLACK,
         ))?;
 
@@ -68,13 +121,6 @@ impl Plotter {
             filled: true,
             stroke_width: 1,
         };
-        ctx.draw_series(
-            custom_x_axes
-                .ticks
-                .iter()
-                .zip(self.y_axis.iter())
-                .map(|(x, y)| Circle::new((x.clone(), *y), 3, style.clone())),
-        )?;
 
         Ok(())
     }
@@ -88,7 +134,12 @@ impl Plotter {
         let root_area = SVGBackend::new(self.path.as_os_str(), (800, 500)).into_drawing_area();
         root_area.fill(&WHITE)?;
 
-        let custom_x_axes = CustomXAxis::new(self.x_axis.clone());
+        // for the bar chart, we need the string values of the x axis
+        let x_axis = self.x_axis.iter().map(|x| {
+            x.get_str()
+        }).collect::<Result<Vec<String>, Error>>()?;
+
+        let custom_x_axes = CustomXAxis::new(x_axis);
         let y_min = self.y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
         let y_max = self.y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
         let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
@@ -137,7 +188,7 @@ impl Plotter {
         Ok(())
     }
 
-    fn parse_ops_per_second(file: &File) -> Result<(Vec<String>, Vec<f64>), Error> {
+    fn parse_ops_per_second(file: &File) -> Result<(Vec<XAxis>, Vec<f64>), Error> {
         let mut reader = csv::Reader::from_reader(file);
         let mut x_axis = vec![];
         let mut y_axis = vec![];
@@ -156,7 +207,7 @@ impl Plotter {
 
         for record in reader.records() {
             let record = record?;
-            x_axis.push(record.get(operation_idx).unwrap().to_string());
+            x_axis.push(XAxis::from(record.get(operation_idx).unwrap()));
             y_axis.push(
                 record
                     .get(ops_per_second_idx)
@@ -170,8 +221,43 @@ impl Plotter {
 
         Ok((x_axis, y_axis))
     }
+
+    fn parse_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<f64>), Error> {
+        let mut reader = csv::Reader::from_reader(file);
+        let mut x_axis = vec![];
+        let mut y_axis = vec![];
+
+        // find the seconds and ops columns
+        let seconds_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "second")
+            .unwrap();
+        let ops_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "ops")
+            .unwrap();
+
+        for record in reader.records() {
+            let record = record?;
+            x_axis.push(XAxis::from(record.get(seconds_idx).unwrap().parse::<f64>().unwrap()));
+            y_axis.push(
+                record
+                    .get(ops_idx)
+                    .unwrap()
+                    .parse::<f64>()
+                    .unwrap(),
+            );
+        }
+
+        assert_eq!(x_axis.len(), y_axis.len());
+
+        Ok((x_axis, y_axis))
+    }
 }
 
+/// Handling the string type values on a plot
 #[derive(Clone)]
 struct CustomXAxis {
     ticks: Vec<String>,
@@ -187,7 +273,7 @@ impl Ranged for CustomXAxis {
     type ValueType = String;
     type FormatOption = DefaultFormatting;
 
-    fn map(&self, v: &String, pixel_range: (i32, i32)) -> i32 {
+    fn map(&self, v: &Self::ValueType, pixel_range: (i32, i32)) -> i32 {
         let plot_pixel_range = (pixel_range.1 - pixel_range.0) as usize;
         let tick_distance = plot_pixel_range / self.ticks.len();
 
@@ -217,7 +303,7 @@ impl Ranged for CustomXAxis {
         return 0;
     }
 
-    fn key_points<Hint: KeyPointHint>(&self, hint: Hint) -> Vec<String> {
+    fn key_points<Hint: KeyPointHint>(&self, hint: Hint) -> Vec<Self::ValueType> {
         if hint.max_num_points() < 3 {
             vec![]
         } else {
@@ -225,7 +311,7 @@ impl Ranged for CustomXAxis {
         }
     }
 
-    fn range(&self) -> Range<String> {
+    fn range(&self) -> Range<Self::ValueType> {
         self.ticks[0].clone()..self.ticks[self.ticks.len() - 1].clone()
     }
 }
