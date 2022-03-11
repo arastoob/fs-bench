@@ -2,6 +2,7 @@ pub mod data_logger;
 pub mod error;
 pub mod micro;
 pub mod plotter;
+pub mod statistics;
 
 use crate::error::Error;
 use std::fmt::{Display, Formatter};
