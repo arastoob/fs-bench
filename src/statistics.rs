@@ -99,7 +99,7 @@ impl Statistics
     // find the outliers of the data vector
     pub fn outliers(&self) -> Result<Vec<f64>, Error> {
         let (q1, q3) = self.quartiles()?;
-        let iqr = self.iqr()?;
+        let iqr = q3 - q1;
 
         let lower_limit = q1 - (iqr.clone() * 1.5);
         let upper_limit = (iqr * 1.5) + q3;
