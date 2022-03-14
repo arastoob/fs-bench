@@ -1,5 +1,3 @@
-use std::fmt::{Display, Formatter};
-use rand::Rng;
 use crate::Error;
 
 #[derive(Debug)]
