@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter};
+use rand::Rng;
 use crate::Error;
 
 #[derive(Debug)]
@@ -9,7 +11,7 @@ pub struct Statistics {
 
 impl Statistics
 {
-    pub fn new<T>(data: Vec<T>)  -> Self
+    pub fn new<T>(data: &Vec<T>)  -> Self
         where T: Clone + std::convert::Into<f64>
     {
         let len = data.len() as f64;
@@ -96,7 +98,9 @@ impl Statistics
         Ok(iqr)
     }
 
-    // find the outliers of the data vector
+    // find the outliers of the data vector based on Tukey's Method:
+    // In Tukey's Method, values less than (25th percentile - 1.5 * IQR) or
+    // greater than (75th percentile + 1.5 * IQR) are considered outliers.
     pub fn outliers(&self) -> Result<Vec<f64>, Error> {
         let (q1, q3) = self.quartiles()?;
         let iqr = q3 - q1;
