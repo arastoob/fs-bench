@@ -114,12 +114,6 @@ impl Plotter {
             &BLACK,
         ))?;
 
-        let style = ShapeStyle {
-            color: BLACK.to_rgba(),
-            filled: true,
-            stroke_width: 1,
-        };
-
         Ok(())
     }
 
