@@ -1,21 +1,19 @@
 use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
-use crate::{make_dir, make_file, read_file, write_file, BenchMode, BenchResult, Error, Record};
+use crate::{make_dir, make_file, read_file, write_file, BenchMode, BenchResult, Error, Record, cleanup};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::{thread_rng, Rng, RngCore};
-use std::fs::remove_dir_all;
 use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
+use std::ops::Add;
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
+use log::error;
+use crate::sample::Sample;
 
 #[derive(Debug)]
 pub struct MicroBench {
     mode: BenchMode,
-    runtime: u16,
     io_size: usize,
     iteration: Option<u64>,
     mount_path: PathBuf,
@@ -26,7 +24,6 @@ pub struct MicroBench {
 impl MicroBench {
     pub fn new(
         mode: BenchMode,
-        runtime: u16,
         io_size: String,
         iteration: Option<u64>,
         mount_path: PathBuf,
@@ -38,7 +35,6 @@ impl MicroBench {
 
         Ok(Self {
             mode,
-            runtime,
             io_size,
             iteration,
             mount_path,
@@ -49,167 +45,239 @@ impl MicroBench {
 
     pub fn run(&self) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {msg} {bar:40.cyan/blue}")
-            .progress_chars("##-");
+            .template("{msg} [{bar:40}]")
+            .progress_chars("=> ");
 
         let logger = DataLogger::new(self.fs_name.clone(), self.log_path.clone())?;
 
         match self.mode {
             BenchMode::OpsPerSecond => {
-                let header = [
+                // results.add_record(self.mkdir(progress_style.clone())?)?;
+                // results.add_record(self.mknod(progress_style.clone())?)?;
+                // results.add_record(self.read(progress_style.clone())?)?;
+                // results.add_record(self.write(progress_style)?)?;
+
+                // let log_file_name = logger.log(results, &self.mode)?;
+                //
+                // let plotter = Plotter::parse(PathBuf::from(log_file_name), &self.mode)?;
+                // plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
+                // println!("results logged to {}", path_to_str(&self.log_path));
+
+            }
+            BenchMode::Throughput => {}
+            BenchMode::Behaviour => {
+
+                let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(progress_style.clone())?;
+                let (mknod_ops_s, mknod_behaviour) = self.mknod(progress_style.clone())?;
+                let (read_ops_s, read_behaviour) = self.read(progress_style.clone())?;
+                let (write_ops_s, write_behaviour) = self.write(progress_style.clone())?;
+
+
+                let ops_s_header = [
                     "operation".to_string(),
                     "runtime(s)".to_string(),
                     "ops/s".to_string(),
                 ]
-                .to_vec();
-                let mut results = BenchResult::new(header);
+                    .to_vec();
+                let mut ops_s_results = BenchResult::new(ops_s_header);
 
-                results.add_record(self.mkdir(progress_style.clone())?)?;
-                results.add_record(self.mknod(progress_style.clone())?)?;
-                results.add_record(self.read(progress_style.clone())?)?;
-                results.add_record(self.write(progress_style)?)?;
-
-                let log_file_name = logger.log(results, &self.mode)?;
-
-                let plotter = Plotter::parse(log_file_name.clone(), &self.mode)?;
+                ops_s_results.add_record(mkdir_ops_s)?;
+                ops_s_results.add_record(mknod_ops_s)?;
+                ops_s_results.add_record(read_ops_s)?;
+                ops_s_results.add_record(write_ops_s)?;
+                let ops_s_log = logger.log(ops_s_results, "ops_per_second")?;
+                let plotter = Plotter::parse(PathBuf::from(ops_s_log), &BenchMode::OpsPerSecond)?;
                 plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
-                println!("results logged to {}", path_to_str(&self.log_path));
+
+
+                let behaviour_header = [
+                    "second".to_string(),
+                    "ops".to_string(),
+                ].to_vec();
+
+                let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
+                mkdir_behaviour_results.add_records(mkdir_behaviour)?;
+                let mkdir_log = logger.log(mkdir_behaviour_results, "mkdir")?;
+                let plotter = Plotter::parse(PathBuf::from(mkdir_log), &BenchMode::Behaviour)?;
+                plotter.line_chart(Some("Time"), Some("Ops/s"), None)?;
+
+                let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
+                mknod_behaviour_results.add_records(mknod_behaviour)?;
+                let mknod_log = logger.log(mknod_behaviour_results, "mknod")?;
+                let plotter = Plotter::parse(PathBuf::from(mknod_log), &BenchMode::Behaviour)?;
+                plotter.line_chart(Some("Time"), Some("Ops/s"), None)?;
+
+                let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
+                read_behaviour_results.add_records(read_behaviour)?;
+                let read_log = logger.log(read_behaviour_results, "read")?;
+                let plotter = Plotter::parse(PathBuf::from(read_log), &BenchMode::Behaviour)?;
+                plotter.line_chart(Some("Time"), Some("Ops/s"), None)?;
+
+                let mut write_behaviour_results = BenchResult::new(behaviour_header);
+                write_behaviour_results.add_records(write_behaviour)?;
+                let write_log = logger.log(write_behaviour_results, "write")?;
+                let plotter = Plotter::parse(PathBuf::from(write_log), &BenchMode::Behaviour)?;
+                plotter.line_chart(Some("Time"), Some("Ops/s"), None)?;
+
+                println!("results logged to: {}", path_to_str(&logger.log_path));
             }
-            BenchMode::Throughput => {}
-            BenchMode::Behaviour => {}
         }
 
         Ok(())
     }
 
-    fn mkdir(&self, style: ProgressStyle) -> Result<Record, Error> {
-        self.cleanup("mkdir")?;
-        let root_path = format!("{}/{}", path_to_str(&self.mount_path), "mkdir");
+    fn mkdir(&self, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+        let mut root_path = self.mount_path.clone();
+        root_path.push("mkdir");
+        cleanup(&root_path)?;
+
+        let bar = ProgressBar::new(self.iteration.unwrap());
+        bar.set_style(style);
+        bar.set_message(format!("{:5}", "mkdir"));
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
 
         let mut dir = 0;
+        let mut times = vec![];
+        let mut behaviour = vec![];
 
-        let timer = timer::Timer::new();
-        // Number of times the callback has been called.
-        let count = Arc::new(Mutex::new(0));
-
-        // Start repeating. Each callback increases `count`.
-        let guard = {
-            let count = count.clone();
-
-            timer.schedule_repeating(chrono::Duration::milliseconds(0), move || {
-                let dir_name = format!("{}/{}", root_path, dir);
-                match make_dir(&dir_name) {
-                    Ok(()) => {
-                        *count.lock().unwrap() += 1;
-                        dir = dir + 1;
-                    }
-                    Err(e) => {
-                        println!("error: {:?}", e);
-                    }
+        let start = SystemTime::now();
+        while dir <= self.iteration.unwrap() {
+            let mut dir_name = root_path.clone();
+            dir_name.push(dir.to_string());
+            let begin = SystemTime::now();
+            match make_dir(&dir_name) {
+                Ok(()) => {
+                    let end = begin.elapsed().unwrap().as_secs_f64();
+                    times.push(end);
+                    behaviour.push(SystemTime::now());
+                    dir = dir + 1;
                 }
-            })
-        };
+                Err(e) => {
+                    error!("error: {:?}", e);
+                }
+            }
 
-        let bar = ProgressBar::new((self.runtime as u64) * 10);
-        bar.set_style(style);
-        bar.set_message(format!("{:10}", "mkdir"));
-
-        for _ in 0..(self.runtime as u64) * 10 {
             bar.inc(1);
-            thread::sleep(Duration::from_millis(100));
         }
+
+        let end = start.elapsed().unwrap().as_secs_f64();
+
         bar.finish();
 
-        // Now drop the guard. This should stop the timer.
-        drop(guard);
+        println!("iterations:    {}", self.iteration.unwrap());
+        println!("run time:      {}", end);
 
-        let count_result = *count.lock().unwrap();
+        let sample = Sample::new(&times);
+        let mean = sample.mean();
+        let ops_per_second = 1.0 / mean;
+        println!("mean:          {}", mean);
+        println!("ops/s:         {}", ops_per_second);
+        println!("op time:       {} s", mean as f64 / 1.0);
 
-        let record = Record {
+        let outliers = sample.outliers();
+        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
+        println!("outliers:      {} %", outliers_percentage);
+
+        let ops_per_second_record = Record {
             fields: [
                 "mkdir".to_string(),
-                self.runtime.to_string(),
-                (count_result / self.runtime).to_string(),
-            ]
-            .to_vec(),
+                end.to_string(),
+                (ops_per_second).to_string(),
+            ].to_vec(),
         };
 
-        Ok(record)
+        let behaviour_records  = self.ops_in_window(&behaviour, 20)?;
+
+        println!();
+        Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn mknod(&self, style: ProgressStyle) -> Result<Record, Error> {
-        self.cleanup("mknod")?;
-        let root_path = format!("{}/{}", path_to_str(&self.mount_path), "mknod");
+    fn mknod(&self, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+        let mut root_path = self.mount_path.clone();
+        root_path.push("mknod");
+        cleanup(&root_path)?;
+
+        let bar = ProgressBar::new(self.iteration.unwrap());
+        bar.set_style(style);
+        bar.set_message(format!("{:5}", "mknod"));
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
 
         let mut file = 0;
+        let mut times = vec![];
+        let mut behaviour = vec![];
 
-        let timer = timer::Timer::new();
-        // Number of times the callback has been called.
-        let count = Arc::new(Mutex::new(0));
-
-        // Start repeating. Each callback increases `count`.
-        let guard = {
-            let count = count.clone();
-
-            timer.schedule_repeating(chrono::Duration::milliseconds(0), move || {
-                let file_name = format!("{}/{}", root_path, file);
-                match make_file(&file_name) {
-                    Ok(_) => {
-                        *count.lock().unwrap() += 1;
-                        file = file + 1;
-                        //let path = Path::new(&dir_name);
-                    }
-                    Err(e) => {
-                        println!("error: {:?}", e);
-                    }
+        let start = SystemTime::now();
+        while file <= self.iteration.unwrap() {
+            let mut file_name = root_path.clone();
+            file_name.push(file.to_string());
+            let begin = SystemTime::now();
+            match make_file(&file_name) {
+                Ok(_) => {
+                    let end = begin.elapsed().unwrap().as_secs_f64();
+                    times.push(end);
+                    behaviour.push(SystemTime::now());
+                    file = file + 1;
                 }
-            })
-        };
+                Err(e) => {
+                    error!("error: {:?}", e);
+                }
+            }
 
-        let bar = ProgressBar::new((self.runtime as u64) * 10);
-        bar.set_style(style);
-        bar.set_message(format!("{:10}", "mknod"));
-
-        for _ in 0..(self.runtime as u64) * 10 {
             bar.inc(1);
-            thread::sleep(Duration::from_millis(100));
         }
+
+        let end = start.elapsed().unwrap().as_secs_f64();
+
         bar.finish();
 
-        // Now drop the guard. This should stop the timer.
-        drop(guard);
+        println!("iterations:    {}", self.iteration.unwrap());
+        println!("run time:      {}", end);
 
-        let count_result = *count.lock().unwrap();
+        let sample = Sample::new(&times);
+        let mean = sample.mean();
+        let ops_per_second = 1.0 / mean;
+        println!("mean:          {}", mean);
+        println!("ops/s:         {}", ops_per_second);
+        println!("op time:       {} s", mean as f64 / 1.0);
 
-        let record = Record {
+        let outliers = sample.outliers();
+        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
+        println!("outliers:      {} %", outliers_percentage);
+
+        let ops_per_second_record = Record {
             fields: [
                 "mknod".to_string(),
-                self.runtime.to_string(),
-                (count_result / self.runtime).to_string(),
-            ]
-            .to_vec(),
+                end.to_string(),
+                (ops_per_second).to_string(),
+            ].to_vec(),
         };
 
-        Ok(record)
+        let behaviour_records  = self.ops_in_window(&behaviour, 20)?;
+
+        println!();
+        Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn read(&self, style: ProgressStyle) -> Result<Record, Error> {
-        self.cleanup("read")?;
-        let root_path = format!("{}/{}", path_to_str(&self.mount_path), "read");
+    fn read(&self, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+        let mut root_path = self.mount_path.clone();
+        root_path.push("read");
+        cleanup(&root_path)?;
+
+        let bar = ProgressBar::new(self.iteration.unwrap());
+        bar.set_style(style);
+        bar.set_message(format!("{:5}", "read"));
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
 
-        // println!("pre-allocating...");
         let size = self.io_size;
         for file in 1..1001 {
-            let file_name = format!("{}/{}", root_path, file);
+            let mut file_name = root_path.clone();
+            file_name.push(file.to_string());
             let mut file = make_file(&file_name)?;
 
             // generate a buffer of size write_size filled with random integer values
@@ -220,68 +288,80 @@ impl MicroBench {
             file.write(&rand_buffer)?;
         }
 
-        let timer = timer::Timer::new();
-        // Number of times the callback has been called.
-        let count = Arc::new(Mutex::new(0));
-
-        // Start repeating. Each callback increases `count`.
+        let mut idx = 0;
+        let mut times = vec![];
+        let mut behaviour = vec![];
         let mut read_buffer = vec![0u8; size];
-        let guard = {
-            let count = count.clone();
 
-            timer.schedule_repeating(chrono::Duration::milliseconds(0), move || {
-                let file = thread_rng().gen_range(1..1001);
-                let file_name = format!("{}/{}", root_path, file);
-
-                match read_file(&file_name, &mut read_buffer) {
-                    Ok(_) => {
-                        *count.lock().unwrap() += 1;
-                    }
-                    Err(e) => {
-                        println!("error: {:?}", e);
-                    }
+        let start = SystemTime::now();
+        while idx <= self.iteration.unwrap() {
+            let file = thread_rng().gen_range(1..1001);
+            let mut file_name = root_path.clone();
+            file_name.push(file.to_string());
+            let begin = SystemTime::now();
+            match read_file(&file_name, &mut read_buffer) {
+                Ok(_) => {
+                    let end = begin.elapsed().unwrap().as_secs_f64();
+                    times.push(end);
+                    behaviour.push(SystemTime::now());
+                    idx += 1;
                 }
-            })
-        };
+                Err(e) => {
+                    println!("error: {:?}", e);
+                }
+            }
 
-        let bar = ProgressBar::new((self.runtime as u64) * 10);
-        bar.set_style(style);
-        bar.set_message(format!("{:10}", "read"));
-
-        for _ in 0..(self.runtime as u64) * 10 {
             bar.inc(1);
-            thread::sleep(Duration::from_millis(100));
         }
+
+        let end = start.elapsed().unwrap().as_secs_f64();
+
         bar.finish();
 
-        // Now drop the guard. This should stop the timer.
-        drop(guard);
+        println!("iterations:    {}", self.iteration.unwrap());
+        println!("run time:      {}", end);
 
-        let count_result = *count.lock().unwrap();
+        let sample = Sample::new(&times);
+        let mean = sample.mean();
+        let ops_per_second = 1.0 / mean;
+        println!("mean:          {}", mean);
+        println!("ops/s:         {}", ops_per_second);
+        println!("op time:       {} s", mean as f64 / 1.0);
 
-        let record = Record {
+        let outliers = sample.outliers();
+        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
+        println!("outliers:      {} %", outliers_percentage);
+
+        let ops_per_second_record = Record {
             fields: [
                 "read".to_string(),
-                self.runtime.to_string(),
-                (count_result / self.runtime).to_string(),
-            ]
-            .to_vec(),
+                end.to_string(),
+                (ops_per_second).to_string(),
+            ].to_vec(),
         };
 
-        Ok(record)
+        let behaviour_records  = self.ops_in_window(&behaviour, 10)?;
+
+        println!();
+        Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn write(&self, style: ProgressStyle) -> Result<Record, Error> {
-        self.cleanup("write")?;
-        let root_path = format!("{}/{}", path_to_str(&self.mount_path), "write");
+    fn write(&self, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+        let mut root_path = self.mount_path.clone();
+        root_path.push("write");
+        cleanup(&root_path)?;
+
+        let bar = ProgressBar::new(self.iteration.unwrap());
+        bar.set_style(style);
+        bar.set_message(format!("{:5}", "write"));
 
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
 
-        // println!("pre-allocation...");
         for file in 1..1001 {
-            let file_name = format!("{}/{}", root_path, file);
-            make_file(&file_name).expect("pre-allocation failed.");
+            let mut file_name = root_path.clone();
+            file_name.push(file.to_string());
+            make_file(&file_name)?;
         }
 
         // create a big vector filled with random content
@@ -290,93 +370,118 @@ impl MicroBench {
         let mut rng = rand::thread_rng();
         rng.fill_bytes(&mut rand_content);
 
-        let timer = timer::Timer::new();
-        // Number of times the callback has been called.
-        let count = Arc::new(Mutex::new(0));
+        let mut idx = 0;
+        let mut times = vec![];
+        let mut behaviour = vec![];
 
-        // Start repeating. Each callback increases `count`.
-        let guard = {
-            let count = count.clone();
+        let start = SystemTime::now();
+        while idx <= self.iteration.unwrap() {
+            let rand_content_index = thread_rng().gen_range(0..(8192 * size) - size - 1);
+            let mut content =
+                rand_content[rand_content_index..(rand_content_index + size)].to_vec();
 
-            timer.schedule_repeating(chrono::Duration::milliseconds(0), move || {
-                let rand_content_index = thread_rng().gen_range(0..(8192 * size) - size - 1);
-                let mut content =
-                    rand_content[rand_content_index..(rand_content_index + size)].to_vec();
-
-                let file = thread_rng().gen_range(1..1001);
-                let file_name = format!("{}/{}", root_path, file);
-
-                match write_file(&file_name, &mut content) {
-                    Ok(_) => {
-                        *count.lock().unwrap() += 1;
-                    }
-                    Err(e) => {
-                        println!("error: {:?}", e);
-                    }
+            let file = thread_rng().gen_range(1..1001);
+            let mut file_name = root_path.clone();
+            file_name.push(file.to_string());
+            let begin = SystemTime::now();
+            match write_file(&file_name, &mut content) {
+                Ok(_) => {
+                    let end = begin.elapsed().unwrap().as_secs_f64();
+                    times.push(end);
+                    behaviour.push(SystemTime::now());
+                    idx += 1;
                 }
-            })
-        };
+                Err(e) => {
+                    println!("error: {:?}", e);
+                }
+            }
 
-        let bar = ProgressBar::new((self.runtime as u64) * 10);
-        bar.set_style(style);
-        bar.set_message(format!("{:10}", "write"));
-
-        for _ in 0..(self.runtime as u64) * 10 {
             bar.inc(1);
-            thread::sleep(Duration::from_millis(100));
         }
+
+        let end = start.elapsed().unwrap().as_secs_f64();
+
         bar.finish();
 
-        // Now drop the guard. This should stop the timer.
-        drop(guard);
+        println!("iterations:    {}", self.iteration.unwrap());
+        println!("run time:      {}", end);
 
-        let count_result = *count.lock().unwrap();
+        let sample = Sample::new(&times);
+        let mean = sample.mean();
+        let ops_per_second = 1.0 / mean;
+        println!("mean:          {}", mean);
+        println!("ops/s:         {}", ops_per_second);
+        println!("op time:       {} s", mean as f64 / 1.0);
 
-        let record = Record {
+        let outliers = sample.outliers();
+        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
+        println!("outliers:      {} %", outliers_percentage);
+
+        let ops_per_second_record = Record {
             fields: [
                 "write".to_string(),
-                self.runtime.to_string(),
-                (count_result / self.runtime).to_string(),
-            ]
-            .to_vec(),
+                end.to_string(),
+                (ops_per_second).to_string(),
+            ].to_vec(),
         };
 
-        Ok(record)
+        let behaviour_records  = self.ops_in_window(&behaviour, 10)?;
+
+        println!();
+        Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn cleanup(&self, bench_name: &str) -> Result<(), Error> {
-        let bench_name = bench_name.to_string();
-        let spinner = ProgressBar::new_spinner();
-        spinner.set_style(ProgressStyle::default_spinner().template("{msg} {spinner}"));
-        spinner.set_message(format!("{} clean up", bench_name));
+    // count the number of operations in a time window
+    // the time window length is in milliseconds
+    // the input times contains the timestamps in unix_time format. The first 10 digits are
+    // date and time in seconds and the last 9 digits show the milliseconds
+    fn ops_in_window(&self, times: &Vec<SystemTime>, window: u64) -> Result<Vec<Record>, Error> {
+        let len = times.len();
+        let first = times[0]; // first timestamp
+        let last = times[len - 1]; // last timestamp
 
-        let (sender, receiver) = channel();
-        let mount_path = path_to_str(&self.mount_path).to_string();
-        thread::spawn(move || {
-            let path = format!("{}/{}", mount_path, bench_name);
-            let path = Path::new(&path);
-            if path.exists() {
-                remove_dir_all(path).unwrap();
-            }
-            // notify the receiver about finishing the clean up
-            sender.send(true).unwrap();
-        });
+        let mut records = vec![];
 
-        // spin the spinner until the clean up is done
-        loop {
-            match receiver.try_recv() {
-                Ok(_done) => {
-                    spinner.finish_and_clear();
-                    break;
-                }
-                _ => {
-                    thread::sleep(Duration::from_millis(50));
-                    spinner.inc(1);
-                }
+        let mut next = first.add(Duration::from_millis(window));
+        let mut idx = 0;
+        let mut ops = 0;
+        while next < last {
+            while times[idx] < next { // count ops in this time window
+                ops += 1;
+                idx += 1;
             }
+            let time = next.duration_since(first).unwrap().as_secs_f64();
+            let record = Record {
+                fields: [
+                    time.to_string(),
+                    // we have counted ops in a window length milliseconds, so the ops in
+                    // a second is (ops * 1000) / window
+                    ((ops * 1000) / window as usize).to_string()
+                ].to_vec()
+            };
+            records.push(record);
+
+            // go the next time window
+            next = next.add(Duration::from_millis(window));
+            ops = 0;
         }
 
-        Ok(())
+        // count the remaining
+        if idx < len {
+            ops = len - idx;
+            let time = last.duration_since(first).unwrap().as_secs_f64();
+            let record = Record {
+                fields: [
+                    time.to_string(),
+                    // we have counted ops in a window length milliseconds, so the ops in
+                    // a second is (ops * 1000) / window
+                    ((ops * 1000) / window as usize).to_string()
+                ].to_vec()
+            };
+            records.push(record);
+        }
+
+        Ok(records)
     }
 }
 
