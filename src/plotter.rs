@@ -34,14 +34,14 @@ impl XAxis {
     pub fn get_str(&self) -> Result<String, Error> {
         match self {
             XAxis::STR(s) => Ok(s.clone()),
-            _ => Err(Error::format("x axis", "value is not a string"))
+            _ => Err(Error::format("x axis", "value is not a string")),
         }
     }
 
     pub fn get_float(&self) -> Result<f64, Error> {
         match self {
             XAxis::F64(f) => Ok(*f),
-            _ => Err(Error::format("x axis", "value is not a float"))
+            _ => Err(Error::format("x axis", "value is not a float")),
         }
     }
 }
@@ -61,7 +61,7 @@ impl Plotter {
                     y_axis,
                     path,
                 })
-            },
+            }
             BenchMode::Behaviour => {
                 let (x_axis, y_axis) = Plotter::parse_timestamps(&file)?;
                 Ok(Self {
@@ -69,7 +69,7 @@ impl Plotter {
                     y_axis,
                     path,
                 })
-            },
+            }
             _ => unimplemented!(),
         }
     }
@@ -90,9 +90,11 @@ impl Plotter {
         let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
 
         // for the line chart, we need the float values of the x axis
-        let x_axis = self.x_axis.iter().map(|x| {
-           x.get_float()
-        }).collect::<Result<Vec<f64>, Error>>()?;
+        let x_axis = self
+            .x_axis
+            .iter()
+            .map(|x| x.get_float())
+            .collect::<Result<Vec<f64>, Error>>()?;
 
         let mut ctx = ChartBuilder::on(&root_area)
             .set_label_area_size(LabelAreaPosition::Left, 100.0)
@@ -107,10 +109,7 @@ impl Plotter {
             .draw()?;
 
         ctx.draw_series(LineSeries::new(
-            x_axis
-                .iter()
-                .zip(self.y_axis.iter())
-                .map(|(x, y)| (*x, *y)), // The data iter
+            x_axis.iter().zip(self.y_axis.iter()).map(|(x, y)| (*x, *y)), // The data iter
             &BLACK,
         ))?;
 
@@ -127,9 +126,11 @@ impl Plotter {
         root_area.fill(&WHITE)?;
 
         // for the bar chart, we need the string values of the x axis
-        let x_axis = self.x_axis.iter().map(|x| {
-            x.get_str()
-        }).collect::<Result<Vec<String>, Error>>()?;
+        let x_axis = self
+            .x_axis
+            .iter()
+            .map(|x| x.get_str())
+            .collect::<Result<Vec<String>, Error>>()?;
 
         let custom_x_axes = CustomXAxis::new(x_axis);
         let y_min = self.y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
@@ -233,14 +234,10 @@ impl Plotter {
 
         for record in reader.records() {
             let record = record?;
-            x_axis.push(XAxis::from(record.get(seconds_idx).unwrap().parse::<f64>().unwrap()));
-            y_axis.push(
-                record
-                    .get(ops_idx)
-                    .unwrap()
-                    .parse::<f64>()
-                    .unwrap(),
-            );
+            x_axis.push(XAxis::from(
+                record.get(seconds_idx).unwrap().parse::<f64>().unwrap(),
+            ));
+            y_axis.push(record.get(ops_idx).unwrap().parse::<f64>().unwrap());
         }
 
         assert_eq!(x_axis.len(), y_axis.len());

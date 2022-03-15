@@ -15,11 +15,7 @@ impl DataLogger {
 
     pub fn log(&self, results: BenchResult, op: &str) -> Result<PathBuf, Error> {
         // remove the log file if exist
-        let file_name = format!(
-            "{}_{}.csv",
-            self.fs_name,
-            op
-        );
+        let file_name = format!("{}_{}.csv", self.fs_name, op);
         let mut log_path = self.log_path.clone();
         log_path.push(file_name);
         if log_path.exists() {

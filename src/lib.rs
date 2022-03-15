@@ -5,15 +5,15 @@ pub mod plotter;
 pub mod sample;
 
 use crate::error::Error;
+use indicatif::{ProgressBar, ProgressStyle};
 use std::fmt::{Display, Formatter};
-use std::fs::{create_dir, File, OpenOptions, remove_dir_all};
+use std::fs::{create_dir, remove_dir_all, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
-use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(Debug)]
 pub enum BenchMode {
@@ -92,14 +92,12 @@ pub struct Record {
 }
 
 pub fn make_dir(path: &PathBuf) -> Result<(), Error> {
-
     create_dir(path)?;
 
     Ok(())
 }
 
 pub fn make_file(path: &PathBuf) -> Result<File, Error> {
-
     Ok(File::create(path)?)
 }
 

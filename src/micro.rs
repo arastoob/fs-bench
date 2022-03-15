@@ -1,15 +1,17 @@
 use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
-use crate::{make_dir, make_file, read_file, write_file, BenchMode, BenchResult, Error, Record, cleanup};
+use crate::sample::Sample;
+use crate::{
+    cleanup, make_dir, make_file, read_file, write_file, BenchMode, BenchResult, Error, Record,
+};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
+use log::error;
 use rand::{thread_rng, Rng, RngCore};
 use std::io::Write;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
-use log::error;
-use crate::sample::Sample;
 
 #[derive(Debug)]
 pub struct MicroBench {
@@ -62,23 +64,20 @@ impl MicroBench {
                 // let plotter = Plotter::parse(PathBuf::from(log_file_name), &self.mode)?;
                 // plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
                 // println!("results logged to {}", path_to_str(&self.log_path));
-
             }
             BenchMode::Throughput => {}
             BenchMode::Behaviour => {
-
                 let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(progress_style.clone())?;
                 let (mknod_ops_s, mknod_behaviour) = self.mknod(progress_style.clone())?;
                 let (read_ops_s, read_behaviour) = self.read(progress_style.clone())?;
                 let (write_ops_s, write_behaviour) = self.write(progress_style.clone())?;
-
 
                 let ops_s_header = [
                     "operation".to_string(),
                     "runtime(s)".to_string(),
                     "ops/s".to_string(),
                 ]
-                    .to_vec();
+                .to_vec();
                 let mut ops_s_results = BenchResult::new(ops_s_header);
 
                 ops_s_results.add_record(mkdir_ops_s)?;
@@ -89,11 +88,7 @@ impl MicroBench {
                 let plotter = Plotter::parse(PathBuf::from(ops_s_log), &BenchMode::OpsPerSecond)?;
                 plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
 
-
-                let behaviour_header = [
-                    "second".to_string(),
-                    "ops".to_string(),
-                ].to_vec();
+                let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
 
                 let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
                 mkdir_behaviour_results.add_records(mkdir_behaviour)?;
@@ -185,10 +180,11 @@ impl MicroBench {
                 "mkdir".to_string(),
                 end.to_string(),
                 (ops_per_second).to_string(),
-            ].to_vec(),
+            ]
+            .to_vec(),
         };
 
-        let behaviour_records  = self.ops_in_window(&behaviour, 20)?;
+        let behaviour_records = self.ops_in_window(&behaviour, 20)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -253,10 +249,11 @@ impl MicroBench {
                 "mknod".to_string(),
                 end.to_string(),
                 (ops_per_second).to_string(),
-            ].to_vec(),
+            ]
+            .to_vec(),
         };
 
-        let behaviour_records  = self.ops_in_window(&behaviour, 20)?;
+        let behaviour_records = self.ops_in_window(&behaviour, 20)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -337,10 +334,11 @@ impl MicroBench {
                 "read".to_string(),
                 end.to_string(),
                 (ops_per_second).to_string(),
-            ].to_vec(),
+            ]
+            .to_vec(),
         };
 
-        let behaviour_records  = self.ops_in_window(&behaviour, 10)?;
+        let behaviour_records = self.ops_in_window(&behaviour, 10)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -422,10 +420,11 @@ impl MicroBench {
                 "write".to_string(),
                 end.to_string(),
                 (ops_per_second).to_string(),
-            ].to_vec(),
+            ]
+            .to_vec(),
         };
 
-        let behaviour_records  = self.ops_in_window(&behaviour, 10)?;
+        let behaviour_records = self.ops_in_window(&behaviour, 10)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -446,7 +445,8 @@ impl MicroBench {
         let mut idx = 0;
         let mut ops = 0;
         while next < last {
-            while times[idx] < next { // count ops in this time window
+            while times[idx] < next {
+                // count ops in this time window
                 ops += 1;
                 idx += 1;
             }
@@ -456,8 +456,9 @@ impl MicroBench {
                     time.to_string(),
                     // we have counted ops in a window length milliseconds, so the ops in
                     // a second is (ops * 1000) / window
-                    ((ops * 1000) / window as usize).to_string()
-                ].to_vec()
+                    ((ops * 1000) / window as usize).to_string(),
+                ]
+                .to_vec(),
             };
             records.push(record);
 
@@ -475,8 +476,9 @@ impl MicroBench {
                     time.to_string(),
                     // we have counted ops in a window length milliseconds, so the ops in
                     // a second is (ops * 1000) / window
-                    ((ops * 1000) / window as usize).to_string()
-                ].to_vec()
+                    ((ops * 1000) / window as usize).to_string(),
+                ]
+                .to_vec(),
             };
             records.push(record);
         }
