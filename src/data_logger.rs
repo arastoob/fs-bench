@@ -1,4 +1,4 @@
-use crate::{BenchMode, BenchResult, Error};
+use crate::{BenchResult, Error};
 use std::fs::{remove_file, OpenOptions};
 use std::path::PathBuf;
 
@@ -13,12 +13,12 @@ impl DataLogger {
         Ok(Self { fs_name, log_path })
     }
 
-    pub fn log(&self, results: BenchResult, mode: &BenchMode) -> Result<PathBuf, Error> {
+    pub fn log(&self, results: BenchResult, op: &str) -> Result<PathBuf, Error> {
         // remove the log file if exist
         let file_name = format!(
             "{}_{}.csv",
             self.fs_name,
-            mode.to_string()
+            op
         );
         let mut log_path = self.log_path.clone();
         log_path.push(file_name);
