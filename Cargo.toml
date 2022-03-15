@@ -14,5 +14,6 @@ indicatif = "0.16.2"
 log = "0.4.0"
 plotters = "0.3"
 rand = "0.8.0"
+rayon = "1.5.1"
 serde = { version = "1", features = ["derive"] }
 timer = "0.2.0"
