@@ -12,6 +12,7 @@ use std::io::Write;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
+use crate::timer::Timer;
 
 #[derive(Debug)]
 pub struct MicroBench {
@@ -51,6 +52,7 @@ impl MicroBench {
             .progress_chars("=> ");
 
         let logger = DataLogger::new(self.fs_name.clone(), self.log_path.clone())?;
+        let max_rt = Duration::from_secs(60 * 5); // maximum running time
 
         match self.mode {
             BenchMode::OpsPerSecond => {
@@ -67,10 +69,10 @@ impl MicroBench {
             }
             BenchMode::Throughput => {}
             BenchMode::Behaviour => {
-                let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(progress_style.clone())?;
-                let (mknod_ops_s, mknod_behaviour) = self.mknod(progress_style.clone())?;
-                let (read_ops_s, read_behaviour) = self.read(progress_style.clone())?;
-                let (write_ops_s, write_behaviour) = self.write(progress_style.clone())?;
+                let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(max_rt, progress_style.clone())?;
+                let (mknod_ops_s, mknod_behaviour) = self.mknod(max_rt, progress_style.clone())?;
+                let (read_ops_s, read_behaviour) = self.read(max_rt, progress_style.clone())?;
+                let (write_ops_s, write_behaviour) = self.write(max_rt, progress_style.clone())?;
 
                 let ops_s_header = [
                     "operation".to_string(),
@@ -121,7 +123,7 @@ impl MicroBench {
         Ok(())
     }
 
-    fn mkdir(&self, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn mkdir(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mkdir");
         cleanup(&root_path)?;
@@ -133,21 +135,24 @@ impl MicroBench {
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
 
-        let mut dir = 0;
+        let mut idx = 0;
         let mut times = vec![];
         let mut behaviour = vec![];
 
+        let timer = Timer::new(max_rt);
+        timer.start();
+        let mut interrupted = false;
         let start = SystemTime::now();
-        while dir <= self.iteration.unwrap() {
+        while idx <= self.iteration.unwrap() {
             let mut dir_name = root_path.clone();
-            dir_name.push(dir.to_string());
+            dir_name.push(idx.to_string());
             let begin = SystemTime::now();
             match make_dir(&dir_name) {
                 Ok(()) => {
                     let end = begin.elapsed().unwrap().as_secs_f64();
                     times.push(end);
                     behaviour.push(SystemTime::now());
-                    dir = dir + 1;
+                    idx = idx + 1;
                 }
                 Err(e) => {
                     error!("error: {:?}", e);
@@ -155,13 +160,22 @@ impl MicroBench {
             }
 
             bar.inc(1);
+
+            if timer.finished() {
+                interrupted = true;
+                break;
+            }
         }
 
         let end = start.elapsed().unwrap().as_secs_f64();
 
-        bar.finish();
+        if !interrupted {
+            bar.finish();
+        } else {
+            bar.abandon_with_message("mkdir exceeded the max runtime");
+        }
 
-        println!("iterations:    {}", self.iteration.unwrap());
+        println!("iterations:    {}", idx - 1);
         println!("run time:      {}", end);
 
         let sample = Sample::new(&times);
@@ -190,7 +204,7 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn mknod(&self, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn mknod(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mknod");
         cleanup(&root_path)?;
@@ -202,21 +216,25 @@ impl MicroBench {
         // creating the root directory to generate the test directories inside it
         make_dir(&root_path)?;
 
-        let mut file = 0;
+        let mut idx = 0;
         let mut times = vec![];
         let mut behaviour = vec![];
 
+        let timer = Timer::new(max_rt);
+        timer.start();
+        let mut interrupted = false;
+
         let start = SystemTime::now();
-        while file <= self.iteration.unwrap() {
+        while idx <= self.iteration.unwrap() {
             let mut file_name = root_path.clone();
-            file_name.push(file.to_string());
+            file_name.push(idx.to_string());
             let begin = SystemTime::now();
             match make_file(&file_name) {
                 Ok(_) => {
                     let end = begin.elapsed().unwrap().as_secs_f64();
                     times.push(end);
                     behaviour.push(SystemTime::now());
-                    file = file + 1;
+                    idx = idx + 1;
                 }
                 Err(e) => {
                     error!("error: {:?}", e);
@@ -224,13 +242,22 @@ impl MicroBench {
             }
 
             bar.inc(1);
+
+            if timer.finished() {
+                interrupted = true;
+                break;
+            }
         }
 
         let end = start.elapsed().unwrap().as_secs_f64();
 
-        bar.finish();
+        if !interrupted {
+            bar.finish();
+        } else {
+            bar.abandon_with_message("mknod exceeded the max runtime");
+        }
 
-        println!("iterations:    {}", self.iteration.unwrap());
+        println!("iterations:    {}", idx - 1);
         println!("run time:      {}", end);
 
         let sample = Sample::new(&times);
@@ -259,7 +286,7 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn read(&self, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn read(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("read");
         cleanup(&root_path)?;
@@ -290,6 +317,10 @@ impl MicroBench {
         let mut behaviour = vec![];
         let mut read_buffer = vec![0u8; size];
 
+        let timer = Timer::new(max_rt);
+        timer.start();
+        let mut interrupted = false;
+
         let start = SystemTime::now();
         while idx <= self.iteration.unwrap() {
             let file = thread_rng().gen_range(1..1001);
@@ -309,13 +340,22 @@ impl MicroBench {
             }
 
             bar.inc(1);
+
+            if timer.finished() {
+                interrupted = true;
+                break;
+            }
         }
 
         let end = start.elapsed().unwrap().as_secs_f64();
 
-        bar.finish();
+        if !interrupted {
+            bar.finish();
+        } else {
+            bar.abandon_with_message("read exceeded the max runtime");
+        }
 
-        println!("iterations:    {}", self.iteration.unwrap());
+        println!("iterations:    {}", idx - 1);
         println!("run time:      {}", end);
 
         let sample = Sample::new(&times);
@@ -344,7 +384,7 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn write(&self, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn write(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("write");
         cleanup(&root_path)?;
@@ -372,6 +412,10 @@ impl MicroBench {
         let mut times = vec![];
         let mut behaviour = vec![];
 
+        let timer = Timer::new(max_rt);
+        timer.start();
+        let mut interrupted = false;
+
         let start = SystemTime::now();
         while idx <= self.iteration.unwrap() {
             let rand_content_index = thread_rng().gen_range(0..(8192 * size) - size - 1);
@@ -395,13 +439,22 @@ impl MicroBench {
             }
 
             bar.inc(1);
+
+            if timer.finished() {
+                interrupted = true;
+                break;
+            }
         }
 
         let end = start.elapsed().unwrap().as_secs_f64();
 
-        bar.finish();
+        if !interrupted {
+            bar.finish();
+        } else {
+            bar.abandon_with_message("write exceeded the max runtime");
+        }
 
-        println!("iterations:    {}", self.iteration.unwrap());
+        println!("iterations:    {}", idx - 1);
         println!("run time:      {}", end);
 
         let sample = Sample::new(&times);

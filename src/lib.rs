@@ -3,6 +3,7 @@ pub mod error;
 pub mod micro;
 pub mod plotter;
 pub mod sample;
+mod timer;
 
 use crate::error::Error;
 use indicatif::{ProgressBar, ProgressStyle};
