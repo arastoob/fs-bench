@@ -227,7 +227,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = self.ops_in_window(&behaviour, 20)?;
+        let behaviour_records = self.ops_in_window(&behaviour)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -313,7 +313,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = self.ops_in_window(&behaviour, 20)?;
+        let behaviour_records = self.ops_in_window(&behaviour)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -411,7 +411,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = self.ops_in_window(&behaviour, 10)?;
+        let behaviour_records = self.ops_in_window(&behaviour)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -514,7 +514,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = self.ops_in_window(&behaviour, 10)?;
+        let behaviour_records = self.ops_in_window(&behaviour)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -727,10 +727,39 @@ impl MicroBench {
     // the time window length is in milliseconds
     // the input times contains the timestamps in unix_time format. The first 10 digits are
     // date and time in seconds and the last 9 digits show the milliseconds
-    fn ops_in_window(&self, times: &Vec<SystemTime>, window: u64) -> Result<Vec<Record>, Error> {
+    fn ops_in_window(&self, times: &Vec<SystemTime>) -> Result<Vec<Record>, Error> {
         let len = times.len();
         let first = times[0]; // first timestamp
         let last = times[len - 1]; // last timestamp
+
+        // decide about the window length in millis
+        let duration = last.duration_since(first)?.as_secs_f64();
+        let window = if duration < 0.5 {
+            2
+        } else if duration < 1f64 {
+            5
+        } else if duration < 3f64 {
+            10
+        } else if duration < 5f64 {
+            20
+        } else if duration < 10f64 {
+            50
+        } else if duration < 20f64 {
+            70
+        }  else if duration < 50f64 {
+            100
+        } else if duration < 100f64 {
+            150
+        } else if duration < 150f64 {
+            200
+        } else if duration < 200f64 {
+            500
+        } else if duration < 300f64 {
+            1000
+        } else  {
+            5000
+        };
+
 
         let mut records = vec![];
 
