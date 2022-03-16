@@ -245,22 +245,21 @@ impl Plotter {
             .headers()?
             .iter()
             .position(|header| header == "operation")
-            .unwrap();
+            .ok_or(Error::CsvError("header 'operation' not found".to_string()))?;
         let ops_per_second_idx = reader
             .headers()?
             .iter()
             .position(|header| header == "ops/s")
-            .unwrap();
+            .ok_or(Error::CsvError("header 'ops/s' not found".to_string()))?;
 
         for record in reader.records() {
             let record = record?;
-            x_axis.push(XAxis::from(record.get(operation_idx).unwrap()));
+            x_axis.push(XAxis::from(record.get(operation_idx).ok_or(Error::CsvError("failed to read from the csv file".to_string()))?));
             y_axis.push(
                 record
                     .get(ops_per_second_idx)
-                    .unwrap()
-                    .parse::<f64>()
-                    .unwrap(),
+                    .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                    .parse::<f64>()?,
             );
         }
 
@@ -279,19 +278,23 @@ impl Plotter {
             .headers()?
             .iter()
             .position(|header| header == "second")
-            .unwrap();
+            .ok_or(Error::CsvError("header 'second' not found".to_string()))?;
         let ops_idx = reader
             .headers()?
             .iter()
             .position(|header| header == "ops")
-            .unwrap();
+            .ok_or(Error::CsvError("header 'ops' not found".to_string()))?;
 
         for record in reader.records() {
             let record = record?;
             x_axis.push(XAxis::from(
-                record.get(seconds_idx).unwrap().parse::<f64>().unwrap(),
+                record.get(seconds_idx)
+                    .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                    .parse::<f64>()?,
             ));
-            y_axis.push(record.get(ops_idx).unwrap().parse::<f64>().unwrap());
+            y_axis.push(record.get(ops_idx)
+                .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                .parse::<f64>()?);
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -309,19 +312,23 @@ impl Plotter {
             .headers()?
             .iter()
             .position(|header| header == "file_size")
-            .unwrap();
+            .ok_or(Error::CsvError("header 'file_size' not found".to_string()))?;
         let throughput_idx = reader
             .headers()?
             .iter()
             .position(|header| header == "throughput")
-            .unwrap();
+            .ok_or(Error::CsvError("header 'throughput' not found".to_string()))?;
 
         for record in reader.records() {
             let record = record?;
             x_axis.push(XAxis::from(
-                record.get(file_size_idx).unwrap().parse::<f64>().unwrap(),
+                record.get(file_size_idx)
+                    .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                    .parse::<f64>()?,
             ));
-            y_axis.push(record.get(throughput_idx).unwrap().parse::<f64>().unwrap());
+            y_axis.push(record.get(throughput_idx)
+                .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                .parse::<f64>()?);
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -352,8 +359,8 @@ impl Ranged for CustomXAxis {
 
         // this case if for calculating the tick position on the plot and for line and point plots
         let pos = self.ticks.iter().position(|tick| tick == v);
-        if pos.is_some() {
-            return (pos.unwrap() * tick_distance) as i32 + pixel_range.0 + 50;
+        if let Some(pos) =  pos {
+            return (pos * tick_distance) as i32 + pixel_range.0 + 50;
         }
 
         // this case and the next one if for calculating the start and end position of a rectangle for bar plot
@@ -361,16 +368,16 @@ impl Ranged for CustomXAxis {
             .ticks
             .iter()
             .position(|tick| format!("{}_before", tick) == *v);
-        if after_pos.is_some() {
-            return (after_pos.unwrap() * tick_distance) as i32 + pixel_range.0 + 70;
+        if let Some(after_pos) = after_pos {
+            return (after_pos * tick_distance) as i32 + pixel_range.0 + 70;
         }
 
         let before_pos = self
             .ticks
             .iter()
             .position(|tick| format!("{}_after", tick) == *v);
-        if before_pos.is_some() {
-            return (before_pos.unwrap() * tick_distance) as i32 + pixel_range.0 + 30;
+        if let Some(before_pos) = before_pos {
+            return (before_pos * tick_distance) as i32 + pixel_range.0 + 30;
         }
 
         return 0;

@@ -2,6 +2,8 @@ use byte_unit::ByteError;
 use plotters::drawing::DrawingAreaErrorKind;
 use std::fmt;
 use std::io::ErrorKind;
+use std::num::ParseFloatError;
+use std::time::SystemTimeError;
 
 ///
 /// Problems that can arise in fs-bench.
@@ -39,6 +41,8 @@ pub enum Error {
     PlottersError(String),
 
     CsvError(String),
+
+    SystemTimeError(String),
 
     Unknown(String),
 }
@@ -106,6 +110,18 @@ impl From<csv::Error> for Error {
     }
 }
 
+impl From<SystemTimeError> for Error {
+    fn from(err: SystemTimeError) -> Self {
+        Error::SystemTimeError(err.to_string())
+    }
+}
+
+impl From<ParseFloatError> for Error {
+    fn from(err: ParseFloatError) -> Self {
+        Error::Unknown(err.to_string())
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -126,6 +142,7 @@ impl fmt::Display for Error {
             &Error::ObjNotFile => write!(f, "Object is not of type File"),
             &Error::PlottersError(ref detail) => write!(f, "Plotters error: {}", detail),
             &Error::CsvError(ref detail) => write!(f, "Csv error: {}", detail),
+            &Error::SystemTimeError(ref detail) => write!(f, "SystemTime error: {}", detail),
             &Error::Unknown(ref detail) => write!(f, "Unknown error: {}", detail),
         }
     }

@@ -51,7 +51,7 @@ impl MicroBench {
         self.behaviour_bench(max_rt, logger.clone())?;
         self.throughput_bench(max_rt, logger.clone())?;
 
-        println!("results logged to: {}", path_to_str(&logger.log_path));
+        println!("results logged to: {}", path_to_str(&logger.log_path)?);
 
         Ok(())
     }
@@ -178,7 +178,7 @@ impl MicroBench {
             let begin = SystemTime::now();
             match make_dir(&dir_name) {
                 Ok(()) => {
-                    let end = begin.elapsed().unwrap().as_secs_f64();
+                    let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
                     behaviour.push(SystemTime::now());
                     idx = idx + 1;
@@ -196,7 +196,7 @@ impl MicroBench {
             }
         }
 
-        let end = start.elapsed().unwrap().as_secs_f64();
+        let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
             bar.finish();
@@ -264,7 +264,7 @@ impl MicroBench {
             let begin = SystemTime::now();
             match make_file(&file_name) {
                 Ok(_) => {
-                    let end = begin.elapsed().unwrap().as_secs_f64();
+                    let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
                     behaviour.push(SystemTime::now());
                     idx = idx + 1;
@@ -282,7 +282,7 @@ impl MicroBench {
             }
         }
 
-        let end = start.elapsed().unwrap().as_secs_f64();
+        let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
             bar.finish();
@@ -362,7 +362,7 @@ impl MicroBench {
             let begin = SystemTime::now();
             match read_file(&file_name, &mut read_buffer) {
                 Ok(_) => {
-                    let end = begin.elapsed().unwrap().as_secs_f64();
+                    let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
                     behaviour.push(SystemTime::now());
                     idx += 1;
@@ -380,7 +380,7 @@ impl MicroBench {
             }
         }
 
-        let end = start.elapsed().unwrap().as_secs_f64();
+        let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
             bar.finish();
@@ -465,7 +465,7 @@ impl MicroBench {
             let begin = SystemTime::now();
             match write_file(&file_name, &mut content) {
                 Ok(_) => {
-                    let end = begin.elapsed().unwrap().as_secs_f64();
+                    let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
                     behaviour.push(SystemTime::now());
                     idx += 1;
@@ -483,7 +483,7 @@ impl MicroBench {
             }
         }
 
-        let end = start.elapsed().unwrap().as_secs_f64();
+        let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
             bar.finish();
@@ -566,7 +566,7 @@ impl MicroBench {
                 // random read from a random index
                 match read_file_at(&file_name, &mut read_buffer, rand_index) {
                     Ok(_) => {
-                        let end = begin.elapsed().unwrap().as_secs_f64();
+                        let end = begin.elapsed()?.as_secs_f64();
                         times.push(end);
                     }
                     Err(e) => {
@@ -589,7 +589,7 @@ impl MicroBench {
             }
         }
 
-        let end = start.elapsed().unwrap().as_secs_f64();
+        let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
             bar.finish();
@@ -668,7 +668,7 @@ impl MicroBench {
                 // random read from a random index
                 match write_file(&file_name, &mut content) {
                     Ok(_) => {
-                        let end = begin.elapsed().unwrap().as_secs_f64();
+                        let end = begin.elapsed()?.as_secs_f64();
                         times.push(end);
                     }
                     Err(e) => {
@@ -691,7 +691,7 @@ impl MicroBench {
             }
         }
 
-        let end = start.elapsed().unwrap().as_secs_f64();
+        let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
             bar.finish();
@@ -743,7 +743,7 @@ impl MicroBench {
                 ops += 1;
                 idx += 1;
             }
-            let time = next.duration_since(first).unwrap().as_secs_f64();
+            let time = next.duration_since(first)?.as_secs_f64();
             let record = Record {
                 fields: [
                     time.to_string(),
@@ -763,7 +763,7 @@ impl MicroBench {
         // count the remaining
         if idx < len {
             ops = len - idx;
-            let time = last.duration_since(first).unwrap().as_secs_f64();
+            let time = last.duration_since(first)?.as_secs_f64();
             let record = Record {
                 fields: [
                     time.to_string(),
@@ -780,6 +780,6 @@ impl MicroBench {
     }
 }
 
-fn path_to_str(path: &PathBuf) -> &str {
-    path.as_os_str().to_str().unwrap()
+fn path_to_str(path: &PathBuf) -> Result<&str, Error> {
+    path.as_os_str().to_str().ok_or(Error::Unknown("failed to convert PathBuf to String".to_string()))
 }
