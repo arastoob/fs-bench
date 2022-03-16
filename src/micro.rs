@@ -45,8 +45,6 @@ impl MicroBench {
     }
 
     pub fn run(&self) -> Result<(), Error> {
-
-
         let logger = DataLogger::new(self.fs_name.clone(), self.log_path.clone())?;
         let max_rt = Duration::from_secs(60 * 5); // maximum running time
 
@@ -73,7 +71,7 @@ impl MicroBench {
             "runtime(s)".to_string(),
             "ops/s".to_string(),
         ]
-            .to_vec();
+        .to_vec();
         let mut ops_s_results = BenchResult::new(ops_s_header);
 
         ops_s_results.add_record(mkdir_ops_s)?;
@@ -118,8 +116,7 @@ impl MicroBench {
             .template("{msg} [{bar:40}]")
             .progress_chars("=> ");
 
-        let throughput_header =
-            ["file_size".to_string(), "throughput".to_string()].to_vec();
+        let throughput_header = ["file_size".to_string(), "throughput".to_string()].to_vec();
 
         let read_throughput = self.read_throughput(max_rt, progress_style.clone())?;
         let write_throughput = self.write_throughput(max_rt, progress_style.clone())?;
@@ -127,8 +124,7 @@ impl MicroBench {
         let mut read_throughput_results = BenchResult::new(throughput_header.clone());
         read_throughput_results.add_records(read_throughput)?;
         let read_throughput_log = logger.log(read_throughput_results, "read_throughput")?;
-        let plotter =
-            Plotter::parse(PathBuf::from(read_throughput_log), &BenchMode::Throughput)?;
+        let plotter = Plotter::parse(PathBuf::from(read_throughput_log), &BenchMode::Throughput)?;
         plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
@@ -139,10 +135,8 @@ impl MicroBench {
 
         let mut write_throughput_results = BenchResult::new(throughput_header);
         write_throughput_results.add_records(write_throughput)?;
-        let write_throughput_log =
-            logger.log(write_throughput_results, "write_throughput")?;
-        let plotter =
-            Plotter::parse(PathBuf::from(write_throughput_log), &BenchMode::Throughput)?;
+        let write_throughput_log = logger.log(write_throughput_results, "write_throughput")?;
+        let plotter = Plotter::parse(PathBuf::from(write_throughput_log), &BenchMode::Throughput)?;
         plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
