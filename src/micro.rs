@@ -17,9 +17,8 @@ use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 pub struct MicroBench {
-    mode: BenchMode,
     io_size: usize,
-    iteration: Option<u64>,
+    iteration: u64,
     mount_path: PathBuf,
     fs_name: String,
     log_path: PathBuf,
@@ -27,9 +26,8 @@ pub struct MicroBench {
 
 impl MicroBench {
     pub fn new(
-        mode: BenchMode,
         io_size: String,
-        iteration: Option<u64>,
+        iteration: u64,
         mount_path: PathBuf,
         fs_name: String,
         log_path: PathBuf,
@@ -38,7 +36,6 @@ impl MicroBench {
         let io_size = io_size.get_bytes() as usize;
 
         Ok(Self {
-            mode,
             io_size,
             iteration,
             mount_path,
@@ -48,100 +45,111 @@ impl MicroBench {
     }
 
     pub fn run(&self) -> Result<(), Error> {
-        let progress_style = ProgressStyle::default_bar()
-            .template("{msg} [{bar:40}]")
-            .progress_chars("=> ");
+
 
         let logger = DataLogger::new(self.fs_name.clone(), self.log_path.clone())?;
         let max_rt = Duration::from_secs(60 * 5); // maximum running time
 
-        match self.mode {
-            BenchMode::OpsPerSecond => {}
-            BenchMode::Throughput => {
-                let throughput_header =
-                    ["file_size".to_string(), "throughput".to_string()].to_vec();
+        self.behaviour_bench(max_rt, logger.clone())?;
+        self.throughput_bench(max_rt, logger.clone())?;
 
-                let read_throughput = self.read_throughput(max_rt, progress_style.clone())?;
-                let write_throughput = self.write_throughput(max_rt, progress_style.clone())?;
+        println!("results logged to: {}", path_to_str(&logger.log_path));
 
-                let mut read_throughput_results = BenchResult::new(throughput_header.clone());
-                read_throughput_results.add_records(read_throughput)?;
-                let read_throughput_log = logger.log(read_throughput_results, "read_throughput")?;
-                let plotter =
-                    Plotter::parse(PathBuf::from(read_throughput_log), &BenchMode::Throughput)?;
-                plotter.line_chart(
-                    Some("File size [B]"),
-                    Some("Throughput [B/s]"),
-                    None,
-                    true,
-                    true,
-                )?;
+        Ok(())
+    }
 
-                let mut write_throughput_results = BenchResult::new(throughput_header);
-                write_throughput_results.add_records(write_throughput)?;
-                let write_throughput_log =
-                    logger.log(write_throughput_results, "write_throughput")?;
-                let plotter =
-                    Plotter::parse(PathBuf::from(write_throughput_log), &BenchMode::Throughput)?;
-                plotter.line_chart(
-                    Some("File size [B]"),
-                    Some("Throughput [B/s]"),
-                    None,
-                    true,
-                    true,
-                )?;
-            }
-            BenchMode::Behaviour => {
-                let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(max_rt, progress_style.clone())?;
-                let (mknod_ops_s, mknod_behaviour) = self.mknod(max_rt, progress_style.clone())?;
-                let (read_ops_s, read_behaviour) = self.read(max_rt, progress_style.clone())?;
-                let (write_ops_s, write_behaviour) = self.write(max_rt, progress_style.clone())?;
+    fn behaviour_bench(&self, max_rt: Duration, logger: DataLogger) -> Result<(), Error> {
+        let progress_style = ProgressStyle::default_bar()
+            .template("{msg} [{bar:40}]")
+            .progress_chars("=> ");
 
-                let ops_s_header = [
-                    "operation".to_string(),
-                    "runtime(s)".to_string(),
-                    "ops/s".to_string(),
-                ]
-                .to_vec();
-                let mut ops_s_results = BenchResult::new(ops_s_header);
+        let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(max_rt, progress_style.clone())?;
+        let (mknod_ops_s, mknod_behaviour) = self.mknod(max_rt, progress_style.clone())?;
+        let (read_ops_s, read_behaviour) = self.read(max_rt, progress_style.clone())?;
+        let (write_ops_s, write_behaviour) = self.write(max_rt, progress_style.clone())?;
 
-                ops_s_results.add_record(mkdir_ops_s)?;
-                ops_s_results.add_record(mknod_ops_s)?;
-                ops_s_results.add_record(read_ops_s)?;
-                ops_s_results.add_record(write_ops_s)?;
-                let ops_s_log = logger.log(ops_s_results, "ops_per_second")?;
-                let plotter = Plotter::parse(PathBuf::from(ops_s_log), &BenchMode::OpsPerSecond)?;
-                plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
+        let ops_s_header = [
+            "operation".to_string(),
+            "runtime(s)".to_string(),
+            "ops/s".to_string(),
+        ]
+            .to_vec();
+        let mut ops_s_results = BenchResult::new(ops_s_header);
 
-                let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
+        ops_s_results.add_record(mkdir_ops_s)?;
+        ops_s_results.add_record(mknod_ops_s)?;
+        ops_s_results.add_record(read_ops_s)?;
+        ops_s_results.add_record(write_ops_s)?;
+        let ops_s_log = logger.log(ops_s_results, "ops_per_second")?;
+        let plotter = Plotter::parse(PathBuf::from(ops_s_log), &BenchMode::OpsPerSecond)?;
+        plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
 
-                let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
-                mkdir_behaviour_results.add_records(mkdir_behaviour)?;
-                let mkdir_log = logger.log(mkdir_behaviour_results, "mkdir")?;
-                let plotter = Plotter::parse(PathBuf::from(mkdir_log), &BenchMode::Behaviour)?;
-                plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+        let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
 
-                let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
-                mknod_behaviour_results.add_records(mknod_behaviour)?;
-                let mknod_log = logger.log(mknod_behaviour_results, "mknod")?;
-                let plotter = Plotter::parse(PathBuf::from(mknod_log), &BenchMode::Behaviour)?;
-                plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+        let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
+        mkdir_behaviour_results.add_records(mkdir_behaviour)?;
+        let mkdir_log = logger.log(mkdir_behaviour_results, "mkdir")?;
+        let plotter = Plotter::parse(PathBuf::from(mkdir_log), &BenchMode::Behaviour)?;
+        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
-                let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
-                read_behaviour_results.add_records(read_behaviour)?;
-                let read_log = logger.log(read_behaviour_results, "read")?;
-                let plotter = Plotter::parse(PathBuf::from(read_log), &BenchMode::Behaviour)?;
-                plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+        let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
+        mknod_behaviour_results.add_records(mknod_behaviour)?;
+        let mknod_log = logger.log(mknod_behaviour_results, "mknod")?;
+        let plotter = Plotter::parse(PathBuf::from(mknod_log), &BenchMode::Behaviour)?;
+        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
-                let mut write_behaviour_results = BenchResult::new(behaviour_header);
-                write_behaviour_results.add_records(write_behaviour)?;
-                let write_log = logger.log(write_behaviour_results, "write")?;
-                let plotter = Plotter::parse(PathBuf::from(write_log), &BenchMode::Behaviour)?;
-                plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+        let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
+        read_behaviour_results.add_records(read_behaviour)?;
+        let read_log = logger.log(read_behaviour_results, "read")?;
+        let plotter = Plotter::parse(PathBuf::from(read_log), &BenchMode::Behaviour)?;
+        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
-                println!("results logged to: {}", path_to_str(&logger.log_path));
-            }
-        }
+        let mut write_behaviour_results = BenchResult::new(behaviour_header);
+        write_behaviour_results.add_records(write_behaviour)?;
+        let write_log = logger.log(write_behaviour_results, "write")?;
+        let plotter = Plotter::parse(PathBuf::from(write_log), &BenchMode::Behaviour)?;
+        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+
+        Ok(())
+    }
+
+    fn throughput_bench(&self, max_rt: Duration, logger: DataLogger) -> Result<(), Error> {
+        let progress_style = ProgressStyle::default_bar()
+            .template("{msg} [{bar:40}]")
+            .progress_chars("=> ");
+
+        let throughput_header =
+            ["file_size".to_string(), "throughput".to_string()].to_vec();
+
+        let read_throughput = self.read_throughput(max_rt, progress_style.clone())?;
+        let write_throughput = self.write_throughput(max_rt, progress_style.clone())?;
+
+        let mut read_throughput_results = BenchResult::new(throughput_header.clone());
+        read_throughput_results.add_records(read_throughput)?;
+        let read_throughput_log = logger.log(read_throughput_results, "read_throughput")?;
+        let plotter =
+            Plotter::parse(PathBuf::from(read_throughput_log), &BenchMode::Throughput)?;
+        plotter.line_chart(
+            Some("File size [B]"),
+            Some("Throughput [B/s]"),
+            None,
+            true,
+            true,
+        )?;
+
+        let mut write_throughput_results = BenchResult::new(throughput_header);
+        write_throughput_results.add_records(write_throughput)?;
+        let write_throughput_log =
+            logger.log(write_throughput_results, "write_throughput")?;
+        let plotter =
+            Plotter::parse(PathBuf::from(write_throughput_log), &BenchMode::Throughput)?;
+        plotter.line_chart(
+            Some("File size [B]"),
+            Some("Throughput [B/s]"),
+            None,
+            true,
+            true,
+        )?;
 
         Ok(())
     }
@@ -155,7 +163,7 @@ impl MicroBench {
         root_path.push("mkdir");
         cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration.unwrap());
+        let bar = ProgressBar::new(self.iteration);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "mkdir"));
 
@@ -170,7 +178,7 @@ impl MicroBench {
         timer.start();
         let mut interrupted = false;
         let start = SystemTime::now();
-        while idx <= self.iteration.unwrap() {
+        while idx <= self.iteration {
             let mut dir_name = root_path.clone();
             dir_name.push(idx.to_string());
             let begin = SystemTime::now();
@@ -207,7 +215,7 @@ impl MicroBench {
 
         let sample = Sample::new(&times);
         let mean = sample.mean();
-        let ops_per_second = 1.0 / mean;
+        let ops_per_second = (1.0 / mean).floor();
         println!("mean:          {}", mean);
         println!("ops/s:         {}", ops_per_second);
         println!("op time:       {} s", mean as f64 / 1.0);
@@ -220,7 +228,7 @@ impl MicroBench {
             fields: [
                 "mkdir".to_string(),
                 end.to_string(),
-                (ops_per_second).to_string(),
+                ops_per_second.to_string(),
             ]
             .to_vec(),
         };
@@ -240,7 +248,7 @@ impl MicroBench {
         root_path.push("mknod");
         cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration.unwrap());
+        let bar = ProgressBar::new(self.iteration);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "mknod"));
 
@@ -256,7 +264,7 @@ impl MicroBench {
         let mut interrupted = false;
 
         let start = SystemTime::now();
-        while idx <= self.iteration.unwrap() {
+        while idx <= self.iteration {
             let mut file_name = root_path.clone();
             file_name.push(idx.to_string());
             let begin = SystemTime::now();
@@ -293,7 +301,7 @@ impl MicroBench {
 
         let sample = Sample::new(&times);
         let mean = sample.mean();
-        let ops_per_second = 1.0 / mean;
+        let ops_per_second = (1.0 / mean).floor();
         println!("mean:          {}", mean);
         println!("ops/s:         {}", ops_per_second);
         println!("op time:       {} s", mean as f64 / 1.0);
@@ -306,7 +314,7 @@ impl MicroBench {
             fields: [
                 "mknod".to_string(),
                 end.to_string(),
-                (ops_per_second).to_string(),
+                ops_per_second.to_string(),
             ]
             .to_vec(),
         };
@@ -322,7 +330,7 @@ impl MicroBench {
         root_path.push("read");
         cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration.unwrap());
+        let bar = ProgressBar::new(self.iteration);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "read"));
 
@@ -353,7 +361,7 @@ impl MicroBench {
         let mut interrupted = false;
 
         let start = SystemTime::now();
-        while idx <= self.iteration.unwrap() {
+        while idx <= self.iteration {
             let file = thread_rng().gen_range(1..1001);
             let mut file_name = root_path.clone();
             file_name.push(file.to_string());
@@ -391,7 +399,7 @@ impl MicroBench {
 
         let sample = Sample::new(&times);
         let mean = sample.mean();
-        let ops_per_second = 1.0 / mean;
+        let ops_per_second = (1.0 / mean).floor();
         println!("mean:          {}", mean);
         println!("ops/s:         {}", ops_per_second);
         println!("op time:       {} s", mean as f64 / 1.0);
@@ -404,7 +412,7 @@ impl MicroBench {
             fields: [
                 "read".to_string(),
                 end.to_string(),
-                (ops_per_second).to_string(),
+                ops_per_second.to_string(),
             ]
             .to_vec(),
         };
@@ -424,7 +432,7 @@ impl MicroBench {
         root_path.push("write");
         cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration.unwrap());
+        let bar = ProgressBar::new(self.iteration);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "write"));
 
@@ -452,7 +460,7 @@ impl MicroBench {
         let mut interrupted = false;
 
         let start = SystemTime::now();
-        while idx <= self.iteration.unwrap() {
+        while idx <= self.iteration {
             let rand_content_index = thread_rng().gen_range(0..(8192 * size) - size - 1);
             let mut content =
                 rand_content[rand_content_index..(rand_content_index + size)].to_vec();
@@ -494,7 +502,7 @@ impl MicroBench {
 
         let sample = Sample::new(&times);
         let mean = sample.mean();
-        let ops_per_second = 1.0 / mean;
+        let ops_per_second = (1.0 / mean).floor();
         println!("mean:          {}", mean);
         println!("ops/s:         {}", ops_per_second);
         println!("op time:       {} s", mean as f64 / 1.0);
@@ -507,7 +515,7 @@ impl MicroBench {
             fields: [
                 "write".to_string(),
                 end.to_string(),
-                (ops_per_second).to_string(),
+                ops_per_second.to_string(),
             ]
             .to_vec(),
         };

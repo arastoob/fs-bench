@@ -2,7 +2,7 @@ use crate::{BenchResult, Error};
 use std::fs::{remove_file, OpenOptions};
 use std::path::PathBuf;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataLogger {
     pub fs_name: String,
     pub log_path: PathBuf,
