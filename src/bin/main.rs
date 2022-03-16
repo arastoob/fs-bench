@@ -12,10 +12,6 @@ struct Args {
     #[clap(short, long)]
     benchmark: BenchMode,
 
-    /// Number of seconds to run the benchmark
-    #[clap(short, long, default_value = "60")]
-    runtime: u16,
-
     /// The I/O size
     #[clap(short, long, default_value = "4KiB")]
     size: String,
@@ -43,7 +39,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let micro_bench = MicroBench::new(
         args.benchmark,
-        args.runtime,
         args.size,
         args.iterations,
         args.mount,
