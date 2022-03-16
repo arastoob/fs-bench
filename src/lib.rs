@@ -120,7 +120,11 @@ pub fn read_file(path: &PathBuf, read_buffer: &mut Vec<u8>) -> Result<usize, Err
     }
 }
 
-pub fn read_file_at(path: &PathBuf, read_buffer: &mut Vec<u8>, offset: u64) -> Result<usize, Error> {
+pub fn read_file_at(
+    path: &PathBuf,
+    read_buffer: &mut Vec<u8>,
+    offset: u64,
+) -> Result<usize, Error> {
     let mut file = OpenOptions::new().read(true).open(path)?;
     file.seek(SeekFrom::Start(offset))?;
 

@@ -77,7 +77,7 @@ impl Plotter {
                     y_axis,
                     path,
                 })
-            },
+            }
         }
     }
 
@@ -87,7 +87,7 @@ impl Plotter {
         y_label: Option<&str>,
         caption: Option<&str>,
         custom: bool,
-        points: bool
+        points: bool,
     ) -> Result<(), Error> {
         let root_area = SVGBackend::new(self.path.as_os_str(), (800, 500)).into_drawing_area();
         root_area.fill(&WHITE)?;
@@ -119,16 +119,18 @@ impl Plotter {
                 .draw()?;
 
             ctx.draw_series(LineSeries::new(
-                custom_x_axes.ticks.iter().zip(self.y_axis.iter()).map(|(x, y)| (x.clone(), *y)), // The data iter
+                custom_x_axes
+                    .ticks
+                    .iter()
+                    .zip(self.y_axis.iter())
+                    .map(|(x, y)| (x.clone(), *y)), // The data iter
                 &BLACK,
             ))?;
 
             if points {
-                ctx.draw_series(
-                    custom_x_axes.ticks.iter().zip(self.y_axis.iter()).map(|(x, y)| {
-                        Circle::new((x.clone(), *y), 3, ShapeStyle::from(&BLACK).filled())
-                    }
-                    ))?;
+                ctx.draw_series(custom_x_axes.ticks.iter().zip(self.y_axis.iter()).map(
+                    |(x, y)| Circle::new((x.clone(), *y), 3, ShapeStyle::from(&BLACK).filled()),
+                ))?;
             }
         } else {
             // if custom is false, we need the x values
@@ -157,10 +159,11 @@ impl Plotter {
 
             if points {
                 ctx.draw_series(
-                    x_axis.iter().zip(self.y_axis.iter()).map(|(x, y)| {
-                        Circle::new((*x, *y), 3, ShapeStyle::from(&BLACK).filled())
-                    }
-                    ))?;
+                    x_axis
+                        .iter()
+                        .zip(self.y_axis.iter())
+                        .map(|(x, y)| Circle::new((*x, *y), 3, ShapeStyle::from(&BLACK).filled())),
+                )?;
             }
         }
 

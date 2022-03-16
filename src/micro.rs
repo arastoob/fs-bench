@@ -1,7 +1,11 @@
 use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
 use crate::sample::Sample;
-use crate::{cleanup, make_dir, make_file, read_file, write_file, BenchMode, BenchResult, Error, Record, read_file_at};
+use crate::timer::Timer;
+use crate::{
+    cleanup, make_dir, make_file, read_file, read_file_at, write_file, BenchMode, BenchResult,
+    Error, Record,
+};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -10,7 +14,6 @@ use std::io::Write;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
-use crate::timer::Timer;
 
 #[derive(Debug)]
 pub struct MicroBench {
@@ -55,10 +58,8 @@ impl MicroBench {
         match self.mode {
             BenchMode::OpsPerSecond => {}
             BenchMode::Throughput => {
-                let throughput_header = [
-                    "file_size".to_string(),
-                    "throughput".to_string(),
-                ].to_vec();
+                let throughput_header =
+                    ["file_size".to_string(), "throughput".to_string()].to_vec();
 
                 let read_throughput = self.read_throughput(max_rt, progress_style.clone())?;
                 let write_throughput = self.write_throughput(max_rt, progress_style.clone())?;
@@ -66,14 +67,29 @@ impl MicroBench {
                 let mut read_throughput_results = BenchResult::new(throughput_header.clone());
                 read_throughput_results.add_records(read_throughput)?;
                 let read_throughput_log = logger.log(read_throughput_results, "read_throughput")?;
-                let plotter = Plotter::parse(PathBuf::from(read_throughput_log), &BenchMode::Throughput)?;
-                plotter.line_chart(Some("File size [B]"), Some("Throughput [B/s]"), None, true, true)?;
+                let plotter =
+                    Plotter::parse(PathBuf::from(read_throughput_log), &BenchMode::Throughput)?;
+                plotter.line_chart(
+                    Some("File size [B]"),
+                    Some("Throughput [B/s]"),
+                    None,
+                    true,
+                    true,
+                )?;
 
                 let mut write_throughput_results = BenchResult::new(throughput_header);
                 write_throughput_results.add_records(write_throughput)?;
-                let write_throughput_log = logger.log(write_throughput_results, "write_throughput")?;
-                let plotter = Plotter::parse(PathBuf::from(write_throughput_log), &BenchMode::Throughput)?;
-                plotter.line_chart(Some("File size [B]"), Some("Throughput [B/s]"), None, true, true)?;
+                let write_throughput_log =
+                    logger.log(write_throughput_results, "write_throughput")?;
+                let plotter =
+                    Plotter::parse(PathBuf::from(write_throughput_log), &BenchMode::Throughput)?;
+                plotter.line_chart(
+                    Some("File size [B]"),
+                    Some("Throughput [B/s]"),
+                    None,
+                    true,
+                    true,
+                )?;
             }
             BenchMode::Behaviour => {
                 let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(max_rt, progress_style.clone())?;
@@ -130,7 +146,11 @@ impl MicroBench {
         Ok(())
     }
 
-    fn mkdir(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn mkdir(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mkdir");
         cleanup(&root_path)?;
@@ -211,7 +231,11 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn mknod(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn mknod(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mknod");
         cleanup(&root_path)?;
@@ -391,7 +415,11 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn write(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn write(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("write");
         cleanup(&root_path)?;
@@ -490,7 +518,11 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn read_throughput(&self, max_rt: Duration, style: ProgressStyle) -> Result<Vec<Record>, Error> {
+    fn read_throughput(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<Vec<Record>, Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("read");
         cleanup(&root_path)?;
@@ -565,7 +597,6 @@ impl MicroBench {
 
         println!("run time:      {}", end);
 
-
         let mut throughput_records = vec![];
         for (size, throughput) in throughputs {
             let size = Byte::from_bytes(size as u128);
@@ -573,23 +604,26 @@ impl MicroBench {
 
             let throughput = Byte::from_bytes(throughput as u128);
             let adjusted_throughput = throughput.get_appropriate_unit(false);
-            println!("[{:10} {}/s]", adjusted_size.format(0), adjusted_throughput.format(3));
-
-            throughput_records.push(
-                Record {
-                    fields: [
-                        size.to_string(),
-                        throughput.to_string(),
-                    ].to_vec(),
-                }
+            println!(
+                "[{:10} {}/s]",
+                adjusted_size.format(0),
+                adjusted_throughput.format(3)
             );
+
+            throughput_records.push(Record {
+                fields: [size.to_string(), throughput.to_string()].to_vec(),
+            });
         }
 
         println!();
         Ok(throughput_records)
     }
 
-    fn write_throughput(&self, max_rt: Duration, style: ProgressStyle) -> Result<Vec<Record>, Error> {
+    fn write_throughput(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<Vec<Record>, Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("write");
         cleanup(&root_path)?;
@@ -672,16 +706,15 @@ impl MicroBench {
 
             let throughput = Byte::from_bytes(throughput as u128);
             let adjusted_throughput = throughput.get_appropriate_unit(false);
-            println!("[{:10} {}/s]", adjusted_size.format(0), adjusted_throughput.format(3));
-
-            throughput_records.push(
-                Record {
-                    fields: [
-                        size.to_string(),
-                        throughput.to_string(),
-                    ].to_vec(),
-                }
+            println!(
+                "[{:10} {}/s]",
+                adjusted_size.format(0),
+                adjusted_throughput.format(3)
             );
+
+            throughput_records.push(Record {
+                fields: [size.to_string(), throughput.to_string()].to_vec(),
+            });
         }
 
         println!();
