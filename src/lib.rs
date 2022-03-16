@@ -138,7 +138,7 @@ pub fn cleanup(path: &PathBuf) -> Result<(), Error> {
     // let bench_name = bench_name.to_string();
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}"));
-    spinner.set_message(format!("clean up {}", path.to_str().unwrap()));
+    spinner.set_message(format!("clean up {}", path.to_str().ok_or(Error::Unknown("failed to convert PathBuf to String".to_string()))?));
 
     let (sender, receiver) = channel();
     let path = path.clone();
