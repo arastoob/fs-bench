@@ -1,8 +1,10 @@
 use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
 use crate::sample::Sample;
+use crate::timer::Timer;
 use crate::{
-    cleanup, make_dir, make_file, read_file, write_file, BenchMode, BenchResult, Error, Record,
+    cleanup, make_dir, make_file, read_file, read_file_at, write_file, BenchMode, BenchResult,
+    Error, Record,
 };
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -12,7 +14,6 @@ use std::io::Write;
 use std::ops::Add;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
-use crate::timer::Timer;
 
 #[derive(Debug)]
 pub struct MicroBench {
@@ -55,19 +56,41 @@ impl MicroBench {
         let max_rt = Duration::from_secs(60 * 5); // maximum running time
 
         match self.mode {
-            BenchMode::OpsPerSecond => {
-                // results.add_record(self.mkdir(progress_style.clone())?)?;
-                // results.add_record(self.mknod(progress_style.clone())?)?;
-                // results.add_record(self.read(progress_style.clone())?)?;
-                // results.add_record(self.write(progress_style)?)?;
+            BenchMode::OpsPerSecond => {}
+            BenchMode::Throughput => {
+                let throughput_header =
+                    ["file_size".to_string(), "throughput".to_string()].to_vec();
 
-                // let log_file_name = logger.log(results, &self.mode)?;
-                //
-                // let plotter = Plotter::parse(PathBuf::from(log_file_name), &self.mode)?;
-                // plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
-                // println!("results logged to {}", path_to_str(&self.log_path));
+                let read_throughput = self.read_throughput(max_rt, progress_style.clone())?;
+                let write_throughput = self.write_throughput(max_rt, progress_style.clone())?;
+
+                let mut read_throughput_results = BenchResult::new(throughput_header.clone());
+                read_throughput_results.add_records(read_throughput)?;
+                let read_throughput_log = logger.log(read_throughput_results, "read_throughput")?;
+                let plotter =
+                    Plotter::parse(PathBuf::from(read_throughput_log), &BenchMode::Throughput)?;
+                plotter.line_chart(
+                    Some("File size [B]"),
+                    Some("Throughput [B/s]"),
+                    None,
+                    true,
+                    true,
+                )?;
+
+                let mut write_throughput_results = BenchResult::new(throughput_header);
+                write_throughput_results.add_records(write_throughput)?;
+                let write_throughput_log =
+                    logger.log(write_throughput_results, "write_throughput")?;
+                let plotter =
+                    Plotter::parse(PathBuf::from(write_throughput_log), &BenchMode::Throughput)?;
+                plotter.line_chart(
+                    Some("File size [B]"),
+                    Some("Throughput [B/s]"),
+                    None,
+                    true,
+                    true,
+                )?;
             }
-            BenchMode::Throughput => {}
             BenchMode::Behaviour => {
                 let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(max_rt, progress_style.clone())?;
                 let (mknod_ops_s, mknod_behaviour) = self.mknod(max_rt, progress_style.clone())?;
@@ -96,25 +119,25 @@ impl MicroBench {
                 mkdir_behaviour_results.add_records(mkdir_behaviour)?;
                 let mkdir_log = logger.log(mkdir_behaviour_results, "mkdir")?;
                 let plotter = Plotter::parse(PathBuf::from(mkdir_log), &BenchMode::Behaviour)?;
-                plotter.line_chart(Some("Time"), Some("Ops/s"), None)?;
+                plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
                 let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
                 mknod_behaviour_results.add_records(mknod_behaviour)?;
                 let mknod_log = logger.log(mknod_behaviour_results, "mknod")?;
                 let plotter = Plotter::parse(PathBuf::from(mknod_log), &BenchMode::Behaviour)?;
-                plotter.line_chart(Some("Time"), Some("Ops/s"), None)?;
+                plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
                 let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
                 read_behaviour_results.add_records(read_behaviour)?;
                 let read_log = logger.log(read_behaviour_results, "read")?;
                 let plotter = Plotter::parse(PathBuf::from(read_log), &BenchMode::Behaviour)?;
-                plotter.line_chart(Some("Time"), Some("Ops/s"), None)?;
+                plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
                 let mut write_behaviour_results = BenchResult::new(behaviour_header);
                 write_behaviour_results.add_records(write_behaviour)?;
                 let write_log = logger.log(write_behaviour_results, "write")?;
                 let plotter = Plotter::parse(PathBuf::from(write_log), &BenchMode::Behaviour)?;
-                plotter.line_chart(Some("Time"), Some("Ops/s"), None)?;
+                plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
                 println!("results logged to: {}", path_to_str(&logger.log_path));
             }
@@ -123,7 +146,11 @@ impl MicroBench {
         Ok(())
     }
 
-    fn mkdir(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn mkdir(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mkdir");
         cleanup(&root_path)?;
@@ -204,7 +231,11 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn mknod(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn mknod(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mknod");
         cleanup(&root_path)?;
@@ -295,7 +326,7 @@ impl MicroBench {
         bar.set_style(style);
         bar.set_message(format!("{:5}", "read"));
 
-        // creating the root directory to generate the test directories inside it
+        // creating the root directory to generate the test files inside it
         make_dir(&root_path)?;
 
         let size = self.io_size;
@@ -384,7 +415,11 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn write(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn write(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("write");
         cleanup(&root_path)?;
@@ -481,6 +516,209 @@ impl MicroBench {
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
+    }
+
+    fn read_throughput(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<Vec<Record>, Error> {
+        let mut root_path = self.mount_path.clone();
+        root_path.push("read");
+        cleanup(&root_path)?;
+
+        let bar = ProgressBar::new(6);
+        bar.set_style(style);
+        bar.set_message(format!("{:5}", "read_throughput"));
+
+        // creating the root directory to generate the test files inside it
+        make_dir(&root_path)?;
+
+        // create a big file filled with random content
+        let mut file_name = root_path.clone();
+        file_name.push("big_file".to_string());
+        let mut file = make_file(&file_name)?;
+
+        let file_size = 1000 * 1000 * 100 * 2; // 200 MB
+        let mut rand_buffer = vec![0u8; file_size];
+        let mut rng = rand::thread_rng();
+        rng.fill_bytes(&mut rand_buffer);
+        file.write(&rand_buffer)?;
+
+        let mut read_size = 1000;
+        let mut throughputs = vec![];
+
+        let timer = Timer::new(max_rt);
+        timer.start();
+        let mut interrupted = false;
+
+        let start = SystemTime::now();
+        // read 1000, 10000, 100000, 1000000, 10000000, 100000000 sizes from the big file
+        while read_size <= file_size / 2 {
+            let mut read_buffer = vec![0u8; read_size];
+            // process read 10 times and then log the mean of the 10 runs
+            let mut times = vec![];
+            for _ in 0..10 {
+                let rand_index = thread_rng().gen_range(0..file_size - read_size - 1) as u64;
+                let begin = SystemTime::now();
+                // random read from a random index
+                match read_file_at(&file_name, &mut read_buffer, rand_index) {
+                    Ok(_) => {
+                        let end = begin.elapsed().unwrap().as_secs_f64();
+                        times.push(end);
+                    }
+                    Err(e) => {
+                        println!("error: {:?}", e);
+                    }
+                }
+            }
+
+            let sample = Sample::new(&times);
+            let mean = sample.mean();
+            let throughput = read_size as f64 / mean; // B/s
+            throughputs.push((read_size, throughput));
+            read_size *= 10;
+
+            bar.inc(1);
+
+            if timer.finished() {
+                interrupted = true;
+                break;
+            }
+        }
+
+        let end = start.elapsed().unwrap().as_secs_f64();
+
+        if !interrupted {
+            bar.finish();
+        } else {
+            bar.abandon_with_message("read exceeded the max runtime");
+        }
+
+        println!("run time:      {}", end);
+
+        let mut throughput_records = vec![];
+        for (size, throughput) in throughputs {
+            let size = Byte::from_bytes(size as u128);
+            let adjusted_size = size.get_appropriate_unit(false);
+
+            let throughput = Byte::from_bytes(throughput as u128);
+            let adjusted_throughput = throughput.get_appropriate_unit(false);
+            println!(
+                "[{:10} {}/s]",
+                adjusted_size.format(0),
+                adjusted_throughput.format(3)
+            );
+
+            throughput_records.push(Record {
+                fields: [size.to_string(), throughput.to_string()].to_vec(),
+            });
+        }
+
+        println!();
+        Ok(throughput_records)
+    }
+
+    fn write_throughput(
+        &self,
+        max_rt: Duration,
+        style: ProgressStyle,
+    ) -> Result<Vec<Record>, Error> {
+        let mut root_path = self.mount_path.clone();
+        root_path.push("write");
+        cleanup(&root_path)?;
+
+        let bar = ProgressBar::new(6);
+        bar.set_style(style);
+        bar.set_message(format!("{:5}", "write_throughput"));
+
+        // creating the root directory to generate the test files inside it
+        make_dir(&root_path)?;
+
+        // create a file to write into
+        let mut file_name = root_path.clone();
+        file_name.push("big_file".to_string());
+        make_file(&file_name)?;
+
+        let buffer_size = 1000 * 1000 * 100 * 2; // 200 MB
+        let mut rand_content = vec![0u8; buffer_size];
+        let mut rng = rand::thread_rng();
+        rng.fill_bytes(&mut rand_content);
+
+        let mut write_size = 1000;
+        let mut throughputs = vec![];
+
+        let timer = Timer::new(max_rt);
+        timer.start();
+        let mut interrupted = false;
+
+        let start = SystemTime::now();
+        // write 1000, 10000, 100000, 1000000, 10000000, 100000000 sizes to the big file
+        while write_size <= buffer_size / 2 {
+            // process write 10 times and then log the mean of the 10 runs
+            let mut times = vec![];
+            for _ in 0..10 {
+                let rand_content_index = thread_rng().gen_range(0..buffer_size - write_size - 1);
+                let mut content =
+                    rand_content[rand_content_index..(rand_content_index + write_size)].to_vec();
+
+                let begin = SystemTime::now();
+                // random read from a random index
+                match write_file(&file_name, &mut content) {
+                    Ok(_) => {
+                        let end = begin.elapsed().unwrap().as_secs_f64();
+                        times.push(end);
+                    }
+                    Err(e) => {
+                        println!("error: {:?}", e);
+                    }
+                }
+            }
+
+            let sample = Sample::new(&times);
+            let mean = sample.mean();
+            let throughput = write_size as f64 / mean; // B/s
+            throughputs.push((write_size, throughput));
+            write_size *= 10;
+
+            bar.inc(1);
+
+            if timer.finished() {
+                interrupted = true;
+                break;
+            }
+        }
+
+        let end = start.elapsed().unwrap().as_secs_f64();
+
+        if !interrupted {
+            bar.finish();
+        } else {
+            bar.abandon_with_message("read exceeded the max runtime");
+        }
+
+        println!("run time:      {}", end);
+
+        let mut throughput_records = vec![];
+        for (size, throughput) in throughputs {
+            let size = Byte::from_bytes(size as u128);
+            let adjusted_size = size.get_appropriate_unit(false);
+
+            let throughput = Byte::from_bytes(throughput as u128);
+            let adjusted_throughput = throughput.get_appropriate_unit(false);
+            println!(
+                "[{:10} {}/s]",
+                adjusted_size.format(0),
+                adjusted_throughput.format(3)
+            );
+
+            throughput_records.push(Record {
+                fields: [size.to_string(), throughput.to_string()].to_vec(),
+            });
+        }
+
+        println!();
+        Ok(throughput_records)
     }
 
     // count the number of operations in a time window

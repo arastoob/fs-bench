@@ -9,7 +9,7 @@ use crate::error::Error;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fmt::{Display, Formatter};
 use std::fs::{create_dir, remove_dir_all, File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::mpsc::channel;
@@ -113,6 +113,20 @@ pub fn write_file(path: &PathBuf, content: &mut Vec<u8>) -> Result<usize, Error>
 
 pub fn read_file(path: &PathBuf, read_buffer: &mut Vec<u8>) -> Result<usize, Error> {
     let mut file = OpenOptions::new().read(true).open(path)?;
+
+    match file.read(read_buffer) {
+        Ok(size) => Ok(size),
+        Err(error) => Err(Error::IO(error)),
+    }
+}
+
+pub fn read_file_at(
+    path: &PathBuf,
+    read_buffer: &mut Vec<u8>,
+    offset: u64,
+) -> Result<usize, Error> {
+    let mut file = OpenOptions::new().read(true).open(path)?;
+    file.seek(SeekFrom::Start(offset))?;
 
     match file.read(read_buffer) {
         Ok(size) => Ok(size),

@@ -70,7 +70,14 @@ impl Plotter {
                     path,
                 })
             }
-            _ => unimplemented!(),
+            BenchMode::Throughput => {
+                let (x_axis, y_axis) = Plotter::parse_throughputs(&file)?;
+                Ok(Self {
+                    x_axis,
+                    y_axis,
+                    path,
+                })
+            }
         }
     }
 
@@ -79,39 +86,86 @@ impl Plotter {
         x_label: Option<&str>,
         y_label: Option<&str>,
         caption: Option<&str>,
+        custom: bool,
+        points: bool,
     ) -> Result<(), Error> {
         let root_area = SVGBackend::new(self.path.as_os_str(), (800, 500)).into_drawing_area();
         root_area.fill(&WHITE)?;
 
-        // let custom_x_axes = CustomXAxis::new(self.x_axis.clone());
         let y_min = self.y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
         let y_max = self.y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
         let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
         let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
 
-        // for the line chart, we need the float values of the x axis
-        let x_axis = self
-            .x_axis
-            .iter()
-            .map(|x| x.get_float())
-            .collect::<Result<Vec<f64>, Error>>()?;
+        if custom {
+            // the x values should be custom, so first convert them to string
+            let x_axis = self
+                .x_axis
+                .iter()
+                .map(|x| x.get_float().map(|f| f.to_string()))
+                .collect::<Result<Vec<String>, Error>>()?;
+            let custom_x_axes = CustomXAxis::new(x_axis);
 
-        let mut ctx = ChartBuilder::on(&root_area)
-            .set_label_area_size(LabelAreaPosition::Left, 100.0)
-            .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
-            .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
-            .build_cartesian_2d(x_axis[0]..x_axis[x_axis.len() - 1], y_start..y_end)?;
+            let mut ctx = ChartBuilder::on(&root_area)
+                .set_label_area_size(LabelAreaPosition::Left, 100.0)
+                .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
+                .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+                .build_cartesian_2d(custom_x_axes.clone(), y_start..y_end)?;
 
-        ctx.configure_mesh()
-            .axis_desc_style(("sans-serif", 20.0))
-            .x_desc(x_label.unwrap_or(""))
-            .y_desc(y_label.unwrap_or(""))
-            .draw()?;
+            ctx.configure_mesh()
+                .axis_desc_style(("sans-serif", 20.0))
+                .x_desc(x_label.unwrap_or(""))
+                .y_desc(y_label.unwrap_or(""))
+                .draw()?;
 
-        ctx.draw_series(LineSeries::new(
-            x_axis.iter().zip(self.y_axis.iter()).map(|(x, y)| (*x, *y)), // The data iter
-            &BLACK,
-        ))?;
+            ctx.draw_series(LineSeries::new(
+                custom_x_axes
+                    .ticks
+                    .iter()
+                    .zip(self.y_axis.iter())
+                    .map(|(x, y)| (x.clone(), *y)), // The data iter
+                &BLACK,
+            ))?;
+
+            if points {
+                ctx.draw_series(custom_x_axes.ticks.iter().zip(self.y_axis.iter()).map(
+                    |(x, y)| Circle::new((x.clone(), *y), 3, ShapeStyle::from(&BLACK).filled()),
+                ))?;
+            }
+        } else {
+            // if custom is false, we need the x values
+            let x_axis = self
+                .x_axis
+                .iter()
+                .map(|x| x.get_float())
+                .collect::<Result<Vec<f64>, Error>>()?;
+
+            let mut ctx = ChartBuilder::on(&root_area)
+                .set_label_area_size(LabelAreaPosition::Left, 100.0)
+                .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
+                .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+                .build_cartesian_2d(x_axis[0]..x_axis[x_axis.len() - 1], y_start..y_end)?;
+
+            ctx.configure_mesh()
+                .axis_desc_style(("sans-serif", 20.0))
+                .x_desc(x_label.unwrap_or(""))
+                .y_desc(y_label.unwrap_or(""))
+                .draw()?;
+
+            ctx.draw_series(LineSeries::new(
+                x_axis.iter().zip(self.y_axis.iter()).map(|(x, y)| (*x, *y)), // The data iter
+                &BLACK,
+            ))?;
+
+            if points {
+                ctx.draw_series(
+                    x_axis
+                        .iter()
+                        .zip(self.y_axis.iter())
+                        .map(|(x, y)| Circle::new((*x, *y), 3, ShapeStyle::from(&BLACK).filled())),
+                )?;
+            }
+        }
 
         Ok(())
     }
@@ -238,6 +292,36 @@ impl Plotter {
                 record.get(seconds_idx).unwrap().parse::<f64>().unwrap(),
             ));
             y_axis.push(record.get(ops_idx).unwrap().parse::<f64>().unwrap());
+        }
+
+        assert_eq!(x_axis.len(), y_axis.len());
+
+        Ok((x_axis, y_axis))
+    }
+
+    fn parse_throughputs(file: &File) -> Result<(Vec<XAxis>, Vec<f64>), Error> {
+        let mut reader = csv::Reader::from_reader(file);
+        let mut x_axis = vec![];
+        let mut y_axis = vec![];
+
+        // find the seconds and ops columns
+        let file_size_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "file_size")
+            .unwrap();
+        let throughput_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "throughput")
+            .unwrap();
+
+        for record in reader.records() {
+            let record = record?;
+            x_axis.push(XAxis::from(
+                record.get(file_size_idx).unwrap().parse::<f64>().unwrap(),
+            ));
+            y_axis.push(record.get(throughput_idx).unwrap().parse::<f64>().unwrap());
         }
 
         assert_eq!(x_axis.len(), y_axis.len());

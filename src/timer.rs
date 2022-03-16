@@ -8,7 +8,6 @@ pub struct Timer {
 }
 
 impl Timer {
-
     pub fn new(runtime: Duration) -> Self {
         Self {
             runtime,
@@ -32,9 +31,9 @@ impl Timer {
 
 #[cfg(test)]
 mod test {
+    use crate::timer::Timer;
     use std::thread;
     use std::time::Duration;
-    use crate::timer::Timer;
 
     #[test]
     fn timer() {
