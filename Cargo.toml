@@ -17,3 +17,5 @@ rand = "0.8.0"
 rayon = "1.5.1"
 serde = { version = "1", features = ["derive"] }
 timer = "0.2.0"
+wasmer = "2.0"
+wasmer-wasi = "2.0"
