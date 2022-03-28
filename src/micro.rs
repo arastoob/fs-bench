@@ -2,10 +2,7 @@ use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
-use crate::{
-    cleanup, make_dir, make_file, read_file, read_file_at, write_file, BenchMode, BenchResult,
-    Error, Record,
-};
+use crate::{cleanup, make_dir, make_file, read_file, read_file_at, write_file, BenchMode, BenchResult, Error, Record, path_to_str};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -807,8 +804,4 @@ impl MicroBench {
 
         Ok(records)
     }
-}
-
-fn path_to_str(path: &PathBuf) -> Result<&str, Error> {
-    path.as_os_str().to_str().ok_or(Error::Unknown("failed to convert PathBuf to String".to_string()))
 }

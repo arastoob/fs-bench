@@ -4,6 +4,7 @@ pub mod micro;
 pub mod plotter;
 pub mod sample;
 mod timer;
+pub mod workload;
 
 use crate::error::Error;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -171,4 +172,8 @@ pub fn cleanup(path: &PathBuf) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+pub fn path_to_str(path: &PathBuf) -> Result<&str, Error> {
+    path.as_os_str().to_str().ok_or(Error::Unknown("failed to convert PathBuf to String".to_string()))
 }
