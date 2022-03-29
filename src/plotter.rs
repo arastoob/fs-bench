@@ -1,4 +1,4 @@
-use crate::{BenchMode, Error};
+use crate::{ResultMode, Error};
 use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint};
 use plotters::prelude::*;
 use std::fs::File;
@@ -47,14 +47,14 @@ impl XAxis {
 }
 
 impl Plotter {
-    pub fn parse(mut path: PathBuf, mode: &BenchMode) -> Result<Self, Error> {
+    pub fn parse(mut path: PathBuf, mode: &ResultMode) -> Result<Self, Error> {
         let file = File::open(path.clone())?;
 
         // change the filename extension
         path.set_extension("svg");
 
         match mode {
-            BenchMode::OpsPerSecond => {
+            ResultMode::OpsPerSecond => {
                 let (x_axis, y_axis) = Plotter::parse_ops_per_second(&file)?;
                 Ok(Self {
                     x_axis,
@@ -62,7 +62,7 @@ impl Plotter {
                     path,
                 })
             }
-            BenchMode::Behaviour => {
+            ResultMode::Behaviour => {
                 let (x_axis, y_axis) = Plotter::parse_timestamps(&file)?;
                 Ok(Self {
                     x_axis,
@@ -70,7 +70,7 @@ impl Plotter {
                     path,
                 })
             }
-            BenchMode::Throughput => {
+            ResultMode::Throughput => {
                 let (x_axis, y_axis) = Plotter::parse_throughputs(&file)?;
                 Ok(Self {
                     x_axis,

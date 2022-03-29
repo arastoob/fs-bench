@@ -2,7 +2,7 @@ use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
-use crate::{BenchMode, BenchResult, Error, Record, Fs};
+use crate::{ResultMode, BenchResult, Error, Record, Fs};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -75,7 +75,7 @@ impl MicroBench {
         ops_s_results.add_record(read_ops_s)?;
         ops_s_results.add_record(write_ops_s)?;
         let ops_s_log = logger.log(ops_s_results, "ops_per_second")?;
-        let plotter = Plotter::parse(PathBuf::from(ops_s_log), &BenchMode::OpsPerSecond)?;
+        let plotter = Plotter::parse(PathBuf::from(ops_s_log), &ResultMode::OpsPerSecond)?;
         plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
 
         let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
@@ -83,25 +83,25 @@ impl MicroBench {
         let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
         mkdir_behaviour_results.add_records(mkdir_behaviour)?;
         let mkdir_log = logger.log(mkdir_behaviour_results, "mkdir")?;
-        let plotter = Plotter::parse(PathBuf::from(mkdir_log), &BenchMode::Behaviour)?;
+        let plotter = Plotter::parse(PathBuf::from(mkdir_log), &ResultMode::Behaviour)?;
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
         let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
         mknod_behaviour_results.add_records(mknod_behaviour)?;
         let mknod_log = logger.log(mknod_behaviour_results, "mknod")?;
-        let plotter = Plotter::parse(PathBuf::from(mknod_log), &BenchMode::Behaviour)?;
+        let plotter = Plotter::parse(PathBuf::from(mknod_log), &ResultMode::Behaviour)?;
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
         let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
         read_behaviour_results.add_records(read_behaviour)?;
         let read_log = logger.log(read_behaviour_results, "read")?;
-        let plotter = Plotter::parse(PathBuf::from(read_log), &BenchMode::Behaviour)?;
+        let plotter = Plotter::parse(PathBuf::from(read_log), &ResultMode::Behaviour)?;
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
         let mut write_behaviour_results = BenchResult::new(behaviour_header);
         write_behaviour_results.add_records(write_behaviour)?;
         let write_log = logger.log(write_behaviour_results, "write")?;
-        let plotter = Plotter::parse(PathBuf::from(write_log), &BenchMode::Behaviour)?;
+        let plotter = Plotter::parse(PathBuf::from(write_log), &ResultMode::Behaviour)?;
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
 
         Ok(())
@@ -120,7 +120,7 @@ impl MicroBench {
         let mut read_throughput_results = BenchResult::new(throughput_header.clone());
         read_throughput_results.add_records(read_throughput)?;
         let read_throughput_log = logger.log(read_throughput_results, "read_throughput")?;
-        let plotter = Plotter::parse(PathBuf::from(read_throughput_log), &BenchMode::Throughput)?;
+        let plotter = Plotter::parse(PathBuf::from(read_throughput_log), &ResultMode::Throughput)?;
         plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
@@ -132,7 +132,7 @@ impl MicroBench {
         let mut write_throughput_results = BenchResult::new(throughput_header);
         write_throughput_results.add_records(write_throughput)?;
         let write_throughput_log = logger.log(write_throughput_results, "write_throughput")?;
-        let plotter = Plotter::parse(PathBuf::from(write_throughput_log), &BenchMode::Throughput)?;
+        let plotter = Plotter::parse(PathBuf::from(write_throughput_log), &ResultMode::Throughput)?;
         plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
