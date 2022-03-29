@@ -19,6 +19,36 @@ use std::thread;
 use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
+pub enum BenchMode {
+    Micro,
+    Workload,
+}
+
+impl FromStr for BenchMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "micro" => Ok(BenchMode::Micro),
+            "workload" => Ok(BenchMode::Workload),
+            _ => {
+                Err("valid benckmark modes are: micro, workload".to_string())
+            }
+        }
+    }
+}
+
+impl Display for BenchMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BenchMode::Micro => write!(f, "micro"),
+            BenchMode::Workload => write!(f, "workload"),
+        }
+    }
+}
+
+
+#[derive(Debug)]
 pub enum ResultMode {
     OpsPerSecond,
     Throughput,
@@ -34,7 +64,7 @@ impl FromStr for ResultMode {
             "throughput" => Ok(ResultMode::Throughput),
             "behaviour" => Ok(ResultMode::Behaviour),
             _ => {
-                Err("valid benckmark modes are: ops_per_second, throughput, behaviour".to_string())
+                Err("valid result modes are: ops_per_second, throughput, behaviour".to_string())
             }
         }
     }
