@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use fs_bench::BenchMode;
 use fs_bench::error::Error;
 use fs_bench::micro::MicroBench;
-use fs_bench::workload::WorkloadRunner;
+use fs_bench::wasm_workload::WasmWorkloadRunner;
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]
@@ -34,14 +34,12 @@ struct Args {
     log_path: PathBuf,
 
     /// The path to the .wasm file including the workload
-    /// The .wasm file should include two functions:
-    ///     setup: prepare the workload environment
-    ///     run: execute the workload
-    /// Both setup and run functions take two i32 inputs, which specify the start address and
-    /// the length of the base path string. The base path is the path to the directory in which
-    /// the workload sub-directories/files are generated.
-    #[clap(short, long, required_if_eq("bench_mode", "workload"))]
+    #[clap(short, long, required_if_eq("bench_mode", "wasm"))]
     wasm_path: Option<PathBuf>,
+
+    /// The path to the strace log file
+    #[clap(short, long, required_if_eq("bench_mode", "strace"))]
+    strace_path: Option<PathBuf>
 }
 
 fn main() -> Result<(), Error> {
@@ -58,12 +56,12 @@ fn main() -> Result<(), Error> {
             )?;
             micro_bench.run()?;
         },
-        BenchMode::Workload => {
+        BenchMode::Wasm => {
             let wasm_path = match args.wasm_path {
                 Some(wasm_path) => wasm_path,
                 None => return Err(Error::InvalidConfig("a valid wasm_path not provided".to_string()))
             };
-            let workload_runner = WorkloadRunner::new(
+            let workload_runner = WasmWorkloadRunner::new(
                 args.iterations,
                 args.mount,
                 args.fs_name,

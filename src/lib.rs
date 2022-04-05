@@ -4,7 +4,7 @@ pub mod micro;
 pub mod plotter;
 pub mod sample;
 mod timer;
-pub mod workload;
+pub mod wasm_workload;
 
 use crate::error::Error;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -21,7 +21,8 @@ use std::time::{Duration, SystemTime};
 #[derive(Debug)]
 pub enum BenchMode {
     Micro,
-    Workload,
+    Wasm,
+    Strace,
 }
 
 impl FromStr for BenchMode {
@@ -30,9 +31,10 @@ impl FromStr for BenchMode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "micro" => Ok(BenchMode::Micro),
-            "workload" => Ok(BenchMode::Workload),
+            "wasm" => Ok(BenchMode::Wasm),
+            "strace" => Ok(BenchMode::Strace),
             _ => {
-                Err("valid benckmark modes are: micro, workload".to_string())
+                Err("valid benckmark modes are: micro, wasm, strace".to_string())
             }
         }
     }
@@ -42,7 +44,8 @@ impl Display for BenchMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             BenchMode::Micro => write!(f, "micro"),
-            BenchMode::Workload => write!(f, "workload"),
+            BenchMode::Wasm => write!(f, "workload"),
+            BenchMode::Strace => write!(f, "strace"),
         }
     }
 }
