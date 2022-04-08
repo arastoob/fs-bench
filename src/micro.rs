@@ -356,7 +356,7 @@ impl MicroBench {
             let mut file_name = root_path.clone();
             file_name.push(file.to_string());
             let begin = SystemTime::now();
-            match Fs::read_file(&file_name, &mut read_buffer) {
+            match Fs::open_read(&file_name, &mut read_buffer) {
                 Ok(_) => {
                     let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
@@ -459,7 +459,7 @@ impl MicroBench {
             let mut file_name = root_path.clone();
             file_name.push(file.to_string());
             let begin = SystemTime::now();
-            match Fs::write_file(&file_name, &mut content) {
+            match Fs::open_write(&file_name, &mut content) {
                 Ok(_) => {
                     let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
@@ -560,7 +560,7 @@ impl MicroBench {
                 let rand_index = thread_rng().gen_range(0..file_size - read_size - 1) as u64;
                 let begin = SystemTime::now();
                 // random read from a random index
-                match Fs::read_file_at(&file_name, &mut read_buffer, rand_index) {
+                match Fs::open_read_at(&file_name, &mut read_buffer, rand_index) {
                     Ok(_) => {
                         let end = begin.elapsed()?.as_secs_f64();
                         times.push(end);
@@ -662,7 +662,7 @@ impl MicroBench {
 
                 let begin = SystemTime::now();
                 // random read from a random index
-                match Fs::write_file(&file_name, &mut content) {
+                match Fs::open_write(&file_name, &mut content) {
                     Ok(_) => {
                         let end = begin.elapsed()?.as_secs_f64();
                         times.push(end);

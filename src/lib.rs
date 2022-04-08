@@ -5,11 +5,12 @@ pub mod plotter;
 pub mod sample;
 mod timer;
 pub mod wasm_workload;
+pub mod strace_workload;
 
 use crate::error::Error;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fmt::{Display, Formatter};
-use std::fs::{create_dir, remove_dir_all, File, OpenOptions};
+use std::fs::{create_dir, remove_dir_all, File, OpenOptions, create_dir_all, remove_file};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
@@ -130,15 +131,23 @@ pub struct Record {
 pub struct Fs {}
 
 impl Fs {
-    pub fn make_dir(path: &PathBuf) -> Result<(), Error> {
+    pub fn make_dir<P: AsRef<Path>>(path: P) -> Result<(), Error> {
         Ok(create_dir(path)?)
     }
 
-    pub fn make_file(path: &PathBuf) -> Result<File, Error> {
+    pub fn make_dir_all<P: AsRef<Path>>(path: P) -> Result<(), Error> {
+        Ok(create_dir_all(path)?)
+    }
+
+    pub fn make_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
         Ok(File::create(path)?)
     }
 
-    pub fn write_file(path: &PathBuf, content: &mut Vec<u8>) -> Result<usize, Error> {
+    pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
+        Ok(OpenOptions::new().write(true).append(false).open(path)?)
+    }
+
+    pub fn open_write<P: AsRef<Path>>(path: P, content: &mut Vec<u8>) -> Result<usize, Error> {
         let mut file = OpenOptions::new().write(true).append(false).open(path)?;
 
         let size = file.write(&content)?;
@@ -146,13 +155,36 @@ impl Fs {
         Ok(size)
     }
 
-    pub fn read_file(path: &PathBuf, read_buffer: &mut Vec<u8>) -> Result<usize, Error> {
+    pub fn open_write_at<P: AsRef<Path>>(path: P, content: &mut Vec<u8>, offset: u64,) -> Result<usize, Error> {
+        let mut file = OpenOptions::new().write(true).append(false).open(path)?;
+        file.seek(SeekFrom::Start(offset))?;
+
+        let size = file.write(&content)?;
+        file.flush()?;
+        Ok(size)
+    }
+
+    pub fn write(file: &mut File, content: &mut Vec<u8>) -> Result<usize, Error> {
+        let size = file.write(&content)?;
+        file.flush()?;
+        Ok(size)
+    }
+
+    pub fn write_at(file: &mut File, content: &mut Vec<u8>, offset: u64,) -> Result<usize, Error> {
+        file.seek(SeekFrom::Start(offset))?;
+
+        let size = file.write(&content)?;
+        file.flush()?;
+        Ok(size)
+    }
+
+    pub fn open_read<P: AsRef<Path>>(path: P, read_buffer: &mut Vec<u8>) -> Result<usize, Error> {
         let mut file = OpenOptions::new().read(true).open(path)?;
         Ok(file.read(read_buffer)?)
     }
 
-    pub fn read_file_at(
-        path: &PathBuf,
+    pub fn open_read_at<P: AsRef<Path>>(
+        path: P,
         read_buffer: &mut Vec<u8>,
         offset: u64,
     ) -> Result<usize, Error> {
@@ -161,8 +193,36 @@ impl Fs {
         Ok(file.read(read_buffer)?)
     }
 
+    pub fn read(file: &mut File, read_buffer: &mut Vec<u8>) -> Result<usize, Error> {
+        Ok(file.read(read_buffer)?)
+    }
+
+    pub fn read_at(
+        file: &mut File,
+        read_buffer: &mut Vec<u8>,
+        offset: u64,
+    ) -> Result<usize, Error> {
+        file.seek(SeekFrom::Start(offset))?;
+        Ok(file.read(read_buffer)?)
+    }
+
+    pub fn remove_file<P: AsRef<Path>>(path: P) -> Result<(), Error> {
+        Ok(remove_file(path)?)
+    }
+
+    pub fn remove_dir<P: AsRef<Path>>(path: P) -> Result<(), Error> {
+        Ok(remove_dir_all(path)?)
+    }
+
+    pub fn metadata<P: AsRef<Path>>(path: P) -> Result<std::fs::Metadata, Error> {
+        Ok(std::fs::metadata(path)?)
+    }
+
+    pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), Error> {
+        Ok(std::fs::rename(from, to)?)
+    }
+
     pub fn cleanup(path: &PathBuf) -> Result<(), Error> {
-        // let bench_name = bench_name.to_string();
         let spinner = ProgressBar::new_spinner();
         spinner.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}"));
         spinner.set_message(format!("clean up {}", path.to_str().ok_or(Error::Unknown("failed to convert PathBuf to String".to_string()))?));
