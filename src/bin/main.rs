@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use fs_bench::BenchMode;
 use fs_bench::error::Error;
 use fs_bench::micro::MicroBench;
+use fs_bench::strace_workload::StraceWorkloadRunner;
 use fs_bench::wasm_workload::WasmWorkloadRunner;
 
 /// A library for benchmarking filesystem operations
@@ -61,14 +62,28 @@ fn main() -> Result<(), Error> {
                 Some(wasm_path) => wasm_path,
                 None => return Err(Error::InvalidConfig("a valid wasm_path not provided".to_string()))
             };
-            let workload_runner = WasmWorkloadRunner::new(
+            let wasm_workload = WasmWorkloadRunner::new(
                 args.iterations,
                 args.mount,
                 args.fs_name,
                 args.log_path,
                 wasm_path
             )?;
-            workload_runner.run()?;
+            wasm_workload.run()?;
+        },
+        BenchMode::Strace => {
+            let strace_path = match args.strace_path {
+                Some(strace_path) => strace_path,
+                None => return Err(Error::InvalidConfig("a valid strace_path not provided".to_string()))
+            };
+            let mut strace_workload = StraceWorkloadRunner::new(
+                args.iterations,
+                args.mount,
+                args.fs_name,
+                args.log_path,
+                strace_path
+            )?;
+            strace_workload.replay()?;
         }
     }
 
