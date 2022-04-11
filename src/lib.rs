@@ -57,6 +57,7 @@ pub enum ResultMode {
     OpsPerSecond,
     Throughput,
     Behaviour,
+    OpTimes,
 }
 
 impl FromStr for ResultMode {
@@ -80,6 +81,7 @@ impl Display for ResultMode {
             ResultMode::OpsPerSecond => write!(f, "ops_per_second"),
             ResultMode::Behaviour => write!(f, "behaviour"),
             ResultMode::Throughput => write!(f, "throughput"),
+            ResultMode::OpTimes => write!(f, "op_times"),
         }
     }
 }
@@ -131,32 +133,36 @@ pub struct Record {
 pub struct Fs {}
 
 impl Fs {
-    pub fn make_dir<P: AsRef<Path>>(path: P) -> Result<(), Error> {
-        Ok(create_dir(path)?)
+    pub fn make_dir<P: AsRef<Path>>(path: P) -> Result<(), std::io::Error> {
+        create_dir(path)
     }
 
-    pub fn make_dir_all<P: AsRef<Path>>(path: P) -> Result<(), Error> {
-        Ok(create_dir_all(path)?)
+    pub fn make_dir_all<P: AsRef<Path>>(path: P) -> Result<(), std::io::Error> {
+        create_dir_all(path)
     }
 
-    pub fn make_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
-        Ok(File::create(path)?)
+    pub fn make_file<P: AsRef<Path>>(path: P) -> Result<File, std::io::Error> {
+        File::create(path)
     }
 
-    pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, Error> {
-        Ok(OpenOptions::new().write(true).append(false).open(path)?)
+    pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, std::io::Error> {
+        OpenOptions::new().write(true).read(true).append(false).open(path)
     }
 
-    pub fn open_write<P: AsRef<Path>>(path: P, content: &mut Vec<u8>) -> Result<usize, Error> {
-        let mut file = OpenOptions::new().write(true).append(false).open(path)?;
+    pub fn open_dir<P: AsRef<Path>>(path: P) -> Result<File, std::io::Error> {
+        OpenOptions::new().read(true).open(path)
+    }
+
+    pub fn open_write<P: AsRef<Path>>(path: P, content: &mut Vec<u8>) -> Result<usize, std::io::Error> {
+        let mut file = OpenOptions::new().write(true).read(true).append(false).open(path)?;
 
         let size = file.write(&content)?;
         file.flush()?;
         Ok(size)
     }
 
-    pub fn open_write_at<P: AsRef<Path>>(path: P, content: &mut Vec<u8>, offset: u64,) -> Result<usize, Error> {
-        let mut file = OpenOptions::new().write(true).append(false).open(path)?;
+    pub fn open_write_at<P: AsRef<Path>>(path: P, content: &mut Vec<u8>, offset: u64,) -> Result<usize, std::io::Error> {
+        let mut file = OpenOptions::new().write(true).read(true).append(false).open(path)?;
         file.seek(SeekFrom::Start(offset))?;
 
         let size = file.write(&content)?;
@@ -164,13 +170,13 @@ impl Fs {
         Ok(size)
     }
 
-    pub fn write(file: &mut File, content: &mut Vec<u8>) -> Result<usize, Error> {
+    pub fn write(file: &mut File, content: &mut Vec<u8>) -> Result<usize, std::io::Error> {
         let size = file.write(&content)?;
         file.flush()?;
         Ok(size)
     }
 
-    pub fn write_at(file: &mut File, content: &mut Vec<u8>, offset: u64,) -> Result<usize, Error> {
+    pub fn write_at(file: &mut File, content: &mut Vec<u8>, offset: u64,) -> Result<usize, std::io::Error> {
         file.seek(SeekFrom::Start(offset))?;
 
         let size = file.write(&content)?;
@@ -178,48 +184,53 @@ impl Fs {
         Ok(size)
     }
 
-    pub fn open_read<P: AsRef<Path>>(path: P, read_buffer: &mut Vec<u8>) -> Result<usize, Error> {
+    pub fn open_read<P: AsRef<Path>>(path: P, read_buffer: &mut Vec<u8>) -> Result<usize, std::io::Error> {
         let mut file = OpenOptions::new().read(true).open(path)?;
-        Ok(file.read(read_buffer)?)
+        file.read(read_buffer)
     }
 
     pub fn open_read_at<P: AsRef<Path>>(
         path: P,
         read_buffer: &mut Vec<u8>,
         offset: u64,
-    ) -> Result<usize, Error> {
+    ) -> Result<usize, std::io::Error> {
         let mut file = OpenOptions::new().read(true).open(path)?;
         file.seek(SeekFrom::Start(offset))?;
-        Ok(file.read(read_buffer)?)
+        file.read(read_buffer)
     }
 
-    pub fn read(file: &mut File, read_buffer: &mut Vec<u8>) -> Result<usize, Error> {
-        Ok(file.read(read_buffer)?)
+    pub fn read(file: &mut File, read_buffer: &mut Vec<u8>) -> Result<usize, std::io::Error> {
+        file.read(read_buffer)
     }
 
     pub fn read_at(
         file: &mut File,
         read_buffer: &mut Vec<u8>,
         offset: u64,
-    ) -> Result<usize, Error> {
+    ) -> Result<usize, std::io::Error> {
         file.seek(SeekFrom::Start(offset))?;
-        Ok(file.read(read_buffer)?)
+        file.read(read_buffer)
     }
 
-    pub fn remove_file<P: AsRef<Path>>(path: P) -> Result<(), Error> {
-        Ok(remove_file(path)?)
+    pub fn remove_file<P: AsRef<Path>>(path: P) -> Result<(), std::io::Error> {
+        remove_file(path)
     }
 
-    pub fn remove_dir<P: AsRef<Path>>(path: P) -> Result<(), Error> {
-        Ok(remove_dir_all(path)?)
+    pub fn remove_dir<P: AsRef<Path>>(path: P) -> Result<(), std::io::Error> {
+        remove_dir_all(path)
     }
 
-    pub fn metadata<P: AsRef<Path>>(path: P) -> Result<std::fs::Metadata, Error> {
-        Ok(std::fs::metadata(path)?)
+    pub fn metadata<P: AsRef<Path>>(path: P) -> Result<std::fs::Metadata, std::io::Error> {
+        std::fs::metadata(path)
     }
 
-    pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), Error> {
-        Ok(std::fs::rename(from, to)?)
+    pub fn rename<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), std::io::Error> {
+        std::fs::rename(from, to)
+    }
+
+    pub fn truncate<P: AsRef<Path>>(path: P) -> Result<(), std::io::Error> {
+        let file = Fs::open_file(path)?;
+        file.set_len(0)
     }
 
     pub fn cleanup(path: &PathBuf) -> Result<(), Error> {

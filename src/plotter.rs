@@ -78,6 +78,14 @@ impl Plotter {
                     path,
                 })
             }
+            ResultMode::OpTimes => {
+                let (x_axis, y_axis) = Plotter::parse_ops_timestamps(&file)?;
+                Ok(Self {
+                    x_axis,
+                    y_axis,
+                    path,
+                })
+            }
         }
     }
 
@@ -327,6 +335,40 @@ impl Plotter {
                     .parse::<f64>()?,
             ));
             y_axis.push(record.get(throughput_idx)
+                .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                .parse::<f64>()?);
+        }
+
+        assert_eq!(x_axis.len(), y_axis.len());
+
+        Ok((x_axis, y_axis))
+    }
+
+    fn parse_ops_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<f64>), Error> {
+        let mut reader = csv::Reader::from_reader(file);
+        let mut x_axis = vec![];
+        let mut y_axis = vec![];
+
+        // find the seconds and ops columns
+        let op_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "op")
+            .ok_or(Error::CsvError("header 'op' not found".to_string()))?;
+        let time_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "time")
+            .ok_or(Error::CsvError("header 'time' not found".to_string()))?;
+
+        for record in reader.records() {
+            let record = record?;
+            x_axis.push(XAxis::from(
+                record.get(op_idx)
+                    .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                    .parse::<f64>()?,
+            ));
+            y_axis.push(record.get(time_idx)
                 .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
                 .parse::<f64>()?);
         }
