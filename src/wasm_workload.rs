@@ -1,13 +1,13 @@
-use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
-use indicatif::{ProgressBar, ProgressStyle};
-use wasmer::{Instance, Module, Store};
-use wasmer_wasi::WasiState;
 use crate::data_logger::DataLogger;
-use crate::{ResultMode, BenchResult, Error, Fs};
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
+use crate::{BenchResult, Error, Fs, ResultMode};
+use indicatif::{ProgressBar, ProgressStyle};
+use std::path::PathBuf;
+use std::time::{Duration, SystemTime};
+use wasmer::{Instance, Module, Store};
+use wasmer_wasi::WasiState;
 
 /// The .wasm workload runner
 /// The .wasm file should include two functions:
@@ -33,13 +33,12 @@ impl WasmWorkloadRunner {
         log_path: PathBuf,
         wasm_path: PathBuf,
     ) -> Result<Self, Error> {
-
         Ok(Self {
             iteration,
             mount_path,
             fs_name,
             log_path,
-            wasm_path
+            wasm_path,
         })
     }
 
@@ -66,7 +65,9 @@ impl WasmWorkloadRunner {
 
         // Write the mount_path string into the lineary memory
         let root_path = Fs::path_to_str(&root_path)?;
-        let memory = instance.exports.get_memory("memory")
+        let memory = instance
+            .exports
+            .get_memory("memory")
             .map_err(|err| Error::WasmerError(format!("{:?}", err)))?;
 
         for (byte, cell) in root_path
@@ -87,7 +88,8 @@ impl WasmWorkloadRunner {
             .map_err(|err| Error::WasmerError(format!("{:?}", err)))?;
 
         // call the setup function
-        setup.call(0, root_path.len() as i32)
+        setup
+            .call(0, root_path.len() as i32)
             .map_err(|err| Error::WasmerError(format!("{:?}", err)))?;
 
         // iterate the run function and produce the ops/s and behaviour results/plots
@@ -170,11 +172,16 @@ impl WasmWorkloadRunner {
         let module = Module::new(&store, wasm_bytes)?;
 
         let mut wasi_env = WasiState::new("fs-bench")
-            .preopen(|p| p.directory(self.mount_path.clone()).read(true).write(true).create(true))?
+            .preopen(|p| {
+                p.directory(self.mount_path.clone())
+                    .read(true)
+                    .write(true)
+                    .create(true)
+            })?
             .finalize()?;
 
         let import_object = wasi_env.import_object(&module)?;
-        let instance  = Instance::new(&module, &import_object)?;
+        let instance = Instance::new(&module, &import_object)?;
 
         Ok(instance)
     }

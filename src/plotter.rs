@@ -1,4 +1,4 @@
-use crate::{ResultMode, Error};
+use crate::{Error, ResultMode};
 use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint};
 use plotters::prelude::*;
 use std::fs::File;
@@ -262,11 +262,15 @@ impl Plotter {
 
         for record in reader.records() {
             let record = record?;
-            x_axis.push(XAxis::from(record.get(operation_idx).ok_or(Error::CsvError("failed to read from the csv file".to_string()))?));
+            x_axis.push(XAxis::from(record.get(operation_idx).ok_or(
+                Error::CsvError("failed to read from the csv file".to_string()),
+            )?));
             y_axis.push(
                 record
                     .get(ops_per_second_idx)
-                    .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                    .ok_or(Error::CsvError(
+                        "failed to read from the csv file".to_string(),
+                    ))?
                     .parse::<f64>()?,
             );
         }
@@ -296,13 +300,21 @@ impl Plotter {
         for record in reader.records() {
             let record = record?;
             x_axis.push(XAxis::from(
-                record.get(seconds_idx)
-                    .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                record
+                    .get(seconds_idx)
+                    .ok_or(Error::CsvError(
+                        "failed to read from the csv file".to_string(),
+                    ))?
                     .parse::<f64>()?,
             ));
-            y_axis.push(record.get(ops_idx)
-                .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
-                .parse::<f64>()?);
+            y_axis.push(
+                record
+                    .get(ops_idx)
+                    .ok_or(Error::CsvError(
+                        "failed to read from the csv file".to_string(),
+                    ))?
+                    .parse::<f64>()?,
+            );
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -330,13 +342,21 @@ impl Plotter {
         for record in reader.records() {
             let record = record?;
             x_axis.push(XAxis::from(
-                record.get(file_size_idx)
-                    .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                record
+                    .get(file_size_idx)
+                    .ok_or(Error::CsvError(
+                        "failed to read from the csv file".to_string(),
+                    ))?
                     .parse::<f64>()?,
             ));
-            y_axis.push(record.get(throughput_idx)
-                .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
-                .parse::<f64>()?);
+            y_axis.push(
+                record
+                    .get(throughput_idx)
+                    .ok_or(Error::CsvError(
+                        "failed to read from the csv file".to_string(),
+                    ))?
+                    .parse::<f64>()?,
+            );
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -364,13 +384,21 @@ impl Plotter {
         for record in reader.records() {
             let record = record?;
             x_axis.push(XAxis::from(
-                record.get(op_idx)
-                    .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
+                record
+                    .get(op_idx)
+                    .ok_or(Error::CsvError(
+                        "failed to read from the csv file".to_string(),
+                    ))?
                     .parse::<f64>()?,
             ));
-            y_axis.push(record.get(time_idx)
-                .ok_or(Error::CsvError("failed to read from the csv file".to_string()))?
-                .parse::<f64>()?);
+            y_axis.push(
+                record
+                    .get(time_idx)
+                    .ok_or(Error::CsvError(
+                        "failed to read from the csv file".to_string(),
+                    ))?
+                    .parse::<f64>()?,
+            );
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -401,7 +429,7 @@ impl Ranged for CustomXAxis {
 
         // this case if for calculating the tick position on the plot and for line and point plots
         let pos = self.ticks.iter().position(|tick| tick == v);
-        if let Some(pos) =  pos {
+        if let Some(pos) = pos {
             return (pos * tick_distance) as i32 + pixel_range.0 + 50;
         }
 

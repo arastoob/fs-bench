@@ -46,7 +46,7 @@ pub enum Error {
 
     Unknown(String),
 
-    WasmerError(String)
+    WasmerError(String),
 }
 
 impl Error {

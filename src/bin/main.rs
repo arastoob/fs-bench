@@ -1,9 +1,9 @@
 use clap::Parser;
-use std::path::PathBuf;
-use fs_bench::BenchMode;
 use fs_bench::error::Error;
 use fs_bench::micro::MicroBench;
 use fs_bench::strace_workload::StraceWorkloadRunner;
+use fs_bench::BenchMode;
+use std::path::PathBuf;
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]
@@ -35,7 +35,7 @@ struct Args {
 
     /// The path to the strace log file
     #[clap(short, long, required_if_eq("bench_mode", "strace"))]
-    workload: Option<PathBuf>
+    workload: Option<PathBuf>,
 }
 
 fn main() -> Result<(), Error> {
@@ -55,14 +55,18 @@ fn main() -> Result<(), Error> {
         BenchMode::Strace => {
             let strace_path = match args.workload {
                 Some(strace_path) => strace_path,
-                None => return Err(Error::InvalidConfig("a valid strace_path not provided".to_string()))
+                None => {
+                    return Err(Error::InvalidConfig(
+                        "a valid strace_path not provided".to_string(),
+                    ))
+                }
             };
             let mut strace_workload = StraceWorkloadRunner::new(
                 // args.iterations,
                 args.mount,
                 args.fs_name,
                 args.log_path,
-                strace_path
+                strace_path,
             )?;
             strace_workload.replay()?;
         }

@@ -1,12 +1,12 @@
+use crate::data_logger::DataLogger;
+use crate::plotter::Plotter;
+use crate::{BenchResult, Error, Fs, Record, ResultMode};
+use indicatif::{ProgressBar, ProgressStyle};
+use rand::RngCore;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::SystemTime;
-use indicatif::{ProgressBar, ProgressStyle};
-use rand::RngCore;
 use strace_parser::{FileDir, Operation, Parser};
-use crate::{BenchResult, Error, Fs, Record, ResultMode};
-use crate::data_logger::DataLogger;
-use crate::plotter::Plotter;
 
 pub struct StraceWorkloadRunner {
     // iteration: u64,
@@ -14,7 +14,7 @@ pub struct StraceWorkloadRunner {
     fs_name: String,
     log_path: PathBuf,
     ops: Vec<Operation>, // the operations extracted from the strace log
-    files: Vec<FileDir> // the files and directories accessed and logged by strace
+    files: Vec<FileDir>, // the files and directories accessed and logged by strace
 }
 
 impl StraceWorkloadRunner {
@@ -25,7 +25,6 @@ impl StraceWorkloadRunner {
         log_path: PathBuf,
         strace_path: PathBuf,
     ) -> Result<Self, Error> {
-
         // parse the strace log file and extract the operations
         let mut parser = Parser::new(strace_path);
         let mut ops = parser.parse()?;
@@ -33,8 +32,7 @@ impl StraceWorkloadRunner {
         let mut files = Vec::from_iter(files.into_iter());
 
         // remove no-op and stat operations
-        ops.retain(|op| op != &Operation::NoOp &&
-            !matches!(op, Operation::Stat(_)));
+        ops.retain(|op| op != &Operation::NoOp && !matches!(op, Operation::Stat(_)));
 
         files.retain(|file_dir| file_dir.path() != "/");
 
@@ -44,11 +42,9 @@ impl StraceWorkloadRunner {
             fs_name,
             log_path,
             ops,
-            files
+            files,
         })
     }
-
-
 
     pub fn replay(&mut self) -> Result<(), Error> {
         let mut base_path = self.mount_path.clone();
@@ -66,7 +62,7 @@ impl StraceWorkloadRunner {
                     match Fs::make_dir(path) {
                         Ok(_) => {
                             times.push(begin.elapsed()?.as_secs_f64());
-                        },
+                        }
                         Err(_err) => {}
                     }
                 }
@@ -78,7 +74,7 @@ impl StraceWorkloadRunner {
                         Ok(file) => {
                             file.set_len(0)?;
                             times.push(begin.elapsed()?.as_secs_f64());
-                        },
+                        }
                         Err(_err) => {}
                     }
                 }
@@ -90,14 +86,14 @@ impl StraceWorkloadRunner {
                         match Fs::remove_dir(path) {
                             Ok(_) => {
                                 times.push(begin.elapsed()?.as_secs_f64());
-                            },
+                            }
                             Err(_err) => {}
                         }
                     } else {
                         match Fs::remove_file(path) {
                             Ok(_) => {
                                 times.push(begin.elapsed()?.as_secs_f64());
-                            },
+                            }
                             Err(_err) => {}
                         }
                     }
@@ -107,18 +103,14 @@ impl StraceWorkloadRunner {
                     let mut buffer = vec![0u8; *len];
                     let begin = SystemTime::now();
                     match Fs::open_file(path) {
-                        Ok(mut file) => {
-                            match Fs::read_at(&mut file, &mut buffer, *offset as u64) {
-                                Ok(_) => {
-                                    times.push(begin.elapsed()?.as_secs_f64());
-                                },
-                                Err(_err) => {}
+                        Ok(mut file) => match Fs::read_at(&mut file, &mut buffer, *offset as u64) {
+                            Ok(_) => {
+                                times.push(begin.elapsed()?.as_secs_f64());
                             }
+                            Err(_err) => {}
                         },
                         Err(_) => {}
                     }
-
-
                 }
                 &Operation::Write(ref path, ref offset, ref len, ref _content) => {
                     let path = self.map_path(&base_path, path)?;
@@ -132,7 +124,7 @@ impl StraceWorkloadRunner {
                     match Fs::write_at(&mut file, &mut rand_content, *offset as u64) {
                         Ok(_) => {
                             times.push(begin.elapsed()?.as_secs_f64());
-                        },
+                        }
                         Err(_err) => {}
                     }
                 }
@@ -143,18 +135,17 @@ impl StraceWorkloadRunner {
                         match Fs::open_file(path) {
                             Ok(_) => {
                                 times.push(begin.elapsed()?.as_secs_f64());
-                            },
+                            }
                             Err(_err) => {}
                         }
                     } else if path.is_dir() {
                         match Fs::open_dir(path) {
                             Ok(_) => {
                                 times.push(begin.elapsed()?.as_secs_f64());
-                            },
+                            }
                             Err(_err) => {}
                         }
                     }
-
                 }
                 &Operation::Truncate(ref path) => {
                     let path = self.map_path(&base_path, path)?;
@@ -162,7 +153,7 @@ impl StraceWorkloadRunner {
                     match Fs::truncate(path) {
                         Ok(_) => {
                             times.push(begin.elapsed()?.as_secs_f64());
-                        },
+                        }
                         Err(_err) => {}
                     }
                 }
@@ -172,7 +163,7 @@ impl StraceWorkloadRunner {
                     match Fs::metadata(path) {
                         Ok(_) => {
                             times.push(begin.elapsed()?.as_secs_f64());
-                        },
+                        }
                         Err(_err) => {}
                     }
                 }
@@ -182,7 +173,7 @@ impl StraceWorkloadRunner {
                     match Fs::metadata(path) {
                         Ok(_) => {
                             times.push(begin.elapsed()?.as_secs_f64());
-                        },
+                        }
                         Err(_err) => {}
                     }
                 }
@@ -192,7 +183,7 @@ impl StraceWorkloadRunner {
                     match Fs::metadata(path) {
                         Ok(_) => {
                             times.push(begin.elapsed()?.as_secs_f64());
-                        },
+                        }
                         Err(_err) => {}
                     }
                 }
@@ -207,7 +198,7 @@ impl StraceWorkloadRunner {
                     match Fs::metadata(path) {
                         Ok(_) => {
                             times.push(begin.elapsed()?.as_secs_f64());
-                        },
+                        }
                         Err(_err) => {}
                     }
                 }
@@ -219,10 +210,10 @@ impl StraceWorkloadRunner {
                     match Fs::rename(from, to) {
                         Ok(_) => {
                             times.push(begin.elapsed()?.as_secs_f64());
-                        },
+                        }
                         Err(_err) => {}
                     }
-                },
+                }
                 &Operation::GetRandom(ref len) => {
                     let begin = SystemTime::now();
 
@@ -231,13 +222,10 @@ impl StraceWorkloadRunner {
                     rng.fill_bytes(&mut rand_content);
 
                     times.push(begin.elapsed()?.as_secs_f64());
-                },
+                }
                 &Operation::NoOp => {}
             }
         }
-
-        println!("ops len: {}", self.ops.len());
-        println!("times len: {}", times.len());
 
         // plot and log the results
         let header = ["op".to_string(), "time".to_string()].to_vec();
@@ -255,13 +243,7 @@ impl StraceWorkloadRunner {
         let workload_log = logger.log(results, "strace_workload")?;
 
         let plotter = Plotter::parse(PathBuf::from(workload_log), &ResultMode::OpTimes)?;
-        plotter.line_chart(
-            Some("Operations"),
-            Some("Time [ns]"),
-            None,
-            false,
-            false,
-        )?;
+        plotter.line_chart(Some("Operations"), Some("Time [ns]"), None, false, false)?;
 
         Ok(())
     }
@@ -279,9 +261,7 @@ impl StraceWorkloadRunner {
         bar.set_style(style);
         bar.set_message(format!("{:5}", "setup paths"));
 
-
         for file_dir in self.files.iter() {
-
             match file_dir {
                 FileDir::File(path, size) => {
                     let new_path = self.map_path(base_path, path)?;
@@ -300,9 +280,9 @@ impl StraceWorkloadRunner {
                     let mut rng = rand::thread_rng();
                     rng.fill_bytes(&mut rand_content);
 
-                    let mut file  = Fs::make_file(&new_path)?;
+                    let mut file = Fs::make_file(&new_path)?;
                     file.write(&mut rand_content)?;
-                },
+                }
                 FileDir::Dir(path, _) => {
                     let new_path = self.map_path(base_path, path)?;
 

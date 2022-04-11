@@ -3,14 +3,14 @@ pub mod error;
 pub mod micro;
 pub mod plotter;
 pub mod sample;
+pub mod strace_workload;
 mod timer;
 pub mod wasm_workload;
-pub mod strace_workload;
 
 use crate::error::Error;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fmt::{Display, Formatter};
-use std::fs::{create_dir, remove_dir_all, File, OpenOptions, create_dir_all, remove_file};
+use std::fs::{create_dir, create_dir_all, remove_dir_all, remove_file, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
@@ -32,9 +32,7 @@ impl FromStr for BenchMode {
         match s {
             "micro" => Ok(BenchMode::Micro),
             "strace" => Ok(BenchMode::Strace),
-            _ => {
-                Err("valid benckmark modes are: micro, strace".to_string())
-            }
+            _ => Err("valid benckmark modes are: micro, strace".to_string()),
         }
     }
 }
@@ -47,7 +45,6 @@ impl Display for BenchMode {
         }
     }
 }
-
 
 #[derive(Debug)]
 pub enum ResultMode {
@@ -65,9 +62,7 @@ impl FromStr for ResultMode {
             "ops_per_second" => Ok(ResultMode::OpsPerSecond),
             "throughput" => Ok(ResultMode::Throughput),
             "behaviour" => Ok(ResultMode::Behaviour),
-            _ => {
-                Err("valid result modes are: ops_per_second, throughput, behaviour".to_string())
-            }
+            _ => Err("valid result modes are: ops_per_second, throughput, behaviour".to_string()),
         }
     }
 }
@@ -143,23 +138,42 @@ impl Fs {
     }
 
     pub fn open_file<P: AsRef<Path>>(path: P) -> Result<File, std::io::Error> {
-        OpenOptions::new().write(true).read(true).append(false).open(path)
+        OpenOptions::new()
+            .write(true)
+            .read(true)
+            .append(false)
+            .open(path)
     }
 
     pub fn open_dir<P: AsRef<Path>>(path: P) -> Result<File, std::io::Error> {
         OpenOptions::new().read(true).open(path)
     }
 
-    pub fn open_write<P: AsRef<Path>>(path: P, content: &mut Vec<u8>) -> Result<usize, std::io::Error> {
-        let mut file = OpenOptions::new().write(true).read(true).append(false).open(path)?;
+    pub fn open_write<P: AsRef<Path>>(
+        path: P,
+        content: &mut Vec<u8>,
+    ) -> Result<usize, std::io::Error> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .append(false)
+            .open(path)?;
 
         let size = file.write(&content)?;
         file.flush()?;
         Ok(size)
     }
 
-    pub fn open_write_at<P: AsRef<Path>>(path: P, content: &mut Vec<u8>, offset: u64,) -> Result<usize, std::io::Error> {
-        let mut file = OpenOptions::new().write(true).read(true).append(false).open(path)?;
+    pub fn open_write_at<P: AsRef<Path>>(
+        path: P,
+        content: &mut Vec<u8>,
+        offset: u64,
+    ) -> Result<usize, std::io::Error> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .append(false)
+            .open(path)?;
         file.seek(SeekFrom::Start(offset))?;
 
         let size = file.write(&content)?;
@@ -173,7 +187,11 @@ impl Fs {
         Ok(size)
     }
 
-    pub fn write_at(file: &mut File, content: &mut Vec<u8>, offset: u64,) -> Result<usize, std::io::Error> {
+    pub fn write_at(
+        file: &mut File,
+        content: &mut Vec<u8>,
+        offset: u64,
+    ) -> Result<usize, std::io::Error> {
         file.seek(SeekFrom::Start(offset))?;
 
         let size = file.write(&content)?;
@@ -181,7 +199,10 @@ impl Fs {
         Ok(size)
     }
 
-    pub fn open_read<P: AsRef<Path>>(path: P, read_buffer: &mut Vec<u8>) -> Result<usize, std::io::Error> {
+    pub fn open_read<P: AsRef<Path>>(
+        path: P,
+        read_buffer: &mut Vec<u8>,
+    ) -> Result<usize, std::io::Error> {
         let mut file = OpenOptions::new().read(true).open(path)?;
         file.read(read_buffer)
     }
@@ -233,7 +254,12 @@ impl Fs {
     pub fn cleanup(path: &PathBuf) -> Result<(), Error> {
         let spinner = ProgressBar::new_spinner();
         spinner.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}"));
-        spinner.set_message(format!("clean up {}", path.to_str().ok_or(Error::Unknown("failed to convert PathBuf to String".to_string()))?));
+        spinner.set_message(format!(
+            "clean up {}",
+            path.to_str().ok_or(Error::Unknown(
+                "failed to convert PathBuf to String".to_string()
+            ))?
+        ));
 
         let (sender, receiver) = channel();
         let path = path.clone();
@@ -269,7 +295,9 @@ impl Fs {
     }
 
     pub fn path_to_str(path: &PathBuf) -> Result<&str, Error> {
-        path.as_os_str().to_str().ok_or(Error::Unknown("failed to convert PathBuf to String".to_string()))
+        path.as_os_str().to_str().ok_or(Error::Unknown(
+            "failed to convert PathBuf to String".to_string(),
+        ))
     }
 
     // count the number of operations in a time window
@@ -295,7 +323,7 @@ impl Fs {
             50
         } else if duration < 20f64 {
             70
-        }  else if duration < 50f64 {
+        } else if duration < 50f64 {
             100
         } else if duration < 100f64 {
             150
@@ -305,10 +333,9 @@ impl Fs {
             500
         } else if duration < 300f64 {
             1000
-        } else  {
+        } else {
             5000
         };
-
 
         let mut records = vec![];
 
@@ -329,7 +356,7 @@ impl Fs {
                     // a second is (ops * 1000) / window
                     ((ops * 1000) / window as usize).to_string(),
                 ]
-                    .to_vec(),
+                .to_vec(),
             };
             records.push(record);
 
@@ -349,7 +376,7 @@ impl Fs {
                     // a second is (ops * 1000) / window
                     ((ops * 1000) / window as usize).to_string(),
                 ]
-                    .to_vec(),
+                .to_vec(),
             };
             records.push(record);
         }
@@ -357,4 +384,3 @@ impl Fs {
         Ok(records)
     }
 }
-

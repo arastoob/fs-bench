@@ -2,7 +2,7 @@ use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
-use crate::{ResultMode, BenchResult, Error, Record, Fs};
+use crate::{BenchResult, Error, Fs, Record, ResultMode};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
