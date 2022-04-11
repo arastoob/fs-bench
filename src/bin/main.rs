@@ -4,7 +4,6 @@ use fs_bench::BenchMode;
 use fs_bench::error::Error;
 use fs_bench::micro::MicroBench;
 use fs_bench::strace_workload::StraceWorkloadRunner;
-use fs_bench::wasm_workload::WasmWorkloadRunner;
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]
@@ -34,13 +33,9 @@ struct Args {
     #[clap(short, long)]
     log_path: PathBuf,
 
-    /// The path to the .wasm file including the workload
-    #[clap(short, long, required_if_eq("bench_mode", "wasm"))]
-    wasm_path: Option<PathBuf>,
-
     /// The path to the strace log file
     #[clap(short, long, required_if_eq("bench_mode", "strace"))]
-    strace_path: Option<PathBuf>
+    workload: Option<PathBuf>
 }
 
 fn main() -> Result<(), Error> {
@@ -56,28 +51,14 @@ fn main() -> Result<(), Error> {
                 args.log_path,
             )?;
             micro_bench.run()?;
-        },
-        BenchMode::Wasm => {
-            let wasm_path = match args.wasm_path {
-                Some(wasm_path) => wasm_path,
-                None => return Err(Error::InvalidConfig("a valid wasm_path not provided".to_string()))
-            };
-            let wasm_workload = WasmWorkloadRunner::new(
-                args.iterations,
-                args.mount,
-                args.fs_name,
-                args.log_path,
-                wasm_path
-            )?;
-            wasm_workload.run()?;
-        },
+        }
         BenchMode::Strace => {
-            let strace_path = match args.strace_path {
+            let strace_path = match args.workload {
                 Some(strace_path) => strace_path,
                 None => return Err(Error::InvalidConfig("a valid strace_path not provided".to_string()))
             };
             let mut strace_workload = StraceWorkloadRunner::new(
-                args.iterations,
+                // args.iterations,
                 args.mount,
                 args.fs_name,
                 args.log_path,
