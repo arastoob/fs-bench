@@ -3,12 +3,15 @@ use plotters::coord::ranged1d::{DefaultFormatting, KeyPointHint};
 use plotters::prelude::*;
 use std::fs::File;
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::Path;
 
 pub struct Plotter {
+    coordinates: Vec<Coordinates>,
+}
+
+struct Coordinates {
     x_axis: Vec<XAxis>,
     y_axis: Vec<f64>,
-    path: PathBuf,
 }
 
 /// The x axis values could be of type float or string
@@ -47,67 +50,99 @@ impl XAxis {
 }
 
 impl Plotter {
-    pub fn parse(mut path: PathBuf, mode: &ResultMode) -> Result<Self, Error> {
-        let file = File::open(path.clone())?;
-
-        // change the filename extension
-        path.set_extension("svg");
-
-        match mode {
-            ResultMode::OpsPerSecond => {
-                let (x_axis, y_axis) = Plotter::parse_ops_per_second(&file)?;
-                Ok(Self {
-                    x_axis,
-                    y_axis,
-                    path,
-                })
-            }
-            ResultMode::Behaviour => {
-                let (x_axis, y_axis) = Plotter::parse_timestamps(&file)?;
-                Ok(Self {
-                    x_axis,
-                    y_axis,
-                    path,
-                })
-            }
-            ResultMode::Throughput => {
-                let (x_axis, y_axis) = Plotter::parse_throughputs(&file)?;
-                Ok(Self {
-                    x_axis,
-                    y_axis,
-                    path,
-                })
-            }
-            ResultMode::OpTimes => {
-                let (x_axis, y_axis) = Plotter::parse_ops_timestamps(&file)?;
-                Ok(Self {
-                    x_axis,
-                    y_axis,
-                    path,
-                })
-            }
+    pub fn new() -> Self {
+        Self {
+            coordinates: vec![],
         }
     }
 
-    pub fn line_chart(
+    pub fn add_coordinates<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(&mut self, data: &P, mode: &ResultMode) -> Result<(), Error> {
+        let file = File::open(data)?;
+
+        let (x_axis, y_axis) = match mode {
+            ResultMode::OpsPerSecond => {
+                Plotter::parse_ops_per_second(&file)?
+            }
+            ResultMode::Behaviour => {
+                Plotter::parse_timestamps(&file)?
+            }
+            ResultMode::Throughput => {
+                Plotter::parse_throughputs(&file)?
+            }
+            ResultMode::OpTimes => {
+                Plotter::parse_ops_timestamps(&file)?
+            }
+        };
+
+        if !self.coordinates.is_empty() {
+            if x_axis.len() != self.coordinates[self.coordinates.len() - 1].x_axis.len() {
+                return Err(Error::PlottersError("the x-axis lengths should be the same".to_string()));
+            }
+        }
+
+        self.coordinates.push(Coordinates {
+            x_axis,
+            y_axis
+        });
+
+        Ok(())
+    }
+
+    pub fn line_chart<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
         &self,
         x_label: Option<&str>,
         y_label: Option<&str>,
         caption: Option<&str>,
         custom: bool,
         points: bool,
+        file_name: &P
     ) -> Result<(), Error> {
-        let root_area = SVGBackend::new(self.path.as_os_str(), (800, 500)).into_drawing_area();
-        root_area.fill(&WHITE)?;
 
-        let y_min = self.y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let y_max = self.y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        // find the min and max y-axis values among the coordinates
+        let mut mins = vec![];
+        let mut maxes = vec![];
+        for coordinate in self.coordinates.iter() {
+            let y_min = coordinate.y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+            mins.push(y_min);
+            let y_max = coordinate.y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+            maxes.push(y_max);
+        }
+        let y_min = mins.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let y_max = maxes.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+
         let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
         let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
 
+
+        let root_area = SVGBackend::new(file_name, (800, 500)).into_drawing_area();
+        root_area.fill(&WHITE)?;
+
+        let mut styles = vec![
+            ShapeStyle::from(&BLACK),
+            ShapeStyle::from(&RED),
+            ShapeStyle::from(&BLUE),
+            ShapeStyle::from(&GREEN),
+            ShapeStyle::from(&YELLOW),
+            ShapeStyle::from(&CYAN),
+            ShapeStyle::from(&MAGENTA),
+        ];
+        if self.coordinates.len() > styles.len() {
+            // we need more styles
+            let len = styles.len();
+            let mut alpha = 0.2;
+            for idx in 0..self.coordinates.len() - len {
+                if idx % len == 0 {
+                    alpha += 0.1;
+                }
+                // generate a new color by changing the alpha value of the existing colors
+                let s = styles[idx % len].clone().color.mix(alpha);
+                styles.push(ShapeStyle::from(s));
+            }
+        }
+
         if custom {
             // the x values should be custom, so first convert them to string
-            let x_axis = self
+            let x_axis = self.coordinates[0]
                 .x_axis
                 .iter()
                 .map(|x| x.get_float().map(|f| f.to_string()))
@@ -126,23 +161,33 @@ impl Plotter {
                 .y_desc(y_label.unwrap_or(""))
                 .draw()?;
 
-            ctx.draw_series(LineSeries::new(
-                custom_x_axes
-                    .ticks
+            // plot the coordinates
+            for (idx, coordinate) in self.coordinates.iter().enumerate() {
+                let x_axis = coordinate
+                    .x_axis
                     .iter()
-                    .zip(self.y_axis.iter())
-                    .map(|(x, y)| (x.clone(), *y)), // The data iter
-                &BLACK,
-            ))?;
+                    .map(|x| x.get_float().map(|f| f.to_string()))
+                    .collect::<Result<Vec<String>, Error>>()?;
+                let custom_x_axes = CustomXAxis::new(x_axis);
 
-            if points {
-                ctx.draw_series(custom_x_axes.ticks.iter().zip(self.y_axis.iter()).map(
-                    |(x, y)| Circle::new((x.clone(), *y), 3, ShapeStyle::from(&BLACK).filled()),
+                ctx.draw_series(LineSeries::new(
+                    custom_x_axes.ticks.iter().zip(coordinate.y_axis.iter()).map(|(x, y)| (x.to_string(), *y)), // The data iter
+                    styles[idx].clone(),
                 ))?;
+
+                if points {
+                    ctx.draw_series(
+                        custom_x_axes.ticks
+                            .iter()
+                            .zip(coordinate.y_axis.iter())
+                            .map(|(x, y)| Circle::new((x.to_string(), *y), 3, ShapeStyle::from(&BLACK).filled())),
+                    )?;
+                }
             }
+
         } else {
             // if custom is false, we need the x values
-            let x_axis = self
+            let x_axis = self.coordinates[0]
                 .x_axis
                 .iter()
                 .map(|x| x.get_float())
@@ -160,43 +205,56 @@ impl Plotter {
                 .y_desc(y_label.unwrap_or(""))
                 .draw()?;
 
-            ctx.draw_series(LineSeries::new(
-                x_axis.iter().zip(self.y_axis.iter()).map(|(x, y)| (*x, *y)), // The data iter
-                &BLACK,
-            ))?;
+            // plot the coordinates
+            for (idx, coordinate) in self.coordinates.iter().enumerate() {
+                let x_axis = coordinate
+                    .x_axis
+                    .iter()
+                    .map(|x| x.get_float())
+                    .collect::<Result<Vec<f64>, Error>>()?;
+                let y_axis = coordinate.y_axis.clone();
 
-            if points {
-                ctx.draw_series(
-                    x_axis
-                        .iter()
-                        .zip(self.y_axis.iter())
-                        .map(|(x, y)| Circle::new((*x, *y), 3, ShapeStyle::from(&BLACK).filled())),
-                )?;
+                ctx.draw_series(LineSeries::new(
+                    x_axis.iter().cloned().zip(y_axis.iter())
+                        .map(|(x, y)| (x, *y)), // The data iter
+                    styles[idx].clone(),
+                ))?;
+
+                if points {
+                    ctx.draw_series(
+                        x_axis
+                            .iter().cloned()
+                            .zip(coordinate.y_axis.iter())
+                            .map(|(x, y)| Circle::new((x, *y), 3, ShapeStyle::from(&BLACK).filled())),
+                    )?;
+                }
             }
         }
 
         Ok(())
     }
 
-    pub fn bar_chart(
+    pub fn bar_chart<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
         &self,
         x_label: Option<&str>,
         y_label: Option<&str>,
         caption: Option<&str>,
+        file_name: &P
     ) -> Result<(), Error> {
-        let root_area = SVGBackend::new(self.path.as_os_str(), (800, 500)).into_drawing_area();
+
+        let root_area = SVGBackend::new(file_name, (800, 500)).into_drawing_area();
         root_area.fill(&WHITE)?;
 
         // for the bar chart, we need the string values of the x axis
-        let x_axis = self
+        let x_axis = self.coordinates[0]
             .x_axis
             .iter()
             .map(|x| x.get_str())
             .collect::<Result<Vec<String>, Error>>()?;
 
         let custom_x_axes = CustomXAxis::new(x_axis);
-        let y_min = self.y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let y_max = self.y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let y_min = self.coordinates[0].y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+        let y_max = self.coordinates[0].y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
         let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
         let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
 
@@ -217,7 +275,7 @@ impl Plotter {
             custom_x_axes
                 .ticks
                 .iter()
-                .zip(self.y_axis.iter())
+                .zip(self.coordinates[0].y_axis.iter())
                 .map(|(x, y)| (x.clone(), *y)),
             5,
             ShapeStyle::from(&RED).filled(),
@@ -232,7 +290,7 @@ impl Plotter {
             custom_x_axes
                 .ticks
                 .iter()
-                .zip(self.y_axis.iter())
+                .zip(self.coordinates[0].y_axis.iter())
                 .map(|(x, y)| {
                     let x_before = format!("{}_before", x);
                     let x_after = format!("{}_after", x);
