@@ -158,7 +158,7 @@ impl WasmWorkloadRunner {
         DataLogger::log(workload_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, &ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 

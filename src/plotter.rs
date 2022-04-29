@@ -12,6 +12,7 @@ pub struct Plotter {
 struct Coordinates {
     x_axis: Vec<XAxis>,
     y_axis: Vec<f64>,
+    label: Option<String> // the legend label for this series
 }
 
 /// The x axis values could be of type float or string
@@ -56,7 +57,7 @@ impl Plotter {
         }
     }
 
-    pub fn add_coordinates<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(&mut self, data: &P, mode: &ResultMode) -> Result<(), Error> {
+    pub fn add_coordinates<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(&mut self, data: &P, label: Option<String>, mode: &ResultMode) -> Result<(), Error> {
         let file = File::open(data)?;
 
         let (x_axis, y_axis) = match mode {
@@ -82,7 +83,8 @@ impl Plotter {
 
         self.coordinates.push(Coordinates {
             x_axis,
-            y_axis
+            y_axis,
+            label
         });
 
         Ok(())
@@ -153,6 +155,7 @@ impl Plotter {
                 .set_label_area_size(LabelAreaPosition::Left, 100.0)
                 .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
                 .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+                .margin(5.0)
                 .build_cartesian_2d(custom_x_axes.clone(), y_start..y_end)?;
 
             ctx.configure_mesh()
@@ -162,6 +165,7 @@ impl Plotter {
                 .draw()?;
 
             // plot the coordinates
+            let mut has_legend = false;
             for (idx, coordinate) in self.coordinates.iter().enumerate() {
                 let x_axis = coordinate
                     .x_axis
@@ -170,10 +174,16 @@ impl Plotter {
                     .collect::<Result<Vec<String>, Error>>()?;
                 let custom_x_axes = CustomXAxis::new(x_axis);
 
-                ctx.draw_series(LineSeries::new(
+                let series = ctx.draw_series(LineSeries::new(
                     custom_x_axes.ticks.iter().zip(coordinate.y_axis.iter()).map(|(x, y)| (x.to_string(), *y)), // The data iter
                     styles[idx].clone(),
                 ))?;
+                if let Some(label) = coordinate.label.clone() {
+                    let style = styles[idx].clone();
+                    series.label(label)
+                        .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], style.clone()));
+                    has_legend = true;
+                }
 
                 if points {
                     ctx.draw_series(
@@ -183,6 +193,11 @@ impl Plotter {
                             .map(|(x, y)| Circle::new((x.to_string(), *y), 3, ShapeStyle::from(&BLACK).filled())),
                     )?;
                 }
+            }
+
+            if has_legend {
+                // draw the legend
+                ctx.configure_series_labels().border_style(&BLACK).draw()?;
             }
 
         } else {
@@ -196,6 +211,7 @@ impl Plotter {
             let mut ctx = ChartBuilder::on(&root_area)
                 .set_label_area_size(LabelAreaPosition::Left, 100.0)
                 .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
+                .margin(5.0)
                 .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
                 .build_cartesian_2d(x_axis[0]..x_axis[x_axis.len() - 1], y_start..y_end)?;
 
@@ -206,6 +222,8 @@ impl Plotter {
                 .draw()?;
 
             // plot the coordinates
+            let mut has_legend = false;
+
             for (idx, coordinate) in self.coordinates.iter().enumerate() {
                 let x_axis = coordinate
                     .x_axis
@@ -214,20 +232,31 @@ impl Plotter {
                     .collect::<Result<Vec<f64>, Error>>()?;
                 let y_axis = coordinate.y_axis.clone();
 
-                ctx.draw_series(LineSeries::new(
-                    x_axis.iter().cloned().zip(y_axis.iter())
-                        .map(|(x, y)| (x, *y)), // The data iter
+                let series = ctx.draw_series(LineSeries::new(
+                    x_axis.iter().zip(y_axis.iter())
+                        .map(|(x, y)| (*x, *y)), // The data iter
                     styles[idx].clone(),
                 ))?;
+                if let Some(label) = coordinate.label.clone() {
+                    let style = styles[idx].clone();
+                    series.label(label)
+                        .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], style.clone()));
+                    has_legend = true;
+                }
 
                 if points {
                     ctx.draw_series(
                         x_axis
-                            .iter().cloned()
+                            .iter()
                             .zip(coordinate.y_axis.iter())
-                            .map(|(x, y)| Circle::new((x, *y), 3, ShapeStyle::from(&BLACK).filled())),
+                            .map(|(x, y)| Circle::new((*x, *y), 3, ShapeStyle::from(&BLACK).filled())),
                     )?;
                 }
+            }
+
+            if has_legend {
+                // draw the legend
+                ctx.configure_series_labels().border_style(&BLACK).draw()?;
             }
         }
 
@@ -262,6 +291,7 @@ impl Plotter {
             .set_label_area_size(LabelAreaPosition::Left, 100.0)
             .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
             .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+            .margin(5.0)
             .build_cartesian_2d(custom_x_axes.clone(), y_start..y_end)?;
 
         ctx.configure_mesh()
@@ -286,7 +316,7 @@ impl Plotter {
         ))?;
 
         // draw the bars
-        ctx.draw_series(
+        let series = ctx.draw_series(
             custom_x_axes
                 .ticks
                 .iter()
@@ -297,6 +327,13 @@ impl Plotter {
                     Rectangle::new([(x_before, 0.0), (x_after, *y)], RED.filled())
                 }),
         )?;
+        // draw the legend
+        if let Some(label) = self.coordinates[0].label.clone() {
+            series.label(label)
+                .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
+
+            ctx.configure_series_labels().border_style(&BLACK).draw()?;
+        }
 
         Ok(())
     }

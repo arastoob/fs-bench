@@ -79,7 +79,7 @@ impl MicroBench {
         DataLogger::log(ops_s_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, &ResultMode::OpsPerSecond)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::OpsPerSecond)?;
         file_name.set_extension("svg");
         plotter.bar_chart(Some("Operation"), Some("Ops/s"), None, &file_name)?;
 
@@ -91,7 +91,7 @@ impl MicroBench {
         DataLogger::log(mkdir_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, &ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -103,7 +103,7 @@ impl MicroBench {
         DataLogger::log(mknod_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, &ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -114,7 +114,7 @@ impl MicroBench {
         DataLogger::log(read_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, &ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -126,7 +126,7 @@ impl MicroBench {
         DataLogger::log(write_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, &ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -150,7 +150,7 @@ impl MicroBench {
         DataLogger::log(read_throughput_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, &ResultMode::Throughput)?;
+        plotter.add_coordinates(&file_name, None,&ResultMode::Throughput)?;
         file_name.set_extension("svg");
         plotter.line_chart(
             Some("File size [B]"),
@@ -169,7 +169,7 @@ impl MicroBench {
         DataLogger::log(write_throughput_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, &ResultMode::Throughput)?;
+        plotter.add_coordinates(&file_name, None,&ResultMode::Throughput)?;
         file_name.set_extension("svg");
         plotter.line_chart(
             Some("File size [B]"),
