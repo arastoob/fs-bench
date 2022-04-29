@@ -1,32 +1,24 @@
 use crate::{BenchResult, Error};
 use std::fs::{remove_file, OpenOptions};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
-pub struct DataLogger {
-    pub fs_name: String,
-    pub log_path: PathBuf,
-}
+pub struct DataLogger {}
 
 impl DataLogger {
-    pub fn new(fs_name: String, log_path: PathBuf) -> Result<Self, Error> {
-        Ok(Self { fs_name, log_path })
-    }
+    pub fn log<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(results: BenchResult, file_name: &P) -> Result<(), Error> {
 
-    pub fn log(&self, results: BenchResult, op: &str) -> Result<PathBuf, Error> {
-        // remove the log file if exist
-        let file_name = format!("{}_{}.csv", self.fs_name, op);
-        let mut log_path = self.log_path.clone();
-        log_path.push(file_name);
-        if log_path.exists() {
-            remove_file(log_path.clone())?;
+        let path = Path::new(file_name);
+        let path = PathBuf::from(path);
+        if path.exists() {
+            remove_file(path.clone())?;
         }
 
         let file = OpenOptions::new()
             .create(true)
             .write(true)
             .append(true)
-            .open(log_path.clone())?;
+            .open(path.clone())?;
 
         let mut writer = csv::Writer::from_writer(file);
         writer.write_record(results.header)?;
@@ -36,6 +28,6 @@ impl DataLogger {
 
         writer.flush()?;
 
-        Ok(log_path)
+        Ok(())
     }
 }
