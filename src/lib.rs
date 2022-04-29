@@ -133,7 +133,16 @@ impl Fs {
         create_dir_all(path)
     }
 
-    pub fn make_file<P: AsRef<Path>>(path: P) -> Result<File, std::io::Error> {
+    pub fn make_file<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(path: P) -> Result<File, std::io::Error> {
+        // create the parent directory hierarchy if needed
+        let path = Path::new(&path);
+        let path = PathBuf::from(path);
+        let mut parents = path.clone();
+        parents.pop();
+        if !parents.exists() {
+            Fs::make_dir_all(&parents)?;
+        }
+
         File::create(path)
     }
 
@@ -298,6 +307,19 @@ impl Fs {
         path.as_os_str().to_str().ok_or(Error::Unknown(
             "failed to convert PathBuf to String".to_string(),
         ))
+    }
+
+    // change the path to a path relative to the base_path
+    fn map_path(base_path: &PathBuf, path: &str) -> Result<PathBuf, Error> {
+        let mut new_path = base_path.clone();
+
+        let mut path = path.to_string();
+        if path.starts_with("/") {
+            path = path[1..].to_string();
+        }
+        new_path.push(path);
+
+        Ok(new_path)
     }
 
     // count the number of operations in a time window
