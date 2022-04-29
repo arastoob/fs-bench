@@ -58,7 +58,6 @@ impl WasmWorkloadRunner {
         // creating the root directory to generate the workload inside it
         Fs::make_dir(&root_path)?;
 
-        let logger = DataLogger::new(self.fs_name.clone(), self.log_path.clone())?;
         let max_rt = Duration::from_secs(60 * 5); // maximum running time
 
         let instance = self.wasm_instance()?;
@@ -154,9 +153,14 @@ impl WasmWorkloadRunner {
         let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
         let mut workload_behaviour_results = BenchResult::new(behaviour_header.clone());
         workload_behaviour_results.add_records(behaviour_records)?;
-        let workload_log = logger.log(workload_behaviour_results, "workload")?;
-        let plotter = Plotter::parse(PathBuf::from(workload_log), &ResultMode::Behaviour)?;
-        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_workload.csv", self.fs_name));
+        DataLogger::log(workload_behaviour_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, &ResultMode::Behaviour)?;
+        file_name.set_extension("svg");
+        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
         // // call the run function
         // run.call(0, root_path.len() as i32)
