@@ -6,6 +6,7 @@ use rand::RngCore;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::SystemTime;
+use console::style;
 use strace_parser::{FileDir, Operation, Parser, Process};
 
 pub struct StraceWorkloadRunner {
@@ -65,12 +66,15 @@ impl StraceWorkloadRunner {
         //     times.push(time / (iteration as f64));
         // }
 
-        let actual_behaviour_times = self.actual_behaviour(&mut base_path)?;
-        let parallel_times = self.parallel(&mut base_path)?;
-
         let header = ["op".to_string(), "time".to_string()].to_vec();
         let mut results = BenchResult::new(header.clone());
 
+        println!(
+            "{} replaying in the actual order...",
+            style("[1/2]").bold().dim(),
+        );
+
+        let (actual_behaviour_times, actual_duration) = self.actual_behaviour(&mut base_path)?;
         // log the actual results
         let op_time: Vec<_> = (0..).into_iter().zip(actual_behaviour_times.into_iter()).collect();
         let mut records = vec![];
@@ -83,6 +87,17 @@ impl StraceWorkloadRunner {
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_strace_workload_actual.csv", self.fs_name));
         DataLogger::log(results, &file_name)?;
+
+        println!(
+            "{} replaying in parallel...",
+            style("[2/2]").bold().dim(),
+        );
+
+        let (parallel_times, parallel_duration) = self.parallel(&mut base_path)?;
+
+        println!();
+        println!("actual order run time:      {} s", actual_duration);
+        println!("parallel run time:          {} s", parallel_duration);
 
         // log the parallel results
         let op_time: Vec<_> = (0..).into_iter().zip(parallel_times.into_iter()).collect();
@@ -111,9 +126,10 @@ impl StraceWorkloadRunner {
     // replay the workload by mimicking the actual workload's order, e.g, if a process p1 clone
     // another process p2 in the workload to execute some operations, this runner spawns a thread
     // when it reaches the clone operation to replay p2's operations
-    fn actual_behaviour(&mut self, base_path: &mut PathBuf) -> Result<Vec<f64>, Error> {
+    fn actual_behaviour(&mut self, base_path: &mut PathBuf) -> Result<(Vec<f64>, f64), Error> {
         self.setup(&base_path)?;
 
+        let start = SystemTime::now();
         let mut times = vec![];
 
         // replay the operations of the first process
@@ -134,13 +150,16 @@ impl StraceWorkloadRunner {
             }
         }
 
-        Ok(times)
+        let end = start.elapsed()?.as_secs_f64();
+
+        Ok((times, end))
     }
 
     // replay the processes' operations (except the postponed operations) all in parallel
-    fn parallel(&mut self, base_path: &mut PathBuf) -> Result<Vec<f64>, Error> {
+    fn parallel(&mut self, base_path: &mut PathBuf) -> Result<(Vec<f64>, f64), Error> {
         self.setup(&base_path)?;
 
+        let start = SystemTime::now();
         let mut times = vec![];
 
         // replay the processes' operations in parallel
@@ -168,7 +187,8 @@ impl StraceWorkloadRunner {
             }
         }
 
-        Ok(times)
+        let end = start.elapsed()?.as_secs_f64();
+        Ok((times, end))
     }
 
     // create the directory hierarchy of the workload
