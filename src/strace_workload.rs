@@ -138,7 +138,6 @@ impl StraceWorkloadRunner {
         let first_process = &self.processes[0];
         for (_op_id, op) in first_process.ops() {
             let mut time = self.exec(op, &base_path)?;
-            // println!("{} {:?} {}", idx, time, op);
             times.append(&mut time);
         }
 
@@ -193,8 +192,6 @@ impl StraceWorkloadRunner {
 
     // create the directory hierarchy of the workload
     pub fn setup(&mut self, base_path: &PathBuf) -> Result<(), Error> {
-        // let mut root_path = self.mount_path.clone();
-        // root_path.push("strace_workload");
         Fs::cleanup(&base_path)?;
 
         let style = ProgressStyle::default_bar()
