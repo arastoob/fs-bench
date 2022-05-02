@@ -119,29 +119,6 @@ impl Plotter {
         let root_area = SVGBackend::new(file_name, (800, 500)).into_drawing_area();
         root_area.fill(&WHITE)?;
 
-        let mut styles = vec![
-            ShapeStyle::from(&BLACK),
-            ShapeStyle::from(&RED),
-            ShapeStyle::from(&BLUE),
-            ShapeStyle::from(&GREEN),
-            ShapeStyle::from(&YELLOW),
-            ShapeStyle::from(&CYAN),
-            ShapeStyle::from(&MAGENTA),
-        ];
-        if self.coordinates.len() > styles.len() {
-            // we need more styles
-            let len = styles.len();
-            let mut alpha = 0.2;
-            for idx in 0..self.coordinates.len() - len {
-                if idx % len == 0 {
-                    alpha += 0.1;
-                }
-                // generate a new color by changing the alpha value of the existing colors
-                let s = styles[idx % len].clone().color.mix(alpha);
-                styles.push(ShapeStyle::from(s));
-            }
-        }
-
         if custom {
             // the x values should be custom, so first convert them to string
             let x_axis = self.coordinates[0]
@@ -166,7 +143,9 @@ impl Plotter {
 
             // plot the coordinates
             let mut has_legend = false;
-            for (idx, coordinate) in self.coordinates.iter().enumerate() {
+            let mut colors = (0..).map(Palette99::pick);
+
+            for coordinate in self.coordinates.iter() {
                 let x_axis = coordinate
                     .x_axis
                     .iter()
@@ -174,14 +153,14 @@ impl Plotter {
                     .collect::<Result<Vec<String>, Error>>()?;
                 let custom_x_axes = CustomXAxis::new(x_axis);
 
+                let color = colors.next().unwrap();
                 let series = ctx.draw_series(LineSeries::new(
                     custom_x_axes.ticks.iter().zip(coordinate.y_axis.iter()).map(|(x, y)| (x.to_string(), *y)), // The data iter
-                    styles[idx].clone(),
+                    &color
                 ))?;
                 if let Some(label) = coordinate.label.clone() {
-                    let style = styles[idx].clone();
                     series.label(label)
-                        .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], style.clone()));
+                        .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &color));
                     has_legend = true;
                 }
 
@@ -223,8 +202,9 @@ impl Plotter {
 
             // plot the coordinates
             let mut has_legend = false;
+            let mut colors = (0..).map(Palette99::pick);
 
-            for (idx, coordinate) in self.coordinates.iter().enumerate() {
+            for coordinate in self.coordinates.iter() {
                 let x_axis = coordinate
                     .x_axis
                     .iter()
@@ -232,15 +212,15 @@ impl Plotter {
                     .collect::<Result<Vec<f64>, Error>>()?;
                 let y_axis = coordinate.y_axis.clone();
 
+                let color = colors.next().unwrap();
                 let series = ctx.draw_series(LineSeries::new(
                     x_axis.iter().zip(y_axis.iter())
                         .map(|(x, y)| (*x, *y)), // The data iter
-                    styles[idx].clone(),
+                    &color,
                 ))?;
                 if let Some(label) = coordinate.label.clone() {
-                    let style = styles[idx].clone();
                     series.label(label)
-                        .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], style.clone()));
+                        .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &color));
                     has_legend = true;
                 }
 
