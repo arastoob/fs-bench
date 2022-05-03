@@ -136,14 +136,14 @@ impl WasmWorkloadRunner {
         println!("iterations:    {}", idx - 1);
         println!("run time:      {}", end);
 
-        let sample = Sample::new(&times);
+        let sample = Sample::new(&times)?;
         let mean = sample.mean();
         let ops_per_second = (1.0 / mean).floor();
         println!("mean:          {}", mean);
         println!("ops/s:         {}", ops_per_second);
         println!("op time:       {} s", mean as f64 / 1.0);
 
-        let outliers = sample.outliers();
+        let outliers = sample.outliers()?;
         let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
         println!("outliers:      {} %", outliers_percentage);
 
