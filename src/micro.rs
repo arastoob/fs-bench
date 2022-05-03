@@ -2,16 +2,12 @@ use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
-use crate::{
-    cleanup, make_dir, make_file, read_file, read_file_at, write_file, BenchMode, BenchResult,
-    Error, Record,
-};
+use crate::{BenchResult, Error, Fs, Record, ResultMode};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
 use rand::{thread_rng, Rng, RngCore};
 use std::io::Write;
-use std::ops::Add;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -45,18 +41,17 @@ impl MicroBench {
     }
 
     pub fn run(&self) -> Result<(), Error> {
-        let logger = DataLogger::new(self.fs_name.clone(), self.log_path.clone())?;
         let max_rt = Duration::from_secs(60 * 5); // maximum running time
 
-        self.behaviour_bench(max_rt, logger.clone())?;
-        self.throughput_bench(max_rt, logger.clone())?;
+        self.behaviour_bench(max_rt)?;
+        self.throughput_bench(max_rt)?;
 
-        println!("results logged to: {}", path_to_str(&logger.log_path)?);
+        println!("results logged to: {}", Fs::path_to_str(&self.log_path)?);
 
         Ok(())
     }
 
-    fn behaviour_bench(&self, max_rt: Duration, logger: DataLogger) -> Result<(), Error> {
+    fn behaviour_bench(&self, max_rt: Duration) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar()
             .template("{msg} [{bar:40}]")
             .progress_chars("=> ");
@@ -78,40 +73,67 @@ impl MicroBench {
         ops_s_results.add_record(mknod_ops_s)?;
         ops_s_results.add_record(read_ops_s)?;
         ops_s_results.add_record(write_ops_s)?;
-        let ops_s_log = logger.log(ops_s_results, "ops_per_second")?;
-        let plotter = Plotter::parse(PathBuf::from(ops_s_log), &BenchMode::OpsPerSecond)?;
-        plotter.bar_chart(Some("Operation"), Some("Ops/s"), None)?;
+
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_ops_per_second.csv", self.fs_name));
+        DataLogger::log(ops_s_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None, &ResultMode::OpsPerSecond)?;
+        file_name.set_extension("svg");
+        plotter.bar_chart(Some("Operation"), Some("Ops/s"), None, &file_name)?;
 
         let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
-
         let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
         mkdir_behaviour_results.add_records(mkdir_behaviour)?;
-        let mkdir_log = logger.log(mkdir_behaviour_results, "mkdir")?;
-        let plotter = Plotter::parse(PathBuf::from(mkdir_log), &BenchMode::Behaviour)?;
-        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_mkdir.csv", self.fs_name));
+        DataLogger::log(mkdir_behaviour_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
+        file_name.set_extension("svg");
+        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
+
 
         let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
         mknod_behaviour_results.add_records(mknod_behaviour)?;
-        let mknod_log = logger.log(mknod_behaviour_results, "mknod")?;
-        let plotter = Plotter::parse(PathBuf::from(mknod_log), &BenchMode::Behaviour)?;
-        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_mknod.csv", self.fs_name));
+        DataLogger::log(mknod_behaviour_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
+        file_name.set_extension("svg");
+        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
         let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
         read_behaviour_results.add_records(read_behaviour)?;
-        let read_log = logger.log(read_behaviour_results, "read")?;
-        let plotter = Plotter::parse(PathBuf::from(read_log), &BenchMode::Behaviour)?;
-        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_read.csv", self.fs_name));
+        DataLogger::log(read_behaviour_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
+        file_name.set_extension("svg");
+        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
         let mut write_behaviour_results = BenchResult::new(behaviour_header);
         write_behaviour_results.add_records(write_behaviour)?;
-        let write_log = logger.log(write_behaviour_results, "write")?;
-        let plotter = Plotter::parse(PathBuf::from(write_log), &BenchMode::Behaviour)?;
-        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false)?;
+        // let write_log = logger.log(write_behaviour_results, "write")?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_write.csv", self.fs_name));
+        DataLogger::log(write_behaviour_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
+        file_name.set_extension("svg");
+        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
         Ok(())
     }
 
-    fn throughput_bench(&self, max_rt: Duration, logger: DataLogger) -> Result<(), Error> {
+    fn throughput_bench(&self, max_rt: Duration) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar()
             .template("{msg} [{bar:40}]")
             .progress_chars("=> ");
@@ -123,26 +145,39 @@ impl MicroBench {
 
         let mut read_throughput_results = BenchResult::new(throughput_header.clone());
         read_throughput_results.add_records(read_throughput)?;
-        let read_throughput_log = logger.log(read_throughput_results, "read_throughput")?;
-        let plotter = Plotter::parse(PathBuf::from(read_throughput_log), &BenchMode::Throughput)?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_read_throughput.csv", self.fs_name));
+        DataLogger::log(read_throughput_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None,&ResultMode::Throughput)?;
+        file_name.set_extension("svg");
         plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
             None,
             true,
             true,
+            &file_name
         )?;
 
         let mut write_throughput_results = BenchResult::new(throughput_header);
         write_throughput_results.add_records(write_throughput)?;
-        let write_throughput_log = logger.log(write_throughput_results, "write_throughput")?;
-        let plotter = Plotter::parse(PathBuf::from(write_throughput_log), &BenchMode::Throughput)?;
+        // let write_throughput_log = logger.log(write_throughput_results, "write_throughput")?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_write_throughput.csv", self.fs_name));
+        DataLogger::log(write_throughput_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None,&ResultMode::Throughput)?;
+        file_name.set_extension("svg");
         plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
             None,
             true,
             true,
+            &file_name
         )?;
 
         Ok(())
@@ -155,14 +190,14 @@ impl MicroBench {
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mkdir");
-        cleanup(&root_path)?;
+        Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new(self.iteration);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "mkdir"));
 
         // creating the root directory to generate the test directories inside it
-        make_dir(&root_path)?;
+        Fs::make_dir(&root_path)?;
 
         let mut idx = 0;
         let mut times = vec![];
@@ -176,7 +211,7 @@ impl MicroBench {
             let mut dir_name = root_path.clone();
             dir_name.push(idx.to_string());
             let begin = SystemTime::now();
-            match make_dir(&dir_name) {
+            match Fs::make_dir(&dir_name) {
                 Ok(()) => {
                     let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
@@ -227,7 +262,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = self.ops_in_window(&behaviour)?;
+        let behaviour_records = Fs::ops_in_window(&behaviour)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -240,14 +275,14 @@ impl MicroBench {
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mknod");
-        cleanup(&root_path)?;
+        Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new(self.iteration);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "mknod"));
 
         // creating the root directory to generate the test directories inside it
-        make_dir(&root_path)?;
+        Fs::make_dir(&root_path)?;
 
         let mut idx = 0;
         let mut times = vec![];
@@ -262,7 +297,7 @@ impl MicroBench {
             let mut file_name = root_path.clone();
             file_name.push(idx.to_string());
             let begin = SystemTime::now();
-            match make_file(&file_name) {
+            match Fs::make_file(&file_name) {
                 Ok(_) => {
                     let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
@@ -313,7 +348,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = self.ops_in_window(&behaviour)?;
+        let behaviour_records = Fs::ops_in_window(&behaviour)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -322,20 +357,20 @@ impl MicroBench {
     fn read(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("read");
-        cleanup(&root_path)?;
+        Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new(self.iteration);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "read"));
 
         // creating the root directory to generate the test files inside it
-        make_dir(&root_path)?;
+        Fs::make_dir(&root_path)?;
 
         let size = self.io_size;
         for file in 1..1001 {
             let mut file_name = root_path.clone();
             file_name.push(file.to_string());
-            let mut file = make_file(&file_name)?;
+            let mut file = Fs::make_file(&file_name)?;
 
             // generate a buffer of size write_size filled with random integer values
             let mut rand_buffer = vec![0u8; size];
@@ -360,7 +395,7 @@ impl MicroBench {
             let mut file_name = root_path.clone();
             file_name.push(file.to_string());
             let begin = SystemTime::now();
-            match read_file(&file_name, &mut read_buffer) {
+            match Fs::open_read(&file_name, &mut read_buffer) {
                 Ok(_) => {
                     let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
@@ -411,7 +446,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = self.ops_in_window(&behaviour)?;
+        let behaviour_records = Fs::ops_in_window(&behaviour)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -424,19 +459,19 @@ impl MicroBench {
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("write");
-        cleanup(&root_path)?;
+        Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new(self.iteration);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "write"));
 
         // creating the root directory to generate the test directories inside it
-        make_dir(&root_path)?;
+        Fs::make_dir(&root_path)?;
 
         for file in 1..1001 {
             let mut file_name = root_path.clone();
             file_name.push(file.to_string());
-            make_file(&file_name)?;
+            Fs::make_file(&file_name)?;
         }
 
         // create a big vector filled with random content
@@ -463,7 +498,7 @@ impl MicroBench {
             let mut file_name = root_path.clone();
             file_name.push(file.to_string());
             let begin = SystemTime::now();
-            match write_file(&file_name, &mut content) {
+            match Fs::open_write(&file_name, &mut content) {
                 Ok(_) => {
                     let end = begin.elapsed()?.as_secs_f64();
                     times.push(end);
@@ -514,7 +549,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = self.ops_in_window(&behaviour)?;
+        let behaviour_records = Fs::ops_in_window(&behaviour)?;
 
         println!();
         Ok((ops_per_second_record, behaviour_records))
@@ -527,19 +562,19 @@ impl MicroBench {
     ) -> Result<Vec<Record>, Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("read");
-        cleanup(&root_path)?;
+        Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new(6);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "read_throughput"));
 
         // creating the root directory to generate the test files inside it
-        make_dir(&root_path)?;
+        Fs::make_dir(&root_path)?;
 
         // create a big file filled with random content
         let mut file_name = root_path.clone();
         file_name.push("big_file".to_string());
-        let mut file = make_file(&file_name)?;
+        let mut file = Fs::make_file(&file_name)?;
 
         let file_size = 1000 * 1000 * 100 * 2; // 200 MB
         let mut rand_buffer = vec![0u8; file_size];
@@ -564,7 +599,7 @@ impl MicroBench {
                 let rand_index = thread_rng().gen_range(0..file_size - read_size - 1) as u64;
                 let begin = SystemTime::now();
                 // random read from a random index
-                match read_file_at(&file_name, &mut read_buffer, rand_index) {
+                match Fs::open_read_at(&file_name, &mut read_buffer, rand_index) {
                     Ok(_) => {
                         let end = begin.elapsed()?.as_secs_f64();
                         times.push(end);
@@ -628,19 +663,19 @@ impl MicroBench {
     ) -> Result<Vec<Record>, Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("write");
-        cleanup(&root_path)?;
+        Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new(6);
         bar.set_style(style);
         bar.set_message(format!("{:5}", "write_throughput"));
 
         // creating the root directory to generate the test files inside it
-        make_dir(&root_path)?;
+        Fs::make_dir(&root_path)?;
 
         // create a file to write into
         let mut file_name = root_path.clone();
         file_name.push("big_file".to_string());
-        make_file(&file_name)?;
+        Fs::make_file(&file_name)?;
 
         let buffer_size = 1000 * 1000 * 100 * 2; // 200 MB
         let mut rand_content = vec![0u8; buffer_size];
@@ -666,7 +701,7 @@ impl MicroBench {
 
                 let begin = SystemTime::now();
                 // random read from a random index
-                match write_file(&file_name, &mut content) {
+                match Fs::open_write(&file_name, &mut content) {
                     Ok(_) => {
                         let end = begin.elapsed()?.as_secs_f64();
                         times.push(end);
@@ -722,93 +757,4 @@ impl MicroBench {
         println!();
         Ok(throughput_records)
     }
-
-    // count the number of operations in a time window
-    // the time window length is in milliseconds
-    // the input times contains the timestamps in unix_time format. The first 10 digits are
-    // date and time in seconds and the last 9 digits show the milliseconds
-    fn ops_in_window(&self, times: &Vec<SystemTime>) -> Result<Vec<Record>, Error> {
-        let len = times.len();
-        let first = times[0]; // first timestamp
-        let last = times[len - 1]; // last timestamp
-
-        // decide about the window length in millis
-        let duration = last.duration_since(first)?.as_secs_f64();
-        let window = if duration < 0.5 {
-            2
-        } else if duration < 1f64 {
-            5
-        } else if duration < 3f64 {
-            10
-        } else if duration < 5f64 {
-            20
-        } else if duration < 10f64 {
-            50
-        } else if duration < 20f64 {
-            70
-        }  else if duration < 50f64 {
-            100
-        } else if duration < 100f64 {
-            150
-        } else if duration < 150f64 {
-            200
-        } else if duration < 200f64 {
-            500
-        } else if duration < 300f64 {
-            1000
-        } else  {
-            5000
-        };
-
-
-        let mut records = vec![];
-
-        let mut next = first.add(Duration::from_millis(window));
-        let mut idx = 0;
-        let mut ops = 0;
-        while next < last {
-            while times[idx] < next {
-                // count ops in this time window
-                ops += 1;
-                idx += 1;
-            }
-            let time = next.duration_since(first)?.as_secs_f64();
-            let record = Record {
-                fields: [
-                    time.to_string(),
-                    // we have counted ops in a window length milliseconds, so the ops in
-                    // a second is (ops * 1000) / window
-                    ((ops * 1000) / window as usize).to_string(),
-                ]
-                .to_vec(),
-            };
-            records.push(record);
-
-            // go the next time window
-            next = next.add(Duration::from_millis(window));
-            ops = 0;
-        }
-
-        // count the remaining
-        if idx < len {
-            ops = len - idx;
-            let time = last.duration_since(first)?.as_secs_f64();
-            let record = Record {
-                fields: [
-                    time.to_string(),
-                    // we have counted ops in a window length milliseconds, so the ops in
-                    // a second is (ops * 1000) / window
-                    ((ops * 1000) / window as usize).to_string(),
-                ]
-                .to_vec(),
-            };
-            records.push(record);
-        }
-
-        Ok(records)
-    }
-}
-
-fn path_to_str(path: &PathBuf) -> Result<&str, Error> {
-    path.as_os_str().to_str().ok_or(Error::Unknown("failed to convert PathBuf to String".to_string()))
 }

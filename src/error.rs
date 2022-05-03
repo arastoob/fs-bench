@@ -45,6 +45,8 @@ pub enum Error {
     SystemTimeError(String),
 
     Unknown(String),
+
+    WasmerError(String),
 }
 
 impl Error {
@@ -77,6 +79,12 @@ impl std::error::Error for Error {
             &Error::IO(ref e) => Some(e),
             _ => None,
         }
+    }
+}
+
+impl From<Box<dyn std::error::Error>> for Error {
+    fn from(err: Box<dyn std::error::Error>) -> Self {
+        Error::WasmerError(err.to_string())
     }
 }
 
@@ -144,6 +152,7 @@ impl fmt::Display for Error {
             &Error::CsvError(ref detail) => write!(f, "Csv error: {}", detail),
             &Error::SystemTimeError(ref detail) => write!(f, "SystemTime error: {}", detail),
             &Error::Unknown(ref detail) => write!(f, "Unknown error: {}", detail),
+            &Error::WasmerError(ref detail) => write!(f, "Wasmer error: {}", detail),
         }
     }
 }

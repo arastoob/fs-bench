@@ -6,9 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+strace-parser = { path="../strace-parser" }
+
 byte-unit = "4.0.9"
 clap = { version = "3.1.3", features = ["derive"] }
 chrono = "0.4.9"
+console = "0.15.0"
+crossbeam = "0.8.1"
 csv = "1.1"
 indicatif = "0.16.2"
 log = "0.4.0"
@@ -17,3 +21,5 @@ rand = "0.8.0"
 rayon = "1.5.1"
 serde = { version = "1", features = ["derive"] }
 timer = "0.2.0"
+wasmer = "2.0"
+wasmer-wasi = "2.0"
