@@ -49,8 +49,7 @@ impl MicroBench {
     }
 
     fn behaviour_bench(&self, max_rt: Duration, min_it: u64) -> Result<(), Error> {
-        let progress_style = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {msg}");
+        let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
         let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(max_rt, min_it, progress_style.clone())?;
         let (mknod_ops_s, mknod_behaviour) = self.mknod(max_rt, min_it, progress_style.clone())?;
@@ -91,7 +90,6 @@ impl MicroBench {
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
-
         let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
         mknod_behaviour_results.add_records(mknod_behaviour)?;
         let mut file_name = self.log_path.clone();
@@ -99,7 +97,7 @@ impl MicroBench {
         DataLogger::log(mknod_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -110,7 +108,7 @@ impl MicroBench {
         DataLogger::log(read_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -122,7 +120,7 @@ impl MicroBench {
         DataLogger::log(write_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -130,8 +128,7 @@ impl MicroBench {
     }
 
     fn throughput_bench(&self, max_rt: Duration) -> Result<(), Error> {
-        let progress_style = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {msg}");
+        let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
         let throughput_header = ["file_size".to_string(), "throughput".to_string()].to_vec();
 
@@ -145,7 +142,7 @@ impl MicroBench {
         DataLogger::log(read_throughput_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Throughput)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Throughput)?;
         file_name.set_extension("svg");
         plotter.line_chart(
             Some("File size [B]"),
@@ -153,7 +150,7 @@ impl MicroBench {
             None,
             true,
             true,
-            &file_name
+            &file_name,
         )?;
 
         let mut write_throughput_results = BenchResult::new(throughput_header);
@@ -164,7 +161,7 @@ impl MicroBench {
         DataLogger::log(write_throughput_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Throughput)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Throughput)?;
         file_name.set_extension("svg");
         plotter.line_chart(
             Some("File size [B]"),
@@ -172,7 +169,7 @@ impl MicroBench {
             None,
             true,
             true,
-            &file_name
+            &file_name,
         )?;
 
         Ok(())
@@ -363,7 +360,12 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn read(&self, max_rt: Duration, min_it: u64, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn read(
+        &self,
+        max_rt: Duration,
+        min_it: u64,
+        style: ProgressStyle,
+    ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("read");
         Fs::cleanup(&root_path)?;
@@ -739,7 +741,6 @@ impl MicroBench {
             let throughput = write_size as f64 / mean; // B/s
             throughputs.push((write_size, throughput));
             write_size *= 10;
-
 
             if timer.finished() {
                 interrupted = true;

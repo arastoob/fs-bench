@@ -133,7 +133,6 @@ impl From<ParseFloatError> for Error {
     }
 }
 
-
 impl<T> From<std::sync::mpsc::SendError<T>> for Error {
     fn from(err: std::sync::mpsc::SendError<T>) -> Error {
         Error::SyncError(err.to_string())

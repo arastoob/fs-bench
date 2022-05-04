@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 pub struct DataLogger {}
 
 impl DataLogger {
-    pub fn log<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(results: BenchResult, file_name: &P) -> Result<(), Error> {
-
+    pub fn log<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
+        results: BenchResult,
+        file_name: &P,
+    ) -> Result<(), Error> {
         let path = Path::new(file_name);
         let path = PathBuf::from(path);
         if path.exists() {

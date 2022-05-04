@@ -2,13 +2,14 @@ pub mod data_logger;
 pub mod error;
 pub mod micro;
 pub mod plotter;
+mod progress;
 pub mod sample;
 pub mod strace_workload;
 mod timer;
 pub mod wasm_workload;
-mod progress;
 
 use crate::error::Error;
+use crate::progress::Progress;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fmt::{Display, Formatter};
 use std::fs::{create_dir, create_dir_all, remove_dir_all, remove_file, File, OpenOptions};
@@ -18,7 +19,6 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::thread;
 use std::time::{Duration, SystemTime};
-use crate::progress::Progress;
 
 #[derive(Debug)]
 pub enum BenchMode {
@@ -134,7 +134,9 @@ impl Fs {
         create_dir_all(path)
     }
 
-    pub fn make_file<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(path: P) -> Result<File, std::io::Error> {
+    pub fn make_file<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
+        path: P,
+    ) -> Result<File, std::io::Error> {
         // create the parent directory hierarchy if needed
         let path = Path::new(&path);
         let path = PathBuf::from(path);

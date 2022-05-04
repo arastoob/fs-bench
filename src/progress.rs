@@ -1,13 +1,14 @@
+use crate::Error;
+use indicatif::ProgressBar;
 use std::sync::mpsc::{channel, Sender};
 use std::thread;
 use std::time::Duration;
-use indicatif::ProgressBar;
-use crate::Error;
 
 pub struct Progress {
     sender: Sender<FinishType>,
 }
 
+#[allow(dead_code)]
 enum FinishType {
     Finish,
     FinishAndClear,
@@ -15,6 +16,7 @@ enum FinishType {
     AbandonWithMessage(String),
 }
 
+#[allow(dead_code)]
 impl Progress {
     pub fn start(progress_bar: ProgressBar) -> Self {
         let (sender, receiver) = channel();
@@ -29,7 +31,7 @@ impl Progress {
                             FinishType::Finish => p.finish(),
                             FinishType::FinishAndClear => p.finish_and_clear(),
                             FinishType::FinishWithMessage(msg) => p.finish_with_message(msg),
-                            FinishType::AbandonWithMessage(msg) => p.abandon_with_message(msg)
+                            FinishType::AbandonWithMessage(msg) => p.abandon_with_message(msg),
                         }
                         break;
                     }
@@ -41,9 +43,7 @@ impl Progress {
             }
         });
 
-        Self {
-            sender
-        }
+        Self { sender }
     }
 
     pub fn finish(&self) -> Result<(), Error> {
@@ -59,13 +59,15 @@ impl Progress {
     }
 
     pub fn finish_with_message(&self, msg: &str) -> Result<(), Error> {
-        self.sender.send(FinishType::FinishWithMessage(msg.to_string()))?;
+        self.sender
+            .send(FinishType::FinishWithMessage(msg.to_string()))?;
 
         Ok(())
     }
 
     pub fn abandon_with_message(&self, msg: &str) -> Result<(), Error> {
-        self.sender.send(FinishType::AbandonWithMessage(msg.to_string()))?;
+        self.sender
+            .send(FinishType::AbandonWithMessage(msg.to_string()))?;
 
         Ok(())
     }

@@ -14,7 +14,7 @@ pub struct StraceWorkloadRunner {
     log_path: PathBuf,
     processes: Vec<Process>, // list of processes that their ops can be run concurrently
     postponed_processes: Vec<Process>, // list of processes that their ops should be run at end
-    files: Vec<FileDir>, // the files and directories accessed and logged by strace
+    files: Vec<FileDir>,     // the files and directories accessed and logged by strace
 }
 
 impl StraceWorkloadRunner {
@@ -46,34 +46,18 @@ impl StraceWorkloadRunner {
         let mut base_path = self.mount_path.clone();
         base_path.push("strace_workload");
 
-        let progress_style = ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] {msg}");
-
-        // let mut iterated_times = vec![];
-        // let iteration = 40;
-        // // replay the ops
-        // for _ in 0..iteration {
-        //     iterated_times.push(self.runner(&mut base_path)?);
-        // }
-        //
-        // let mut times = vec![];
-        // let replay_times_len = iterated_times[0].len();
-        // println!("replay_times_len: {}", replay_times_len);
-        // for j in 0..replay_times_len {
-        //     let mut time = 0f64;
-        //     for i in 0..iteration {
-        //         time += iterated_times[i][j];
-        //     }
-        //
-        //     times.push(time / (iteration as f64));
-        // }
+        let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
         let header = ["op".to_string(), "time".to_string()].to_vec();
         let mut results = BenchResult::new(header.clone());
 
-        let actual_behaviour_times = self.actual_behaviour(&mut base_path, progress_style.clone())?;
+        let actual_behaviour_times =
+            self.actual_behaviour(&mut base_path, progress_style.clone())?;
         // log the actual results
-        let op_time: Vec<_> = (0..).into_iter().zip(actual_behaviour_times.into_iter()).collect();
+        let op_time: Vec<_> = (0..)
+            .into_iter()
+            .zip(actual_behaviour_times.into_iter())
+            .collect();
         let mut records = vec![];
         for (op, time) in op_time {
             records.push(Record {
@@ -103,10 +87,27 @@ impl StraceWorkloadRunner {
 
         // plot both results
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, Some("actual order".to_string()), &ResultMode::OpTimes)?;
-        plotter.add_coordinates(&file_name_p, Some("parallel".to_string()), &ResultMode::OpTimes)?;
-        file_name.set_extension("svg");
-        plotter.line_chart(Some("Operations"), Some("Time [s]"), None, false, false, &file_name)?;
+        plotter.add_coordinates(
+            &file_name,
+            Some("actual order".to_string()),
+            &ResultMode::OpTimes,
+        )?;
+        plotter.add_coordinates(
+            &file_name_p,
+            Some("parallel".to_string()),
+            &ResultMode::OpTimes,
+        )?;
+
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_strace_workload.svg", self.fs_name));
+        plotter.line_chart(
+            Some("Operations"),
+            Some("Time [s]"),
+            None,
+            false,
+            false,
+            &file_name,
+        )?;
 
         println!("results logged to: {}", Fs::path_to_str(&self.log_path)?);
 
@@ -116,7 +117,11 @@ impl StraceWorkloadRunner {
     // replay the workload by mimicking the actual workload's order, e.g, if a process p1 clone
     // another process p2 in the workload to execute some operations, this runner spawns a thread
     // when it reaches the clone operation to replay p2's operations
-    fn actual_behaviour(&mut self, base_path: &mut PathBuf, style: ProgressStyle) -> Result<Vec<f64>, Error> {
+    fn actual_behaviour(
+        &mut self,
+        base_path: &mut PathBuf,
+        style: ProgressStyle,
+    ) -> Result<Vec<f64>, Error> {
         self.setup(&base_path)?;
 
         let bar = ProgressBar::new_spinner();
@@ -153,7 +158,11 @@ impl StraceWorkloadRunner {
     }
 
     // replay the processes' operations (except the postponed operations) all in parallel
-    fn parallel(&mut self, base_path: &mut PathBuf, style: ProgressStyle) -> Result<Vec<f64>, Error> {
+    fn parallel(
+        &mut self,
+        base_path: &mut PathBuf,
+        style: ProgressStyle,
+    ) -> Result<Vec<f64>, Error> {
         self.setup(&base_path)?;
 
         let bar = ProgressBar::new_spinner();
@@ -177,8 +186,8 @@ impl StraceWorkloadRunner {
                     }
                     Ok(())
                 });
-            }).unwrap();
-
+            })
+            .unwrap();
         }
 
         // replay the postponed processes' ops
@@ -295,7 +304,7 @@ impl StraceWorkloadRunner {
                             }
                             Err(_err) => {}
                         }
-                    },
+                    }
                     Err(_err) => {}
                 }
             }
@@ -332,7 +341,8 @@ impl StraceWorkloadRunner {
                         }
                         Err(_err) => {}
                     }
-                } else {}
+                } else {
+                }
             }
             &Operation::Truncate(ref file) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
@@ -422,8 +432,9 @@ impl StraceWorkloadRunner {
                                 }
                                 Ok(())
                             });
-                        }).unwrap();
-                    },
+                        })
+                        .unwrap();
+                    }
                     None => {}
                 }
             }

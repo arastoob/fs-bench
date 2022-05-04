@@ -12,7 +12,7 @@ pub struct Plotter {
 struct Coordinates {
     x_axis: Vec<XAxis>,
     y_axis: Vec<f64>,
-    label: Option<String> // the legend label for this series
+    label: Option<String>, // the legend label for this series
 }
 
 /// The x axis values could be of type float or string
@@ -57,34 +57,33 @@ impl Plotter {
         }
     }
 
-    pub fn add_coordinates<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(&mut self, data: &P, label: Option<String>, mode: &ResultMode) -> Result<(), Error> {
+    pub fn add_coordinates<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
+        &mut self,
+        data: &P,
+        label: Option<String>,
+        mode: &ResultMode,
+    ) -> Result<(), Error> {
         let file = File::open(data)?;
 
         let (x_axis, y_axis) = match mode {
-            ResultMode::OpsPerSecond => {
-                Plotter::parse_ops_per_second(&file)?
-            }
-            ResultMode::Behaviour => {
-                Plotter::parse_timestamps(&file)?
-            }
-            ResultMode::Throughput => {
-                Plotter::parse_throughputs(&file)?
-            }
-            ResultMode::OpTimes => {
-                Plotter::parse_ops_timestamps(&file)?
-            }
+            ResultMode::OpsPerSecond => Plotter::parse_ops_per_second(&file)?,
+            ResultMode::Behaviour => Plotter::parse_timestamps(&file)?,
+            ResultMode::Throughput => Plotter::parse_throughputs(&file)?,
+            ResultMode::OpTimes => Plotter::parse_ops_timestamps(&file)?,
         };
 
         if !self.coordinates.is_empty() {
             if x_axis.len() != self.coordinates[self.coordinates.len() - 1].x_axis.len() {
-                return Err(Error::PlottersError("the x-axis lengths should be the same".to_string()));
+                return Err(Error::PlottersError(
+                    "the x-axis lengths should be the same".to_string(),
+                ));
             }
         }
 
         self.coordinates.push(Coordinates {
             x_axis,
             y_axis,
-            label
+            label,
         });
 
         Ok(())
@@ -97,16 +96,21 @@ impl Plotter {
         caption: Option<&str>,
         custom: bool,
         points: bool,
-        file_name: &P
+        file_name: &P,
     ) -> Result<(), Error> {
-
         // find the min and max y-axis values among the coordinates
         let mut mins = vec![];
         let mut maxes = vec![];
         for coordinate in self.coordinates.iter() {
-            let y_min = coordinate.y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+            let y_min = coordinate
+                .y_axis
+                .iter()
+                .fold(f64::INFINITY, |a, &b| a.min(b));
             mins.push(y_min);
-            let y_max = coordinate.y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+            let y_max = coordinate
+                .y_axis
+                .iter()
+                .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
             maxes.push(y_max);
         }
         let y_min = mins.iter().fold(f64::INFINITY, |a, &b| a.min(b));
@@ -114,7 +118,6 @@ impl Plotter {
 
         let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
         let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
-
 
         let root_area = SVGBackend::new(file_name, (800, 500)).into_drawing_area();
         root_area.fill(&WHITE)?;
@@ -155,21 +158,33 @@ impl Plotter {
 
                 let color = colors.next().unwrap();
                 let series = ctx.draw_series(LineSeries::new(
-                    custom_x_axes.ticks.iter().zip(coordinate.y_axis.iter()).map(|(x, y)| (x.to_string(), *y)), // The data iter
-                    &color
+                    custom_x_axes
+                        .ticks
+                        .iter()
+                        .zip(coordinate.y_axis.iter())
+                        .map(|(x, y)| (x.to_string(), *y)), // The data iter
+                    &color,
                 ))?;
                 if let Some(label) = coordinate.label.clone() {
-                    series.label(label)
+                    series
+                        .label(label)
                         .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &color));
                     has_legend = true;
                 }
 
                 if points {
                     ctx.draw_series(
-                        custom_x_axes.ticks
+                        custom_x_axes
+                            .ticks
                             .iter()
                             .zip(coordinate.y_axis.iter())
-                            .map(|(x, y)| Circle::new((x.to_string(), *y), 3, ShapeStyle::from(&BLACK).filled())),
+                            .map(|(x, y)| {
+                                Circle::new(
+                                    (x.to_string(), *y),
+                                    3,
+                                    ShapeStyle::from(&BLACK).filled(),
+                                )
+                            }),
                     )?;
                 }
             }
@@ -178,7 +193,6 @@ impl Plotter {
                 // draw the legend
                 ctx.configure_series_labels().border_style(&BLACK).draw()?;
             }
-
         } else {
             // if custom is false, we need the x values
             let x_axis = self.coordinates[0]
@@ -214,23 +228,20 @@ impl Plotter {
 
                 let color = colors.next().unwrap();
                 let series = ctx.draw_series(LineSeries::new(
-                    x_axis.iter().zip(y_axis.iter())
-                        .map(|(x, y)| (*x, *y)), // The data iter
+                    x_axis.iter().zip(y_axis.iter()).map(|(x, y)| (*x, *y)), // The data iter
                     &color,
                 ))?;
                 if let Some(label) = coordinate.label.clone() {
-                    series.label(label)
+                    series
+                        .label(label)
                         .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &color));
                     has_legend = true;
                 }
 
                 if points {
-                    ctx.draw_series(
-                        x_axis
-                            .iter()
-                            .zip(coordinate.y_axis.iter())
-                            .map(|(x, y)| Circle::new((*x, *y), 3, ShapeStyle::from(&BLACK).filled())),
-                    )?;
+                    ctx.draw_series(x_axis.iter().zip(coordinate.y_axis.iter()).map(|(x, y)| {
+                        Circle::new((*x, *y), 3, ShapeStyle::from(&BLACK).filled())
+                    }))?;
                 }
             }
 
@@ -240,6 +251,9 @@ impl Plotter {
             }
         }
 
+        // to avoid the IO failure being ignored silently, we manually call the present function
+        root_area.present()?;
+
         Ok(())
     }
 
@@ -248,9 +262,8 @@ impl Plotter {
         x_label: Option<&str>,
         y_label: Option<&str>,
         caption: Option<&str>,
-        file_name: &P
+        file_name: &P,
     ) -> Result<(), Error> {
-
         let root_area = SVGBackend::new(file_name, (800, 500)).into_drawing_area();
         root_area.fill(&WHITE)?;
 
@@ -262,8 +275,14 @@ impl Plotter {
             .collect::<Result<Vec<String>, Error>>()?;
 
         let custom_x_axes = CustomXAxis::new(x_axis);
-        let y_min = self.coordinates[0].y_axis.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        let y_max = self.coordinates[0].y_axis.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let y_min = self.coordinates[0]
+            .y_axis
+            .iter()
+            .fold(f64::INFINITY, |a, &b| a.min(b));
+        let y_max = self.coordinates[0]
+            .y_axis
+            .iter()
+            .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
         let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
         let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
 
@@ -309,11 +328,15 @@ impl Plotter {
         )?;
         // draw the legend
         if let Some(label) = self.coordinates[0].label.clone() {
-            series.label(label)
+            series
+                .label(label)
                 .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], &RED));
 
             ctx.configure_series_labels().border_style(&BLACK).draw()?;
         }
+
+        // to avoid the IO failure being ignored silently, we manually call the present function
+        root_area.present()?;
 
         Ok(())
     }
