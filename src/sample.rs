@@ -1,7 +1,4 @@
 use crate::Error;
-use rand::Rng;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::sync::{Arc, Mutex};
 
 /// A collection of data points with some statistical functions on the data
 pub struct Sample {

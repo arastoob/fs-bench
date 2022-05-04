@@ -47,6 +47,9 @@ pub enum Error {
     Unknown(String),
 
     WasmerError(String),
+
+    /// A synchronization channel experienced an error
+    SyncError(String),
 }
 
 impl Error {
@@ -130,6 +133,13 @@ impl From<ParseFloatError> for Error {
     }
 }
 
+
+impl<T> From<std::sync::mpsc::SendError<T>> for Error {
+    fn from(err: std::sync::mpsc::SendError<T>) -> Error {
+        Error::SyncError(err.to_string())
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -153,6 +163,7 @@ impl fmt::Display for Error {
             &Error::SystemTimeError(ref detail) => write!(f, "SystemTime error: {}", detail),
             &Error::Unknown(ref detail) => write!(f, "Unknown error: {}", detail),
             &Error::WasmerError(ref detail) => write!(f, "Wasmer error: {}", detail),
+            Error::SyncError(ref detail) => write!(f, "Sync error: {}", detail),
         }
     }
 }
