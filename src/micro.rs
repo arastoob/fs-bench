@@ -14,7 +14,6 @@ use std::time::{Duration, SystemTime};
 #[derive(Debug)]
 pub struct MicroBench {
     io_size: usize,
-    iteration: u64,
     mount_path: PathBuf,
     fs_name: String,
     log_path: PathBuf,
@@ -23,7 +22,6 @@ pub struct MicroBench {
 impl MicroBench {
     pub fn new(
         io_size: String,
-        iteration: u64,
         mount_path: PathBuf,
         fs_name: String,
         log_path: PathBuf,
@@ -33,7 +31,6 @@ impl MicroBench {
 
         Ok(Self {
             io_size,
-            iteration,
             mount_path,
             fs_name,
             log_path,
@@ -191,7 +188,7 @@ impl MicroBench {
         root_path.push("mkdir");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "mkdir"));
         let progress = Progress::start(bar);
@@ -283,7 +280,7 @@ impl MicroBench {
         root_path.push("mknod");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "mknod"));
         let progress = Progress::start(bar);
@@ -371,7 +368,7 @@ impl MicroBench {
         root_path.push("read");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "read"));
         let progress = Progress::start(bar);
@@ -480,7 +477,7 @@ impl MicroBench {
         root_path.push("write");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "write"));
         let progress = Progress::start(bar);
@@ -589,7 +586,7 @@ impl MicroBench {
         root_path.push("read");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(6);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "read_throughput"));
         let progress = Progress::start(bar);
@@ -689,7 +686,7 @@ impl MicroBench {
         root_path.push("write");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(6);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "write_throughput"));
         let progress = Progress::start(bar);
