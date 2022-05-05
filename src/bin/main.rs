@@ -17,10 +17,6 @@ struct Args {
     #[clap(short, long, default_value = "4KiB")]
     size: String,
 
-    /// Number of iterations to repeat the operations
-    #[clap(short, long, default_value = "100000")]
-    iterations: u64,
-
     /// The path to the mounted filesystem being benchmarked
     #[clap(short, long)]
     mount: PathBuf,
@@ -43,13 +39,7 @@ fn main() -> Result<(), Error> {
 
     match args.bench_mode {
         BenchMode::Micro => {
-            let micro_bench = MicroBench::new(
-                args.size,
-                args.iterations,
-                args.mount,
-                args.fs_name,
-                args.log_path,
-            )?;
+            let micro_bench = MicroBench::new(args.size, args.mount, args.fs_name, args.log_path)?;
             micro_bench.run()?;
         }
         BenchMode::Strace => {
@@ -61,13 +51,8 @@ fn main() -> Result<(), Error> {
                     ))
                 }
             };
-            let mut strace_workload = StraceWorkloadRunner::new(
-                // args.iterations,
-                args.mount,
-                args.fs_name,
-                args.log_path,
-                strace_path,
-            )?;
+            let mut strace_workload =
+                StraceWorkloadRunner::new(args.mount, args.fs_name, args.log_path, strace_path)?;
             strace_workload.replay()?;
         }
     }

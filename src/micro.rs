@@ -2,7 +2,7 @@ use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
-use crate::{BenchResult, Error, Fs, Record, ResultMode};
+use crate::{BenchResult, Error, Fs, Progress, Record, ResultMode};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -14,7 +14,6 @@ use std::time::{Duration, SystemTime};
 #[derive(Debug)]
 pub struct MicroBench {
     io_size: usize,
-    iteration: u64,
     mount_path: PathBuf,
     fs_name: String,
     log_path: PathBuf,
@@ -23,7 +22,6 @@ pub struct MicroBench {
 impl MicroBench {
     pub fn new(
         io_size: String,
-        iteration: u64,
         mount_path: PathBuf,
         fs_name: String,
         log_path: PathBuf,
@@ -33,7 +31,6 @@ impl MicroBench {
 
         Ok(Self {
             io_size,
-            iteration,
             mount_path,
             fs_name,
             log_path,
@@ -42,8 +39,8 @@ impl MicroBench {
 
     pub fn run(&self) -> Result<(), Error> {
         let max_rt = Duration::from_secs(60 * 5); // maximum running time
-
-        self.behaviour_bench(max_rt)?;
+        let min_it = 20_000; // minimum iterations
+        self.behaviour_bench(max_rt, min_it)?;
         self.throughput_bench(max_rt)?;
 
         println!("results logged to: {}", Fs::path_to_str(&self.log_path)?);
@@ -51,15 +48,13 @@ impl MicroBench {
         Ok(())
     }
 
-    fn behaviour_bench(&self, max_rt: Duration) -> Result<(), Error> {
-        let progress_style = ProgressStyle::default_bar()
-            .template("{msg} [{bar:40}]")
-            .progress_chars("=> ");
+    fn behaviour_bench(&self, max_rt: Duration, min_it: u64) -> Result<(), Error> {
+        let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
-        let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(max_rt, progress_style.clone())?;
-        let (mknod_ops_s, mknod_behaviour) = self.mknod(max_rt, progress_style.clone())?;
-        let (read_ops_s, read_behaviour) = self.read(max_rt, progress_style.clone())?;
-        let (write_ops_s, write_behaviour) = self.write(max_rt, progress_style.clone())?;
+        let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(max_rt, min_it, progress_style.clone())?;
+        let (mknod_ops_s, mknod_behaviour) = self.mknod(max_rt, min_it, progress_style.clone())?;
+        let (read_ops_s, read_behaviour) = self.read(max_rt, min_it, progress_style.clone())?;
+        let (write_ops_s, write_behaviour) = self.write(max_rt, min_it, progress_style)?;
 
         let ops_s_header = [
             "operation".to_string(),
@@ -95,7 +90,6 @@ impl MicroBench {
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
-
         let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
         mknod_behaviour_results.add_records(mknod_behaviour)?;
         let mut file_name = self.log_path.clone();
@@ -103,7 +97,7 @@ impl MicroBench {
         DataLogger::log(mknod_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -114,7 +108,7 @@ impl MicroBench {
         DataLogger::log(read_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -126,7 +120,7 @@ impl MicroBench {
         DataLogger::log(write_behaviour_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Behaviour)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
         file_name.set_extension("svg");
         plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
@@ -134,14 +128,12 @@ impl MicroBench {
     }
 
     fn throughput_bench(&self, max_rt: Duration) -> Result<(), Error> {
-        let progress_style = ProgressStyle::default_bar()
-            .template("{msg} [{bar:40}]")
-            .progress_chars("=> ");
+        let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
         let throughput_header = ["file_size".to_string(), "throughput".to_string()].to_vec();
 
         let read_throughput = self.read_throughput(max_rt, progress_style.clone())?;
-        let write_throughput = self.write_throughput(max_rt, progress_style.clone())?;
+        let write_throughput = self.write_throughput(max_rt, progress_style)?;
 
         let mut read_throughput_results = BenchResult::new(throughput_header.clone());
         read_throughput_results.add_records(read_throughput)?;
@@ -150,7 +142,7 @@ impl MicroBench {
         DataLogger::log(read_throughput_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Throughput)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Throughput)?;
         file_name.set_extension("svg");
         plotter.line_chart(
             Some("File size [B]"),
@@ -158,7 +150,7 @@ impl MicroBench {
             None,
             true,
             true,
-            &file_name
+            &file_name,
         )?;
 
         let mut write_throughput_results = BenchResult::new(throughput_header);
@@ -169,7 +161,7 @@ impl MicroBench {
         DataLogger::log(write_throughput_results, &file_name)?;
 
         let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None,&ResultMode::Throughput)?;
+        plotter.add_coordinates(&file_name, None, &ResultMode::Throughput)?;
         file_name.set_extension("svg");
         plotter.line_chart(
             Some("File size [B]"),
@@ -177,7 +169,7 @@ impl MicroBench {
             None,
             true,
             true,
-            &file_name
+            &file_name,
         )?;
 
         Ok(())
@@ -186,15 +178,17 @@ impl MicroBench {
     fn mkdir(
         &self,
         max_rt: Duration,
+        min_it: u64,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mkdir");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "mkdir"));
+        let progress = Progress::start(bar);
 
         // creating the root directory to generate the test directories inside it
         Fs::make_dir(&root_path)?;
@@ -207,7 +201,7 @@ impl MicroBench {
         timer.start();
         let mut interrupted = false;
         let start = SystemTime::now();
-        while idx <= self.iteration {
+        loop {
             let mut dir_name = root_path.clone();
             dir_name.push(idx.to_string());
             let begin = SystemTime::now();
@@ -223,7 +217,12 @@ impl MicroBench {
                 }
             }
 
-            bar.inc(1);
+            // check the stop criteria
+            if idx > min_it {
+                if self.stop(&times)? {
+                    break;
+                }
+            }
 
             if timer.finished() {
                 interrupted = true;
@@ -234,22 +233,22 @@ impl MicroBench {
         let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
-            bar.finish();
+            progress.finish()?;
         } else {
-            bar.abandon_with_message("mkdir exceeded the max runtime");
+            progress.abandon_with_message("mkdir exceeded the max runtime")?;
         }
 
         println!("iterations:    {}", idx - 1);
-        println!("run time:      {}", end);
+        println!("run time:      {} s", end);
 
-        let sample = Sample::new(&times);
+        let sample = Sample::new(&times)?;
         let mean = sample.mean();
         let ops_per_second = (1.0 / mean).floor();
         println!("mean:          {}", mean);
         println!("ops/s:         {}", ops_per_second);
         println!("op time:       {} s", mean as f64 / 1.0);
 
-        let outliers = sample.outliers();
+        let outliers = sample.outliers()?;
         let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
         println!("outliers:      {} %", outliers_percentage);
 
@@ -271,15 +270,17 @@ impl MicroBench {
     fn mknod(
         &self,
         max_rt: Duration,
+        min_it: u64,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mknod");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "mknod"));
+        let progress = Progress::start(bar);
 
         // creating the root directory to generate the test directories inside it
         Fs::make_dir(&root_path)?;
@@ -293,7 +294,7 @@ impl MicroBench {
         let mut interrupted = false;
 
         let start = SystemTime::now();
-        while idx <= self.iteration {
+        loop {
             let mut file_name = root_path.clone();
             file_name.push(idx.to_string());
             let begin = SystemTime::now();
@@ -309,7 +310,12 @@ impl MicroBench {
                 }
             }
 
-            bar.inc(1);
+            // check the stop criteria
+            if idx > min_it {
+                if self.stop(&times)? {
+                    break;
+                }
+            }
 
             if timer.finished() {
                 interrupted = true;
@@ -320,22 +326,22 @@ impl MicroBench {
         let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
-            bar.finish();
+            progress.finish()?;
         } else {
-            bar.abandon_with_message("mknod exceeded the max runtime");
+            progress.abandon_with_message("mknod exceeded the max runtime")?;
         }
 
         println!("iterations:    {}", idx - 1);
-        println!("run time:      {}", end);
+        println!("run time:      {} s", end);
 
-        let sample = Sample::new(&times);
+        let sample = Sample::new(&times)?;
         let mean = sample.mean();
         let ops_per_second = (1.0 / mean).floor();
         println!("mean:          {}", mean);
         println!("ops/s:         {}", ops_per_second);
         println!("op time:       {} s", mean as f64 / 1.0);
 
-        let outliers = sample.outliers();
+        let outliers = sample.outliers()?;
         let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
         println!("outliers:      {} %", outliers_percentage);
 
@@ -354,14 +360,20 @@ impl MicroBench {
         Ok((ops_per_second_record, behaviour_records))
     }
 
-    fn read(&self, max_rt: Duration, style: ProgressStyle) -> Result<(Record, Vec<Record>), Error> {
+    fn read(
+        &self,
+        max_rt: Duration,
+        min_it: u64,
+        style: ProgressStyle,
+    ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("read");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "read"));
+        let progress = Progress::start(bar);
 
         // creating the root directory to generate the test files inside it
         Fs::make_dir(&root_path)?;
@@ -390,7 +402,7 @@ impl MicroBench {
         let mut interrupted = false;
 
         let start = SystemTime::now();
-        while idx <= self.iteration {
+        loop {
             let file = thread_rng().gen_range(1..1001);
             let mut file_name = root_path.clone();
             file_name.push(file.to_string());
@@ -407,7 +419,12 @@ impl MicroBench {
                 }
             }
 
-            bar.inc(1);
+            // check the stop criteria
+            if idx > min_it {
+                if self.stop(&times)? {
+                    break;
+                }
+            }
 
             if timer.finished() {
                 interrupted = true;
@@ -418,22 +435,22 @@ impl MicroBench {
         let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
-            bar.finish();
+            progress.finish()?;
         } else {
-            bar.abandon_with_message("read exceeded the max runtime");
+            progress.abandon_with_message("read exceeded the max runtime")?;
         }
 
         println!("iterations:    {}", idx - 1);
-        println!("run time:      {}", end);
+        println!("run time:      {} s", end);
 
-        let sample = Sample::new(&times);
+        let sample = Sample::new(&times)?;
         let mean = sample.mean();
         let ops_per_second = (1.0 / mean).floor();
         println!("mean:          {}", mean);
         println!("ops/s:         {}", ops_per_second);
         println!("op time:       {} s", mean as f64 / 1.0);
 
-        let outliers = sample.outliers();
+        let outliers = sample.outliers()?;
         let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
         println!("outliers:      {} %", outliers_percentage);
 
@@ -455,15 +472,17 @@ impl MicroBench {
     fn write(
         &self,
         max_rt: Duration,
+        min_it: u64,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("write");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(self.iteration);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "write"));
+        let progress = Progress::start(bar);
 
         // creating the root directory to generate the test directories inside it
         Fs::make_dir(&root_path)?;
@@ -489,7 +508,7 @@ impl MicroBench {
         let mut interrupted = false;
 
         let start = SystemTime::now();
-        while idx <= self.iteration {
+        loop {
             let rand_content_index = thread_rng().gen_range(0..(8192 * size) - size - 1);
             let mut content =
                 rand_content[rand_content_index..(rand_content_index + size)].to_vec();
@@ -510,7 +529,12 @@ impl MicroBench {
                 }
             }
 
-            bar.inc(1);
+            // check the stop criteria
+            if idx > min_it {
+                if self.stop(&times)? {
+                    break;
+                }
+            }
 
             if timer.finished() {
                 interrupted = true;
@@ -521,22 +545,22 @@ impl MicroBench {
         let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
-            bar.finish();
+            progress.finish()?;
         } else {
-            bar.abandon_with_message("write exceeded the max runtime");
+            progress.abandon_with_message("write exceeded the max runtime")?;
         }
 
         println!("iterations:    {}", idx - 1);
-        println!("run time:      {}", end);
+        println!("run time:      {} s", end);
 
-        let sample = Sample::new(&times);
+        let sample = Sample::new(&times)?;
         let mean = sample.mean();
         let ops_per_second = (1.0 / mean).floor();
         println!("mean:          {}", mean);
         println!("ops/s:         {}", ops_per_second);
         println!("op time:       {} s", mean as f64 / 1.0);
 
-        let outliers = sample.outliers();
+        let outliers = sample.outliers()?;
         let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
         println!("outliers:      {} %", outliers_percentage);
 
@@ -564,9 +588,10 @@ impl MicroBench {
         root_path.push("read");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(6);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "read_throughput"));
+        let progress = Progress::start(bar);
 
         // creating the root directory to generate the test files inside it
         Fs::make_dir(&root_path)?;
@@ -610,13 +635,11 @@ impl MicroBench {
                 }
             }
 
-            let sample = Sample::new(&times);
+            let sample = Sample::new(&times)?;
             let mean = sample.mean();
             let throughput = read_size as f64 / mean; // B/s
             throughputs.push((read_size, throughput));
             read_size *= 10;
-
-            bar.inc(1);
 
             if timer.finished() {
                 interrupted = true;
@@ -627,12 +650,12 @@ impl MicroBench {
         let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
-            bar.finish();
+            progress.finish()?;
         } else {
-            bar.abandon_with_message("read exceeded the max runtime");
+            progress.abandon_with_message("read exceeded the max runtime")?;
         }
 
-        println!("run time:      {}", end);
+        println!("run time:      {} s", end);
 
         let mut throughput_records = vec![];
         for (size, throughput) in throughputs {
@@ -665,9 +688,10 @@ impl MicroBench {
         root_path.push("write");
         Fs::cleanup(&root_path)?;
 
-        let bar = ProgressBar::new(6);
+        let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{:5}", "write_throughput"));
+        let progress = Progress::start(bar);
 
         // creating the root directory to generate the test files inside it
         Fs::make_dir(&root_path)?;
@@ -712,13 +736,11 @@ impl MicroBench {
                 }
             }
 
-            let sample = Sample::new(&times);
+            let sample = Sample::new(&times)?;
             let mean = sample.mean();
             let throughput = write_size as f64 / mean; // B/s
             throughputs.push((write_size, throughput));
             write_size *= 10;
-
-            bar.inc(1);
 
             if timer.finished() {
                 interrupted = true;
@@ -729,12 +751,12 @@ impl MicroBench {
         let end = start.elapsed()?.as_secs_f64();
 
         if !interrupted {
-            bar.finish();
+            progress.finish()?;
         } else {
-            bar.abandon_with_message("read exceeded the max runtime");
+            progress.abandon_with_message("write exceeded the max runtime")?;
         }
 
-        println!("run time:      {}", end);
+        println!("run time:      {} s", end);
 
         let mut throughput_records = vec![];
         for (size, throughput) in throughputs {
@@ -756,5 +778,19 @@ impl MicroBench {
 
         println!();
         Ok(throughput_records)
+    }
+
+    // if the half-width of the confidence interval (or the error margin) is within 5% of
+    // the mean, we can stop the test
+    fn stop(&self, times: &Vec<f64>) -> Result<bool, Error> {
+        // check the stop criteria
+        let sample = Sample::new(&times)?;
+        let mean = sample.mean();
+        let error_margin = sample.confidence_interval_error_margin(0.95)?;
+        if (error_margin / mean) < 0.05 {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }

@@ -2,12 +2,14 @@ pub mod data_logger;
 pub mod error;
 pub mod micro;
 pub mod plotter;
+mod progress;
 pub mod sample;
 pub mod strace_workload;
 mod timer;
 pub mod wasm_workload;
 
 use crate::error::Error;
+use crate::progress::Progress;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fmt::{Display, Formatter};
 use std::fs::{create_dir, create_dir_all, remove_dir_all, remove_file, File, OpenOptions};
@@ -15,7 +17,6 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::mpsc::channel;
 use std::thread;
 use std::time::{Duration, SystemTime};
 
@@ -133,7 +134,9 @@ impl Fs {
         create_dir_all(path)
     }
 
-    pub fn make_file<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(path: P) -> Result<File, std::io::Error> {
+    pub fn make_file<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
+        path: P,
+    ) -> Result<File, std::io::Error> {
         // create the parent directory hierarchy if needed
         let path = Path::new(&path);
         let path = PathBuf::from(path);
@@ -269,36 +272,15 @@ impl Fs {
                 "failed to convert PathBuf to String".to_string()
             ))?
         ));
+        let progress = Progress::start(spinner);
 
-        let (sender, receiver) = channel();
-        let path = path.clone();
-        thread::spawn(move || {
-            let path = Path::new(&path);
-            if path.exists() {
-                remove_dir_all(path).unwrap();
-            }
-            // notify the receiver about finishing the clean up
-            sender.send(true).unwrap();
-        });
-
-        // spin the spinner until the clean up is done
-        loop {
-            match receiver.try_recv() {
-                Ok(_done) => {
-                    // wait another 2 seconds
-                    for _ in 0..40 {
-                        thread::sleep(Duration::from_millis(50));
-                        spinner.inc(1);
-                    }
-                    spinner.finish_and_clear();
-                    break;
-                }
-                _ => {
-                    thread::sleep(Duration::from_millis(50));
-                    spinner.inc(1);
-                }
-            }
+        if path.exists() {
+            remove_dir_all(path).unwrap();
         }
+        // wait another 2 seconds
+        thread::sleep(Duration::from_secs(2));
+        // finish the progress
+        progress.finish_and_clear()?;
 
         Ok(())
     }
