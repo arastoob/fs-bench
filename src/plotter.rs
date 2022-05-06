@@ -11,8 +11,15 @@ pub struct Plotter {
 
 struct Coordinates {
     x_axis: Vec<XAxis>,
-    y_axis: Vec<f64>,
+    y_axis: Vec<YAxis>,
     label: Option<String>, // the legend label for this series
+}
+
+#[derive(Clone)]
+struct YAxis {
+    y: f64,
+    lb: Option<f64>,
+    ub: Option<f64>
 }
 
 /// The x axis values could be of type float or string
@@ -105,12 +112,14 @@ impl Plotter {
             let y_min = coordinate
                 .y_axis
                 .iter()
-                .fold(f64::INFINITY, |a, &b| a.min(b));
+                .map(|y_axis| y_axis.y)
+                .fold(f64::INFINITY, |a, b| a.min(b));
             mins.push(y_min);
             let y_max = coordinate
                 .y_axis
                 .iter()
-                .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+                .map(|y_axis| y_axis.y)
+                .fold(f64::NEG_INFINITY, |a, b| a.max(b));
             maxes.push(y_max);
         }
         let y_min = mins.iter().fold(f64::INFINITY, |a, &b| a.min(b));
@@ -162,7 +171,7 @@ impl Plotter {
                         .ticks
                         .iter()
                         .zip(coordinate.y_axis.iter())
-                        .map(|(x, y)| (x.to_string(), *y)), // The data iter
+                        .map(|(x, y_axis)| (x.to_string(), y_axis.y)), // The data iter
                     &color,
                 ))?;
                 if let Some(label) = coordinate.label.clone() {
@@ -178,9 +187,9 @@ impl Plotter {
                             .ticks
                             .iter()
                             .zip(coordinate.y_axis.iter())
-                            .map(|(x, y)| {
+                            .map(|(x, y_axis)| {
                                 Circle::new(
-                                    (x.to_string(), *y),
+                                    (x.to_string(), y_axis.y),
                                     3,
                                     ShapeStyle::from(&BLACK).filled(),
                                 )
@@ -228,7 +237,7 @@ impl Plotter {
 
                 let color = colors.next().unwrap();
                 let series = ctx.draw_series(LineSeries::new(
-                    x_axis.iter().zip(y_axis.iter()).map(|(x, y)| (*x, *y)), // The data iter
+                    x_axis.iter().zip(y_axis.iter()).map(|(x, y_axis)| (*x, y_axis.y)), // The data iter
                     &color,
                 ))?;
                 if let Some(label) = coordinate.label.clone() {
@@ -239,8 +248,8 @@ impl Plotter {
                 }
 
                 if points {
-                    ctx.draw_series(x_axis.iter().zip(coordinate.y_axis.iter()).map(|(x, y)| {
-                        Circle::new((*x, *y), 3, ShapeStyle::from(&BLACK).filled())
+                    ctx.draw_series(x_axis.iter().zip(coordinate.y_axis.iter()).map(|(x, y_axis)| {
+                        Circle::new((*x, y_axis.y), 3, ShapeStyle::from(&BLACK).filled())
                     }))?;
                 }
             }
@@ -278,11 +287,13 @@ impl Plotter {
         let y_min = self.coordinates[0]
             .y_axis
             .iter()
-            .fold(f64::INFINITY, |a, &b| a.min(b));
+            .map(|y_axis| y_axis.y)
+            .fold(f64::INFINITY, |a, b| a.min(b));
         let y_max = self.coordinates[0]
             .y_axis
             .iter()
-            .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+            .map(|y_axis| y_axis.y)
+            .fold(f64::NEG_INFINITY, |a, b| a.max(b));
         let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
         let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
 
@@ -299,33 +310,46 @@ impl Plotter {
             .y_desc(y_label.unwrap_or(""))
             .draw()?;
 
-        // draw labels on bars
-        ctx.draw_series(PointSeries::of_element(
-            custom_x_axes
-                .ticks
-                .iter()
-                .zip(self.coordinates[0].y_axis.iter())
-                .map(|(x, y)| (x.clone(), *y)),
-            5,
-            ShapeStyle::from(&RED).filled(),
-            &|(x, y), _size, _style| {
-                EmptyElement::at((x.clone(), y))
-                    + Text::new(format!("{:?}", y), (-20, -10), ("sans-serif", 15))
-            },
-        ))?;
-
         // draw the bars
-        let series = ctx.draw_series(
+        ctx.draw_series(
             custom_x_axes
                 .ticks
                 .iter()
                 .zip(self.coordinates[0].y_axis.iter())
-                .map(|(x, y)| {
+                .map(|(x, y_axis)| {
                     let x_before = format!("{}_before", x);
                     let x_after = format!("{}_after", x);
-                    Rectangle::new([(x_before, 0.0), (x_after, *y)], RED.filled())
+                    Rectangle::new([(x_before, 0.0), (x_after, y_axis.y)], RED.filled())
                 }),
         )?;
+
+        // draw the error bars
+        ctx.draw_series(
+            custom_x_axes
+                .ticks
+                .iter()
+                .zip(self.coordinates[0].y_axis.iter())
+                .map(|(x, y_axis)| {
+                    if let (Some(lb), Some(ub)) = (y_axis.lb, y_axis.ub) {
+                        ErrorBar::new_vertical(x.clone(), lb, y_axis.y, ub, BLACK.filled(), 10)
+                    } else {
+                        ErrorBar::new_vertical(x.clone(), 0f64, 0f64, 0f64, RED.filled(), 0)
+                    }
+                }),
+        )?;
+
+        // draw the bar labels
+        let series =  ctx.draw_series(
+            custom_x_axes
+                .ticks
+                .iter()
+                .zip(self.coordinates[0].y_axis.iter())
+                .map(|(x, y_axis)| {
+                    EmptyElement::at((x.clone(), y_axis.y))
+                        + Text::new(y_axis.y.to_string(), (-20, -30), ("sans-serif", 15))
+                })
+        )?;
+
         // draw the legend
         if let Some(label) = self.coordinates[0].label.clone() {
             series
@@ -341,7 +365,7 @@ impl Plotter {
         Ok(())
     }
 
-    fn parse_ops_per_second(file: &File) -> Result<(Vec<XAxis>, Vec<f64>), Error> {
+    fn parse_ops_per_second(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
         let mut reader = csv::Reader::from_reader(file);
         let mut x_axis = vec![];
         let mut y_axis = vec![];
@@ -357,20 +381,42 @@ impl Plotter {
             .iter()
             .position(|header| header == "ops/s")
             .ok_or(Error::CsvError("header 'ops/s' not found".to_string()))?;
+        let ops_per_second_lb_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "ops/s_lb")
+            .ok_or(Error::CsvError("header 'ops/s_lb' not found".to_string()))?;
+        let ops_per_second_ub_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "ops/s_ub")
+            .ok_or(Error::CsvError("header 'ops/s_ub' not found".to_string()))?;
 
         for record in reader.records() {
             let record = record?;
             x_axis.push(XAxis::from(record.get(operation_idx).ok_or(
                 Error::CsvError("failed to read from the csv file".to_string()),
             )?));
-            y_axis.push(
-                record
-                    .get(ops_per_second_idx)
-                    .ok_or(Error::CsvError(
-                        "failed to read from the csv file".to_string(),
-                    ))?
-                    .parse::<f64>()?,
-            );
+
+            let y = record
+                .get(ops_per_second_idx)
+                .ok_or(Error::CsvError(
+                    "failed to read from the csv file".to_string(),
+                ))?
+                .parse::<f64>()?;
+            let lb = record
+                .get(ops_per_second_lb_idx)
+                .ok_or(Error::CsvError(
+                    "failed to read from the csv file".to_string(),
+                ))?
+                .parse::<f64>()?;
+            let ub = record
+                .get(ops_per_second_ub_idx)
+                .ok_or(Error::CsvError(
+                    "failed to read from the csv file".to_string(),
+                ))?
+                .parse::<f64>()?;
+            y_axis.push(YAxis {y, lb: Some(lb), ub: Some(ub)});
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -378,7 +424,7 @@ impl Plotter {
         Ok((x_axis, y_axis))
     }
 
-    fn parse_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<f64>), Error> {
+    fn parse_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
         let mut reader = csv::Reader::from_reader(file);
         let mut x_axis = vec![];
         let mut y_axis = vec![];
@@ -405,14 +451,13 @@ impl Plotter {
                     ))?
                     .parse::<f64>()?,
             ));
-            y_axis.push(
-                record
-                    .get(ops_idx)
-                    .ok_or(Error::CsvError(
-                        "failed to read from the csv file".to_string(),
-                    ))?
-                    .parse::<f64>()?,
-            );
+            let y = record
+                .get(ops_idx)
+                .ok_or(Error::CsvError(
+                    "failed to read from the csv file".to_string(),
+                ))?
+                .parse::<f64>()?;
+            y_axis.push(YAxis {y, lb: None, ub: None});
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -420,7 +465,7 @@ impl Plotter {
         Ok((x_axis, y_axis))
     }
 
-    fn parse_throughputs(file: &File) -> Result<(Vec<XAxis>, Vec<f64>), Error> {
+    fn parse_throughputs(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
         let mut reader = csv::Reader::from_reader(file);
         let mut x_axis = vec![];
         let mut y_axis = vec![];
@@ -447,14 +492,13 @@ impl Plotter {
                     ))?
                     .parse::<f64>()?,
             ));
-            y_axis.push(
-                record
-                    .get(throughput_idx)
-                    .ok_or(Error::CsvError(
-                        "failed to read from the csv file".to_string(),
-                    ))?
-                    .parse::<f64>()?,
-            );
+            let y = record
+                .get(throughput_idx)
+                .ok_or(Error::CsvError(
+                    "failed to read from the csv file".to_string(),
+                ))?
+                .parse::<f64>()?;
+            y_axis.push(YAxis {y, lb: None, ub: None});
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -462,7 +506,7 @@ impl Plotter {
         Ok((x_axis, y_axis))
     }
 
-    fn parse_ops_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<f64>), Error> {
+    fn parse_ops_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
         let mut reader = csv::Reader::from_reader(file);
         let mut x_axis = vec![];
         let mut y_axis = vec![];
@@ -489,14 +533,13 @@ impl Plotter {
                     ))?
                     .parse::<f64>()?,
             ));
-            y_axis.push(
-                record
-                    .get(time_idx)
-                    .ok_or(Error::CsvError(
-                        "failed to read from the csv file".to_string(),
-                    ))?
-                    .parse::<f64>()?,
-            );
+            let y = record
+                .get(time_idx)
+                .ok_or(Error::CsvError(
+                    "failed to read from the csv file".to_string(),
+                ))?
+                .parse::<f64>()?;
+            y_axis.push(YAxis {y, lb: None, ub: None});
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
