@@ -1,5 +1,6 @@
 pub mod data_logger;
 pub mod error;
+mod format;
 pub mod micro;
 pub mod plotter;
 mod progress;
