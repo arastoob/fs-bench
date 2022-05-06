@@ -244,20 +244,6 @@ impl MicroBench {
         let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
             self.print_micro(idx - 1, end, &times)?;
 
-        // println!("iterations:        {}", idx - 1);
-        // println!("run time:          {} s", end);
-        //
-        // let sample = Sample::new(&times)?;
-        // let mean = sample.mean();
-        // let ci = sample.confidence_interval_error_margin(0.95)?;
-        // let ops_per_second = (1.0 / mean).floor();
-        // println!("ops/s:             {}", ops_per_second);
-        // println!("op time (95% CI):  [{} us, {} us]", micro_second(mean - ci), micro_second(mean + ci));
-        //
-        // let outliers = sample.outliers()?;
-        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        // println!("outliers:          {} %", outliers_percentage);
-
         let ops_per_second_record = Record {
             fields: [
                 "mkdir".to_string(),
@@ -341,20 +327,6 @@ impl MicroBench {
 
         let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
             self.print_micro(idx - 1, end, &times)?;
-
-        // println!("iterations:    {}", idx - 1);
-        // println!("run time:      {} s", end);
-        //
-        // let sample = Sample::new(&times)?;
-        // let mean = sample.mean();
-        // let ops_per_second = (1.0 / mean).floor();
-        // println!("mean:          {}", mean);
-        // println!("ops/s:         {}", ops_per_second);
-        // println!("op time:       {} s", mean as f64 / 1.0);
-        //
-        // let outliers = sample.outliers()?;
-        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        // println!("outliers:      {} %", outliers_percentage);
 
         let ops_per_second_record = Record {
             fields: [
@@ -456,20 +428,6 @@ impl MicroBench {
         let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
             self.print_micro(idx - 1, end, &times)?;
 
-        // println!("iterations:    {}", idx - 1);
-        // println!("run time:      {} s", end);
-        //
-        // let sample = Sample::new(&times)?;
-        // let mean = sample.mean();
-        // let ops_per_second = (1.0 / mean).floor();
-        // println!("mean:          {}", mean);
-        // println!("ops/s:         {}", ops_per_second);
-        // println!("op time:       {} s", mean as f64 / 1.0);
-        //
-        // let outliers = sample.outliers()?;
-        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        // println!("outliers:      {} %", outliers_percentage);
-
         let ops_per_second_record = Record {
             fields: [
                 "read".to_string(),
@@ -570,20 +528,6 @@ impl MicroBench {
 
         let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
             self.print_micro(idx - 1, end, &times)?;
-
-        // println!("iterations:    {}", idx - 1);
-        // println!("run time:      {} s", end);
-        //
-        // let sample = Sample::new(&times)?;
-        // let mean = sample.mean();
-        // let ops_per_second = (1.0 / mean).floor();
-        // println!("mean:          {}", mean);
-        // println!("ops/s:         {}", ops_per_second);
-        // println!("op time:       {} s", mean as f64 / 1.0);
-        //
-        // let outliers = sample.outliers()?;
-        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        // println!("outliers:      {} %", outliers_percentage);
 
         let ops_per_second_record = Record {
             fields: [
