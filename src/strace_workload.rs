@@ -1,4 +1,5 @@
 use crate::data_logger::DataLogger;
+use crate::format::time_format;
 use crate::plotter::Plotter;
 use crate::{BenchResult, Error, Fs, Progress, Record, ResultMode};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -152,7 +153,7 @@ impl StraceWorkloadRunner {
         let end = start.elapsed()?.as_secs_f64();
         progress.finish()?;
 
-        println!("run time:      {} s", end);
+        println!("{:11} {}", "run time:", time_format(end));
         println!();
         Ok(times)
     }
@@ -201,7 +202,7 @@ impl StraceWorkloadRunner {
         let end = start.elapsed()?.as_secs_f64();
         progress.finish()?;
 
-        println!("run time:      {} s", end);
+        println!("{:11} {}", "run time:", time_format(end));
         println!();
         Ok(times)
     }

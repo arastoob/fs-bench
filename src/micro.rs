@@ -1,4 +1,5 @@
 use crate::data_logger::DataLogger;
+use crate::format::time_format;
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
@@ -60,6 +61,8 @@ impl MicroBench {
             "operation".to_string(),
             "runtime(s)".to_string(),
             "ops/s".to_string(),
+            "ops/s_lb".to_string(),
+            "ops/s_ub".to_string(),
         ]
         .to_vec();
         let mut ops_s_results = BenchResult::new(ops_s_header);
@@ -238,32 +241,37 @@ impl MicroBench {
             progress.abandon_with_message("mkdir exceeded the max runtime")?;
         }
 
-        println!("iterations:    {}", idx - 1);
-        println!("run time:      {} s", end);
+        let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
+            self.print_micro(idx - 1, end, &times)?;
 
-        let sample = Sample::new(&times)?;
-        let mean = sample.mean();
-        let ops_per_second = (1.0 / mean).floor();
-        println!("mean:          {}", mean);
-        println!("ops/s:         {}", ops_per_second);
-        println!("op time:       {} s", mean as f64 / 1.0);
-
-        let outliers = sample.outliers()?;
-        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        println!("outliers:      {} %", outliers_percentage);
+        // println!("iterations:        {}", idx - 1);
+        // println!("run time:          {} s", end);
+        //
+        // let sample = Sample::new(&times)?;
+        // let mean = sample.mean();
+        // let ci = sample.confidence_interval_error_margin(0.95)?;
+        // let ops_per_second = (1.0 / mean).floor();
+        // println!("ops/s:             {}", ops_per_second);
+        // println!("op time (95% CI):  [{} us, {} us]", micro_second(mean - ci), micro_second(mean + ci));
+        //
+        // let outliers = sample.outliers()?;
+        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
+        // println!("outliers:          {} %", outliers_percentage);
 
         let ops_per_second_record = Record {
             fields: [
                 "mkdir".to_string(),
                 end.to_string(),
                 ops_per_second.to_string(),
+                ops_per_second_lb.to_string(),
+                ops_per_second_ub.to_string(),
             ]
             .to_vec(),
         };
 
         let behaviour_records = Fs::ops_in_window(&behaviour)?;
 
-        println!();
+        // println!();
         Ok((ops_per_second_record, behaviour_records))
     }
 
@@ -331,32 +339,37 @@ impl MicroBench {
             progress.abandon_with_message("mknod exceeded the max runtime")?;
         }
 
-        println!("iterations:    {}", idx - 1);
-        println!("run time:      {} s", end);
+        let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
+            self.print_micro(idx - 1, end, &times)?;
 
-        let sample = Sample::new(&times)?;
-        let mean = sample.mean();
-        let ops_per_second = (1.0 / mean).floor();
-        println!("mean:          {}", mean);
-        println!("ops/s:         {}", ops_per_second);
-        println!("op time:       {} s", mean as f64 / 1.0);
-
-        let outliers = sample.outliers()?;
-        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        println!("outliers:      {} %", outliers_percentage);
+        // println!("iterations:    {}", idx - 1);
+        // println!("run time:      {} s", end);
+        //
+        // let sample = Sample::new(&times)?;
+        // let mean = sample.mean();
+        // let ops_per_second = (1.0 / mean).floor();
+        // println!("mean:          {}", mean);
+        // println!("ops/s:         {}", ops_per_second);
+        // println!("op time:       {} s", mean as f64 / 1.0);
+        //
+        // let outliers = sample.outliers()?;
+        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
+        // println!("outliers:      {} %", outliers_percentage);
 
         let ops_per_second_record = Record {
             fields: [
                 "mknod".to_string(),
                 end.to_string(),
                 ops_per_second.to_string(),
+                ops_per_second_lb.to_string(),
+                ops_per_second_ub.to_string(),
             ]
             .to_vec(),
         };
 
         let behaviour_records = Fs::ops_in_window(&behaviour)?;
 
-        println!();
+        // println!();
         Ok((ops_per_second_record, behaviour_records))
     }
 
@@ -440,32 +453,37 @@ impl MicroBench {
             progress.abandon_with_message("read exceeded the max runtime")?;
         }
 
-        println!("iterations:    {}", idx - 1);
-        println!("run time:      {} s", end);
+        let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
+            self.print_micro(idx - 1, end, &times)?;
 
-        let sample = Sample::new(&times)?;
-        let mean = sample.mean();
-        let ops_per_second = (1.0 / mean).floor();
-        println!("mean:          {}", mean);
-        println!("ops/s:         {}", ops_per_second);
-        println!("op time:       {} s", mean as f64 / 1.0);
-
-        let outliers = sample.outliers()?;
-        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        println!("outliers:      {} %", outliers_percentage);
+        // println!("iterations:    {}", idx - 1);
+        // println!("run time:      {} s", end);
+        //
+        // let sample = Sample::new(&times)?;
+        // let mean = sample.mean();
+        // let ops_per_second = (1.0 / mean).floor();
+        // println!("mean:          {}", mean);
+        // println!("ops/s:         {}", ops_per_second);
+        // println!("op time:       {} s", mean as f64 / 1.0);
+        //
+        // let outliers = sample.outliers()?;
+        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
+        // println!("outliers:      {} %", outliers_percentage);
 
         let ops_per_second_record = Record {
             fields: [
                 "read".to_string(),
                 end.to_string(),
                 ops_per_second.to_string(),
+                ops_per_second_lb.to_string(),
+                ops_per_second_ub.to_string(),
             ]
             .to_vec(),
         };
 
         let behaviour_records = Fs::ops_in_window(&behaviour)?;
 
-        println!();
+        // println!();
         Ok((ops_per_second_record, behaviour_records))
     }
 
@@ -550,32 +568,37 @@ impl MicroBench {
             progress.abandon_with_message("write exceeded the max runtime")?;
         }
 
-        println!("iterations:    {}", idx - 1);
-        println!("run time:      {} s", end);
+        let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
+            self.print_micro(idx - 1, end, &times)?;
 
-        let sample = Sample::new(&times)?;
-        let mean = sample.mean();
-        let ops_per_second = (1.0 / mean).floor();
-        println!("mean:          {}", mean);
-        println!("ops/s:         {}", ops_per_second);
-        println!("op time:       {} s", mean as f64 / 1.0);
-
-        let outliers = sample.outliers()?;
-        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        println!("outliers:      {} %", outliers_percentage);
+        // println!("iterations:    {}", idx - 1);
+        // println!("run time:      {} s", end);
+        //
+        // let sample = Sample::new(&times)?;
+        // let mean = sample.mean();
+        // let ops_per_second = (1.0 / mean).floor();
+        // println!("mean:          {}", mean);
+        // println!("ops/s:         {}", ops_per_second);
+        // println!("op time:       {} s", mean as f64 / 1.0);
+        //
+        // let outliers = sample.outliers()?;
+        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
+        // println!("outliers:      {} %", outliers_percentage);
 
         let ops_per_second_record = Record {
             fields: [
                 "write".to_string(),
                 end.to_string(),
                 ops_per_second.to_string(),
+                ops_per_second_lb.to_string(),
+                ops_per_second_ub.to_string(),
             ]
             .to_vec(),
         };
 
         let behaviour_records = Fs::ops_in_window(&behaviour)?;
 
-        println!();
+        // println!();
         Ok((ops_per_second_record, behaviour_records))
     }
 
@@ -655,7 +678,7 @@ impl MicroBench {
             progress.abandon_with_message("read exceeded the max runtime")?;
         }
 
-        println!("run time:      {} s", end);
+        println!("{:11} {}", "run time:", time_format(end));
 
         let mut throughput_records = vec![];
         for (size, throughput) in throughputs {
@@ -756,7 +779,7 @@ impl MicroBench {
             progress.abandon_with_message("write exceeded the max runtime")?;
         }
 
-        println!("run time:      {} s", end);
+        println!("{:11} {}", "run time:", time_format(end));
 
         let mut throughput_records = vec![];
         for (size, throughput) in throughputs {
@@ -792,5 +815,40 @@ impl MicroBench {
         } else {
             Ok(false)
         }
+    }
+
+    fn print_micro(
+        &self,
+        iterations: u64,
+        run_time: f64,
+        times: &Vec<f64>,
+    ) -> Result<(f64, f64, f64), Error> {
+        println!("{:18} {}", "iterations:", iterations);
+        println!("{:18} {}", "run time:", time_format(run_time));
+
+        let sample = Sample::new(times)?;
+        let mean = sample.mean();
+        let ci = sample.confidence_interval_error_margin(0.95)?;
+        println!(
+            "{:18} [{}, {}]",
+            "op time (95% CI):",
+            time_format(mean - ci),
+            time_format(mean + ci)
+        );
+
+        let ops_per_second = (1f64 / mean).floor();
+        let ops_per_second_lb = (1f64 / (mean + ci)).floor();
+        let ops_per_second_ub = (1f64 / (mean - ci)).floor();
+        println!(
+            "{:18} [{}, {}]",
+            "ops/s (95% CI):", ops_per_second_lb, ops_per_second_ub
+        );
+
+        let outliers = sample.outliers()?;
+        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
+        println!("{:18} {} %", "outliers:", outliers_percentage);
+
+        println!();
+        Ok((ops_per_second_lb, ops_per_second, ops_per_second_ub))
     }
 }

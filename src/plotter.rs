@@ -19,7 +19,7 @@ struct Coordinates {
 struct YAxis {
     y: f64,
     lb: Option<f64>,
-    ub: Option<f64>
+    ub: Option<f64>,
 }
 
 /// The x axis values could be of type float or string
@@ -237,7 +237,10 @@ impl Plotter {
 
                 let color = colors.next().unwrap();
                 let series = ctx.draw_series(LineSeries::new(
-                    x_axis.iter().zip(y_axis.iter()).map(|(x, y_axis)| (*x, y_axis.y)), // The data iter
+                    x_axis
+                        .iter()
+                        .zip(y_axis.iter())
+                        .map(|(x, y_axis)| (*x, y_axis.y)), // The data iter
                     &color,
                 ))?;
                 if let Some(label) = coordinate.label.clone() {
@@ -248,9 +251,11 @@ impl Plotter {
                 }
 
                 if points {
-                    ctx.draw_series(x_axis.iter().zip(coordinate.y_axis.iter()).map(|(x, y_axis)| {
-                        Circle::new((*x, y_axis.y), 3, ShapeStyle::from(&BLACK).filled())
-                    }))?;
+                    ctx.draw_series(x_axis.iter().zip(coordinate.y_axis.iter()).map(
+                        |(x, y_axis)| {
+                            Circle::new((*x, y_axis.y), 3, ShapeStyle::from(&BLACK).filled())
+                        },
+                    ))?;
                 }
             }
 
@@ -339,7 +344,7 @@ impl Plotter {
         )?;
 
         // draw the bar labels
-        let series =  ctx.draw_series(
+        let series = ctx.draw_series(
             custom_x_axes
                 .ticks
                 .iter()
@@ -347,7 +352,7 @@ impl Plotter {
                 .map(|(x, y_axis)| {
                     EmptyElement::at((x.clone(), y_axis.y))
                         + Text::new(y_axis.y.to_string(), (-20, -30), ("sans-serif", 15))
-                })
+                }),
         )?;
 
         // draw the legend
@@ -416,7 +421,11 @@ impl Plotter {
                     "failed to read from the csv file".to_string(),
                 ))?
                 .parse::<f64>()?;
-            y_axis.push(YAxis {y, lb: Some(lb), ub: Some(ub)});
+            y_axis.push(YAxis {
+                y,
+                lb: Some(lb),
+                ub: Some(ub),
+            });
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -457,7 +466,11 @@ impl Plotter {
                     "failed to read from the csv file".to_string(),
                 ))?
                 .parse::<f64>()?;
-            y_axis.push(YAxis {y, lb: None, ub: None});
+            y_axis.push(YAxis {
+                y,
+                lb: None,
+                ub: None,
+            });
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -498,7 +511,11 @@ impl Plotter {
                     "failed to read from the csv file".to_string(),
                 ))?
                 .parse::<f64>()?;
-            y_axis.push(YAxis {y, lb: None, ub: None});
+            y_axis.push(YAxis {
+                y,
+                lb: None,
+                ub: None,
+            });
         }
 
         assert_eq!(x_axis.len(), y_axis.len());
@@ -539,7 +556,11 @@ impl Plotter {
                     "failed to read from the csv file".to_string(),
                 ))?
                 .parse::<f64>()?;
-            y_axis.push(YAxis {y, lb: None, ub: None});
+            y_axis.push(YAxis {
+                y,
+                lb: None,
+                ub: None,
+            });
         }
 
         assert_eq!(x_axis.len(), y_axis.len());

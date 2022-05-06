@@ -7,7 +7,7 @@ use std::time::Duration;
 
 pub struct Progress {
     sender: Sender<FinishType>,
-    handle: JoinHandle<()>
+    handle: JoinHandle<()>,
 }
 
 #[allow(dead_code)]
@@ -50,14 +50,18 @@ impl Progress {
 
     pub fn finish(self) -> Result<(), Error> {
         self.sender.send(FinishType::Finish)?;
-        self.handle.join().map_err(|_err| Error::SyncError("the progress bar thread couldn't be finished".to_string()))?;
+        self.handle.join().map_err(|_err| {
+            Error::SyncError("the progress bar thread couldn't be finished".to_string())
+        })?;
 
         Ok(())
     }
 
     pub fn finish_and_clear(self) -> Result<(), Error> {
         self.sender.send(FinishType::FinishAndClear)?;
-        self.handle.join().map_err(|_err| Error::SyncError("the progress bar thread couldn't be finished".to_string()))?;
+        self.handle.join().map_err(|_err| {
+            Error::SyncError("the progress bar thread couldn't be finished".to_string())
+        })?;
 
         Ok(())
     }
@@ -65,7 +69,9 @@ impl Progress {
     pub fn finish_with_message(self, msg: &str) -> Result<(), Error> {
         self.sender
             .send(FinishType::FinishWithMessage(msg.to_string()))?;
-        self.handle.join().map_err(|_err| Error::SyncError("the progress bar thread couldn't be finished".to_string()))?;
+        self.handle.join().map_err(|_err| {
+            Error::SyncError("the progress bar thread couldn't be finished".to_string())
+        })?;
 
         Ok(())
     }
@@ -73,7 +79,9 @@ impl Progress {
     pub fn abandon_with_message(self, msg: &str) -> Result<(), Error> {
         self.sender
             .send(FinishType::AbandonWithMessage(msg.to_string()))?;
-        self.handle.join().map_err(|_err| Error::SyncError("the progress bar thread couldn't be finished".to_string()))?;
+        self.handle.join().map_err(|_err| {
+            Error::SyncError("the progress bar thread couldn't be finished".to_string())
+        })?;
 
         Ok(())
     }
