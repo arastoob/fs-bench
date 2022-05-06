@@ -193,7 +193,7 @@ impl MicroBench {
         bar.set_message(format!("{:5}", "mkdir"));
         let progress = Progress::start(bar);
 
-        // creating the root directory to generate the test directories inside it
+        // creating the root directory to generate the benchmark directories inside it
         Fs::make_dir(&root_path)?;
 
         let mut idx = 0;
@@ -276,7 +276,7 @@ impl MicroBench {
         bar.set_message(format!("{:5}", "mknod"));
         let progress = Progress::start(bar);
 
-        // creating the root directory to generate the test directories inside it
+        // creating the root directory to generate the benchmark files inside it
         Fs::make_dir(&root_path)?;
 
         let mut idx = 0;
@@ -360,7 +360,7 @@ impl MicroBench {
         bar.set_message(format!("{:5}", "read"));
         let progress = Progress::start(bar);
 
-        // creating the root directory to generate the test files inside it
+        // creating the root directory to generate the benchmark files inside it
         Fs::make_dir(&root_path)?;
 
         let size = self.io_size;
@@ -369,7 +369,7 @@ impl MicroBench {
             file_name.push(file.to_string());
             let mut file = Fs::make_file(&file_name)?;
 
-            // generate a buffer of size write_size filled with random integer values
+            // generate a buffer of size io size filled with random data
             let mut rand_buffer = vec![0u8; size];
             let mut rng = rand::thread_rng();
             rng.fill_bytes(&mut rand_buffer);
@@ -460,7 +460,7 @@ impl MicroBench {
         bar.set_message(format!("{:5}", "write"));
         let progress = Progress::start(bar);
 
-        // creating the root directory to generate the test directories inside it
+        // creating the root directory to generate the benchmark files inside it
         Fs::make_dir(&root_path)?;
 
         for file in 1..1001 {
@@ -542,7 +542,6 @@ impl MicroBench {
 
         let behaviour_records = Fs::ops_in_window(&behaviour)?;
 
-        // println!();
         Ok((ops_per_second_record, behaviour_records))
     }
 
