@@ -11,7 +11,7 @@ pub struct Quartiles {
 }
 
 impl Sample {
-    pub fn new<T>(sample: &Vec<T>) -> Result<Self, Error>
+    pub fn new<T>(sample: &[T]) -> Result<Self, Error>
     where
         T: Clone + std::convert::Into<f64>,
     {
