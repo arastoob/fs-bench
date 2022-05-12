@@ -161,30 +161,31 @@ impl Sample {
     }
 
     /// Calculate the confidence interval of mean for the sample data using bootstrap sampling.
-    /// This method returns a range for sample points' mean. For a confidence level, say 95%,
-    /// the true mean of the main population is in this range.
+    /// This method returns a range for sample points' mean, and the bootstrap sample means.
+    /// For a confidence level, say 95%, the true mean of the main population is in this range.
     pub fn mean_confidence_interval(
         &self,
         confidence_level: f64,
         iterations: usize,
-    ) -> Result<(f64, f64), Error> {
+    ) -> Result<(f64, f64, Vec<f64>), Error> {
         if confidence_level < 0f64 || confidence_level > 1f64 {
             return Err(Error::InvalidConfig(
                 "The confidence level should be in range (0, 1)".to_string(),
             ));
         }
 
-        let mut means = self.bootstrap(iterations)?;
-        means.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let means = self.bootstrap(iterations)?;
+        let mut means_sorted = means.clone();
+        means_sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
 
         let confidence_level = confidence_level * 100f64;
         let first_percentile = (100f64 - confidence_level) / 2f64;
         let last_percentile = confidence_level + first_percentile;
 
-        let lb_idx = ((first_percentile * means.len() as f64) / 100f64).ceil() as usize;
-        let ub_idx = ((last_percentile * means.len() as f64) / 100f64).floor() as usize;
+        let lb_idx = ((first_percentile * means_sorted.len() as f64) / 100f64).ceil() as usize;
+        let ub_idx = ((last_percentile * means_sorted.len() as f64) / 100f64).floor() as usize;
 
-        Ok((means[lb_idx], means[ub_idx]))
+        Ok((means_sorted[lb_idx], means_sorted[ub_idx], means))
     }
 
     /// Bootstrap Sampling
