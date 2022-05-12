@@ -22,6 +22,10 @@ pub fn time_format(s: f64) -> String {
     }
 }
 
+pub fn percent_format(p: f64) -> String {
+    format!("{:.2} %", p)
+}
+
 fn micro_second(s: f64) -> f64 {
     let micro = s * 1e6;
     // output to 4 floating points
