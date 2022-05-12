@@ -1,7 +1,7 @@
-use std::sync::{Arc, Mutex};
+use crate::Error;
 use rand::Rng;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use crate::Error;
+use std::sync::{Arc, Mutex};
 
 /// A collection of data points with some statistical functions on the data
 pub struct Sample {
@@ -163,9 +163,15 @@ impl Sample {
     /// Calculate the confidence interval of mean for the sample data using bootstrap sampling.
     /// This method returns a range for sample points' mean. For a confidence level, say 95%,
     /// the true mean of the main population is in this range.
-    pub fn mean_confidence_interval(&self, confidence_level: f64, iterations: usize) -> Result<(f64, f64), Error> {
+    pub fn mean_confidence_interval(
+        &self,
+        confidence_level: f64,
+        iterations: usize,
+    ) -> Result<(f64, f64), Error> {
         if confidence_level < 0f64 || confidence_level > 1f64 {
-            return Err(Error::InvalidConfig("The confidence level should be in range (0, 1)".to_string()));
+            return Err(Error::InvalidConfig(
+                "The confidence level should be in range (0, 1)".to_string(),
+            ));
         }
 
         let mut means = self.bootstrap(iterations)?;
@@ -187,19 +193,21 @@ impl Sample {
     ///
     /// This method returns a vector containing the means of each resample
     fn bootstrap(&self, iterations: usize) -> Result<Vec<f64>, Error> {
-
         let len = self.sample.len();
 
         // The output of this method is a vector of size at least 30 so that we can use the z-scores
         // for calculating confidence interval, otherwise we have to use t-values.
         if len < 30 {
-            return Err(Error::InvalidConfig("The sample size is less than 20".to_string()))
+            return Err(Error::InvalidConfig(
+                "The sample size is less than 20".to_string(),
+            ));
         }
 
         let resample_means = Arc::new(Mutex::new(vec![]));
         (0..iterations).into_par_iter().for_each(|_| {
             let mut resample = vec![];
-            while resample.len() < len { // get random samples repeatedly with replacement
+            while resample.len() < len {
+                // get random samples repeatedly with replacement
                 let idx = rand::thread_rng().gen_range(0..len);
                 resample.push(self.sample[idx]);
             }

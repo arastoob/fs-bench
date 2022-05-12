@@ -43,7 +43,13 @@ fn main() -> Result<(), Error> {
 
     match args.bench_mode {
         BenchMode::Micro => {
-            let micro_bench = MicroBench::new(args.size, args.time, args.mount, args.fs_name, args.log_path)?;
+            let micro_bench = MicroBench::new(
+                args.size,
+                args.time,
+                args.mount,
+                args.fs_name,
+                args.log_path,
+            )?;
             micro_bench.run()?;
         }
         BenchMode::Strace => {

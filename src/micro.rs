@@ -56,7 +56,7 @@ impl MicroBench {
     fn behaviour_bench(&self, run_time: Duration) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
-        let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(run_time,  progress_style.clone())?;
+        let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(run_time, progress_style.clone())?;
         let (mknod_ops_s, mknod_behaviour) = self.mknod(run_time, progress_style.clone())?;
         let (read_ops_s, read_behaviour) = self.read(run_time, progress_style.clone())?;
         let (write_ops_s, write_behaviour) = self.write(run_time, progress_style)?;
@@ -201,44 +201,43 @@ impl MicroBench {
         Fs::make_dir(&root_path)?;
 
         let (sender, receiver) = channel();
-        let handle = std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
-            let mut times = vec![];
-            let mut behaviour = vec![];
-            let mut idx = 0;
-            loop {
-                match receiver.try_recv() {
-                    Ok(true) => {
-                        return Ok((times, behaviour, idx));
-                    }
-                    _ => {
-                        let mut dir_name = root_path.clone();
-                        dir_name.push(idx.to_string());
-                        let begin = SystemTime::now();
-                        match Fs::make_dir(&dir_name) {
-                            Ok(()) => {
-                                let end = begin.elapsed()?.as_secs_f64();
-                                times.push(end);
-                                behaviour.push(SystemTime::now());
-                                idx = idx + 1;
-                            }
-                            Err(e) => {
-                                error!("error: {:?}", e);
+        let handle =
+            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
+                let mut times = vec![];
+                let mut behaviour = vec![];
+                let mut idx = 0;
+                loop {
+                    match receiver.try_recv() {
+                        Ok(true) => {
+                            return Ok((times, behaviour, idx));
+                        }
+                        _ => {
+                            let mut dir_name = root_path.clone();
+                            dir_name.push(idx.to_string());
+                            let begin = SystemTime::now();
+                            match Fs::make_dir(&dir_name) {
+                                Ok(()) => {
+                                    let end = begin.elapsed()?.as_secs_f64();
+                                    times.push(end);
+                                    behaviour.push(SystemTime::now());
+                                    idx = idx + 1;
+                                }
+                                Err(e) => {
+                                    error!("error: {:?}", e);
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
 
         std::thread::sleep(run_time);
         let (times, behaviour, idx) = match sender.send(true) {
             Ok(_) => {
                 bar.set_message("waiting for collected data...");
                 handle.join().unwrap()?
-            },
-            Err(e) => {
-                return Err(Error::SyncError(e.to_string()))
             }
+            Err(e) => return Err(Error::SyncError(e.to_string())),
         };
         progress.finish_with_message("mkdir finished")?;
 
@@ -279,44 +278,43 @@ impl MicroBench {
         Fs::make_dir(&root_path)?;
 
         let (sender, receiver) = channel();
-        let handle = std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
-            let mut times = vec![];
-            let mut behaviour = vec![];
-            let mut idx = 0;
-            loop {
-                match receiver.try_recv() {
-                    Ok(true) => {
-                        return Ok((times, behaviour, idx));
-                    }
-                    _ => {
-                        let mut file_name = root_path.clone();
-                        file_name.push(idx.to_string());
-                        let begin = SystemTime::now();
-                        match Fs::make_file(&file_name) {
-                            Ok(_) => {
-                                let end = begin.elapsed()?.as_secs_f64();
-                                times.push(end);
-                                behaviour.push(SystemTime::now());
-                                idx = idx + 1;
-                            }
-                            Err(e) => {
-                                error!("error: {:?}", e);
+        let handle =
+            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
+                let mut times = vec![];
+                let mut behaviour = vec![];
+                let mut idx = 0;
+                loop {
+                    match receiver.try_recv() {
+                        Ok(true) => {
+                            return Ok((times, behaviour, idx));
+                        }
+                        _ => {
+                            let mut file_name = root_path.clone();
+                            file_name.push(idx.to_string());
+                            let begin = SystemTime::now();
+                            match Fs::make_file(&file_name) {
+                                Ok(_) => {
+                                    let end = begin.elapsed()?.as_secs_f64();
+                                    times.push(end);
+                                    behaviour.push(SystemTime::now());
+                                    idx = idx + 1;
+                                }
+                                Err(e) => {
+                                    error!("error: {:?}", e);
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
 
         std::thread::sleep(run_time);
         let (times, behaviour, idx) = match sender.send(true) {
             Ok(_) => {
                 bar.set_message("waiting for collected data...");
                 handle.join().unwrap()?
-            },
-            Err(e) => {
-                return Err(Error::SyncError(e.to_string()))
             }
+            Err(e) => return Err(Error::SyncError(e.to_string())),
         };
         progress.finish_with_message("mknod finished")?;
 
@@ -371,46 +369,45 @@ impl MicroBench {
         }
 
         let (sender, receiver) = channel();
-        let handle = std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
-            let mut times = vec![];
-            let mut behaviour = vec![];
-            let mut idx = 0;
-            let mut read_buffer = vec![0u8; size];
-            loop {
-                match receiver.try_recv() {
-                    Ok(true) => {
-                        return Ok((times, behaviour, idx));
-                    }
-                    _ => {
-                        let file = thread_rng().gen_range(1..1001);
-                        let mut file_name = root_path.clone();
-                        file_name.push(file.to_string());
-                        let begin = SystemTime::now();
-                        match Fs::open_read(&file_name, &mut read_buffer) {
-                            Ok(_) => {
-                                let end = begin.elapsed()?.as_secs_f64();
-                                times.push(end);
-                                behaviour.push(SystemTime::now());
-                                idx += 1;
-                            }
-                            Err(e) => {
-                                println!("error: {:?}", e);
+        let handle =
+            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
+                let mut times = vec![];
+                let mut behaviour = vec![];
+                let mut idx = 0;
+                let mut read_buffer = vec![0u8; size];
+                loop {
+                    match receiver.try_recv() {
+                        Ok(true) => {
+                            return Ok((times, behaviour, idx));
+                        }
+                        _ => {
+                            let file = thread_rng().gen_range(1..1001);
+                            let mut file_name = root_path.clone();
+                            file_name.push(file.to_string());
+                            let begin = SystemTime::now();
+                            match Fs::open_read(&file_name, &mut read_buffer) {
+                                Ok(_) => {
+                                    let end = begin.elapsed()?.as_secs_f64();
+                                    times.push(end);
+                                    behaviour.push(SystemTime::now());
+                                    idx += 1;
+                                }
+                                Err(e) => {
+                                    println!("error: {:?}", e);
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
 
         std::thread::sleep(run_time);
         let (times, behaviour, idx) = match sender.send(true) {
             Ok(_) => {
                 bar.set_message("waiting for collected data...");
                 handle.join().unwrap()?
-            },
-            Err(e) => {
-                return Err(Error::SyncError(e.to_string()))
             }
+            Err(e) => return Err(Error::SyncError(e.to_string())),
         };
         progress.finish_with_message("read finished")?;
 
@@ -463,49 +460,50 @@ impl MicroBench {
         rng.fill_bytes(&mut rand_content);
 
         let (sender, receiver) = channel();
-        let handle = std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
-            let mut times = vec![];
-            let mut behaviour = vec![];
-            let mut idx = 0;
-            loop {
-                match receiver.try_recv() {
-                    Ok(true) => {
-                        return Ok((times, behaviour, idx));
-                    }
-                    _ => {
-                        let rand_content_index = thread_rng().gen_range(0..(8192 * size) - size - 1);
-                        let mut content =
-                            rand_content[rand_content_index..(rand_content_index + size)].to_vec();
+        let handle =
+            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
+                let mut times = vec![];
+                let mut behaviour = vec![];
+                let mut idx = 0;
+                loop {
+                    match receiver.try_recv() {
+                        Ok(true) => {
+                            return Ok((times, behaviour, idx));
+                        }
+                        _ => {
+                            let rand_content_index =
+                                thread_rng().gen_range(0..(8192 * size) - size - 1);
+                            let mut content = rand_content
+                                [rand_content_index..(rand_content_index + size)]
+                                .to_vec();
 
-                        let file = thread_rng().gen_range(1..1001);
-                        let mut file_name = root_path.clone();
-                        file_name.push(file.to_string());
-                        let begin = SystemTime::now();
-                        match Fs::open_write(&file_name, &mut content) {
-                            Ok(_) => {
-                                let end = begin.elapsed()?.as_secs_f64();
-                                times.push(end);
-                                behaviour.push(SystemTime::now());
-                                idx += 1;
-                            }
-                            Err(e) => {
-                                println!("error: {:?}", e);
+                            let file = thread_rng().gen_range(1..1001);
+                            let mut file_name = root_path.clone();
+                            file_name.push(file.to_string());
+                            let begin = SystemTime::now();
+                            match Fs::open_write(&file_name, &mut content) {
+                                Ok(_) => {
+                                    let end = begin.elapsed()?.as_secs_f64();
+                                    times.push(end);
+                                    behaviour.push(SystemTime::now());
+                                    idx += 1;
+                                }
+                                Err(e) => {
+                                    println!("error: {:?}", e);
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
 
         std::thread::sleep(run_time);
         let (times, behaviour, idx) = match sender.send(true) {
             Ok(_) => {
                 bar.set_message("waiting for collected data...");
                 handle.join().unwrap()?
-            },
-            Err(e) => {
-                return Err(Error::SyncError(e.to_string()))
             }
+            Err(e) => return Err(Error::SyncError(e.to_string())),
         };
         progress.finish_with_message("write finished")?;
 
