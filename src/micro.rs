@@ -1,5 +1,5 @@
 use crate::data_logger::DataLogger;
-use crate::format::{percent_format, time_format};
+use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
@@ -56,10 +56,10 @@ impl MicroBench {
     fn behaviour_bench(&self, run_time: Duration) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
-        let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(run_time, progress_style.clone())?;
-        let (mknod_ops_s, mknod_behaviour) = self.mknod(run_time, progress_style.clone())?;
-        let (read_ops_s, read_behaviour) = self.read(run_time, progress_style.clone())?;
-        let (write_ops_s, write_behaviour) = self.write(run_time, progress_style)?;
+        let (mkdir_ops_s, mkdir_behaviour, mkdir_times, mkdir_time_uint) = self.mkdir(run_time, progress_style.clone())?;
+        let (mknod_ops_s, mknod_behaviour, mknod_times, mknod_time_uint) = self.mknod(run_time, progress_style.clone())?;
+        let (read_ops_s, read_behaviour, read_times, read_time_uint) = self.read(run_time, progress_style.clone())?;
+        let (write_ops_s, write_behaviour, write_times, write_time_uint) = self.write(run_time, progress_style)?;
 
         let ops_s_header = [
             "operation".to_string(),
@@ -69,8 +69,9 @@ impl MicroBench {
             "ops/s_ub".to_string(),
         ]
         .to_vec();
-        let mut ops_s_results = BenchResult::new(ops_s_header);
 
+        // ops/s logs and plots
+        let mut ops_s_results = BenchResult::new(ops_s_header);
         ops_s_results.add_record(mkdir_ops_s)?;
         ops_s_results.add_record(mknod_ops_s)?;
         ops_s_results.add_record(read_ops_s)?;
@@ -85,6 +86,59 @@ impl MicroBench {
         file_name.set_extension("svg");
         plotter.bar_chart(Some("Operation"), Some("Ops/s"), None, &file_name)?;
 
+
+
+        // sample iteration average times logs and plots
+        let times_header = ["time".to_string()].to_vec();
+        let mut mkdir_times_results = BenchResult::new(times_header.clone());
+        mkdir_times_results.add_records(mkdir_times)?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_mkdir_iteration_times.csv", self.fs_name));
+        DataLogger::log(mkdir_times_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None, &ResultMode::IterationTimes)?;
+        file_name.set_extension("svg");
+        plotter.point_series(Some(format!("Average time ({})", mkdir_time_uint).as_str()), Some("Sample iteration"), None, &file_name)?;
+
+
+        let mut mknod_times_results = BenchResult::new(times_header.clone());
+        mknod_times_results.add_records(mknod_times)?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_mknod_iteration_times.csv", self.fs_name));
+        DataLogger::log(mknod_times_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None, &ResultMode::IterationTimes)?;
+        file_name.set_extension("svg");
+        plotter.point_series(Some(format!("Average time ({})", mknod_time_uint).as_str()), Some("Sample iteration"), None, &file_name)?;
+
+        let mut read_times_results = BenchResult::new(times_header.clone());
+        read_times_results.add_records(read_times)?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_read_iteration_times.csv", self.fs_name));
+        DataLogger::log(read_times_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None, &ResultMode::IterationTimes)?;
+        file_name.set_extension("svg");
+        plotter.point_series(Some(format!("Average time ({})", read_time_uint).as_str()), Some("Sample iteration"), None, &file_name)?;
+
+
+        let mut write_times_results = BenchResult::new(times_header.clone());
+        write_times_results.add_records(write_times)?;
+        let mut file_name = self.log_path.clone();
+        file_name.push(format!("{}_write_iteration_times.csv", self.fs_name));
+        DataLogger::log(write_times_results, &file_name)?;
+
+        let mut plotter = Plotter::new();
+        plotter.add_coordinates(&file_name, None, &ResultMode::IterationTimes)?;
+        file_name.set_extension("svg");
+        plotter.point_series(Some(format!("Average time ({})", write_time_uint).as_str()), Some("Sample iteration"), None, &file_name)?;
+
+
+
+        // behaviour plots and files
         let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
 
         let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
@@ -187,7 +241,7 @@ impl MicroBench {
         &self,
         run_time: Duration,
         style: ProgressStyle,
-    ) -> Result<(Record, Vec<Record>), Error> {
+    ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mkdir");
         Fs::cleanup(&root_path)?;
@@ -241,7 +295,7 @@ impl MicroBench {
         };
         progress.finish_with_message("mkdir finished")?;
 
-        let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
+        let (ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means) =
             self.print_micro(idx, run_time.as_secs_f64(), &times)?;
 
         let ops_per_second_record = Record {
@@ -257,14 +311,25 @@ impl MicroBench {
 
         let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
-        Ok((ops_per_second_record, behaviour_records))
+        let mut time_records = vec![];
+        for time in sample_means.iter() {
+            time_records.push(
+                Record {
+                    fields: [
+                        time_format_by_unit(*time, time_unit)?.to_string(),
+                    ].to_vec()
+                }
+            )
+        }
+
+        Ok((ops_per_second_record, behaviour_records, time_records, time_unit))
     }
 
     fn mknod(
         &self,
         run_time: Duration,
         style: ProgressStyle,
-    ) -> Result<(Record, Vec<Record>), Error> {
+    ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("mknod");
         Fs::cleanup(&root_path)?;
@@ -318,7 +383,7 @@ impl MicroBench {
         };
         progress.finish_with_message("mknod finished")?;
 
-        let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
+        let (ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means) =
             self.print_micro(idx, run_time.as_secs_f64(), &times)?;
 
         let ops_per_second_record = Record {
@@ -334,14 +399,25 @@ impl MicroBench {
 
         let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
-        Ok((ops_per_second_record, behaviour_records))
+        let mut time_records = vec![];
+        for time in sample_means.iter() {
+            time_records.push(
+                Record {
+                    fields: [
+                        time_format_by_unit(*time, time_unit)?.to_string(),
+                    ].to_vec()
+                }
+            )
+        }
+
+        Ok((ops_per_second_record, behaviour_records, time_records, time_unit))
     }
 
     fn read(
         &self,
         run_time: Duration,
         style: ProgressStyle,
-    ) -> Result<(Record, Vec<Record>), Error> {
+    ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("read");
         Fs::cleanup(&root_path)?;
@@ -411,7 +487,7 @@ impl MicroBench {
         };
         progress.finish_with_message("read finished")?;
 
-        let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
+        let (ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means) =
             self.print_micro(idx, run_time.as_secs_f64(), &times)?;
 
         let ops_per_second_record = Record {
@@ -427,14 +503,25 @@ impl MicroBench {
 
         let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
-        Ok((ops_per_second_record, behaviour_records))
+        let mut time_records = vec![];
+        for time in sample_means.iter() {
+            time_records.push(
+                Record {
+                    fields: [
+                        time_format_by_unit(*time, time_unit)?.to_string(),
+                    ].to_vec()
+                }
+            )
+        }
+
+        Ok((ops_per_second_record, behaviour_records, time_records, time_unit))
     }
 
     fn write(
         &self,
         run_time: Duration,
         style: ProgressStyle,
-    ) -> Result<(Record, Vec<Record>), Error> {
+    ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
         let mut root_path = self.mount_path.clone();
         root_path.push("write");
         Fs::cleanup(&root_path)?;
@@ -507,7 +594,7 @@ impl MicroBench {
         };
         progress.finish_with_message("write finished")?;
 
-        let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
+        let (ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means) =
             self.print_micro(idx, run_time.as_secs_f64(), &times)?;
 
         let ops_per_second_record = Record {
@@ -523,7 +610,18 @@ impl MicroBench {
 
         let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
-        Ok((ops_per_second_record, behaviour_records))
+        let mut time_records = vec![];
+        for time in sample_means.iter() {
+            time_records.push(
+                Record {
+                    fields: [
+                        time_format_by_unit(*time, time_unit)?.to_string(),
+                    ].to_vec()
+                }
+            )
+        }
+
+        Ok((ops_per_second_record, behaviour_records, time_records, time_unit))
     }
 
     fn read_throughput(
@@ -732,13 +830,13 @@ impl MicroBench {
         iterations: u64,
         run_time: f64,
         times: &Vec<f64>,
-    ) -> Result<(f64, f64, f64), Error> {
+    ) -> Result<(f64, f64, f64, &str, Vec<f64>), Error> {
         println!("{:18} {}", "iterations:", iterations);
         println!("{:18} {}", "run time:", time_format(run_time));
 
         let sample = Sample::new(times)?;
         let mean = sample.mean();
-        let (mean_lb, mean_ub) = sample.mean_confidence_interval(0.95, 1000)?;
+        let (mean_lb, mean_ub, sample_means) = sample.mean_confidence_interval(0.95, 1000)?;
         println!(
             "{:18} [{}, {}]",
             "op time (95% CI):",
@@ -758,7 +856,9 @@ impl MicroBench {
         let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
         println!("{:18} {}", "outliers:", percent_format(outliers_percentage));
 
+        let time_unit = time_unit(mean_ub);
+
         println!();
-        Ok((ops_per_second_lb, ops_per_second, ops_per_second_ub))
+        Ok((ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means))
     }
 }

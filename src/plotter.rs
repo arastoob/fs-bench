@@ -77,6 +77,7 @@ impl Plotter {
             ResultMode::Behaviour => Plotter::parse_timestamps(&file)?,
             ResultMode::Throughput => Plotter::parse_throughputs(&file)?,
             ResultMode::OpTimes => Plotter::parse_ops_timestamps(&file)?,
+            ResultMode::IterationTimes => Plotter::parse_iteration_timestamps(&file)?,
         };
 
         if !self.coordinates.is_empty() {
@@ -370,6 +371,69 @@ impl Plotter {
         Ok(())
     }
 
+    pub fn point_series<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
+        &self,
+        x_label: Option<&str>,
+        y_label: Option<&str>,
+        caption: Option<&str>,
+        file_name: &P,
+    ) -> Result<(), Error> {
+        let root_area = SVGBackend::new(file_name, (800, 500)).into_drawing_area();
+        root_area.fill(&WHITE)?;
+
+        let x_axis = self.coordinates[0]
+            .x_axis
+            .iter()
+            .map(|x| x.get_float())
+            .collect::<Result<Vec<f64>, Error>>()?;
+
+        let x_start = x_axis.iter()
+            .fold(f64::INFINITY, |a, b| a.min(*b));
+        let x_end = x_axis.iter()
+            .fold(f64::NEG_INFINITY, |a, b| a.max(*b));
+
+        let y_min = self.coordinates[0]
+            .y_axis
+            .iter()
+            .map(|y_axis| y_axis.y)
+            .fold(f64::INFINITY, |a, b| a.min(b));
+        let y_max = self.coordinates[0]
+            .y_axis
+            .iter()
+            .map(|y_axis| y_axis.y)
+            .fold(f64::NEG_INFINITY, |a, b| a.max(b));
+        let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
+        let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
+
+        let mut ctx = ChartBuilder::on(&root_area)
+            .set_label_area_size(LabelAreaPosition::Left, 100.0)
+            .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
+            .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+            .margin(5.0)
+            .build_cartesian_2d(x_start..x_end, y_start..y_end)?;
+
+        ctx.configure_mesh()
+            .axis_desc_style(("sans-serif", 20.0))
+            .x_desc(x_label.unwrap_or(""))
+            .y_desc(y_label.unwrap_or(""))
+            .draw()?;
+
+        // draw the points
+        ctx.draw_series(
+            x_axis
+                .iter()
+                .zip(self.coordinates[0].y_axis.iter())
+                .map(|(x, y_axis)| {
+                    Circle::new((*x, y_axis.y), 2, RED.filled())
+                }),
+        )?;
+
+        // to avoid the IO failure being ignored silently, we manually call the present function
+        root_area.present()?;
+
+        Ok(())
+    }
+
     fn parse_ops_per_second(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
         let mut reader = csv::Reader::from_reader(file);
         let mut x_axis = vec![];
@@ -558,6 +622,40 @@ impl Plotter {
                 .parse::<f64>()?;
             y_axis.push(YAxis {
                 y,
+                lb: None,
+                ub: None,
+            });
+        }
+
+        assert_eq!(x_axis.len(), y_axis.len());
+
+        Ok((x_axis, y_axis))
+    }
+
+    fn parse_iteration_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
+        let mut reader = csv::Reader::from_reader(file);
+        let mut x_axis = vec![];
+        let mut y_axis = vec![];
+
+        // find the times column
+        let time_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "time")
+            .ok_or(Error::CsvError("header 'time' not found".to_string()))?;
+
+        for (idx, record) in reader.records().enumerate() {
+            let record = record?;
+            x_axis.push(XAxis::from(
+                record
+                    .get(time_idx)
+                    .ok_or(Error::CsvError(
+                        "failed to read from the csv file".to_string(),
+                    ))?
+                    .parse::<f64>()?
+            ));
+            y_axis.push(YAxis {
+                y: (idx + 1) as f64,
                 lb: None,
                 ub: None,
             });
