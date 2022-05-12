@@ -309,10 +309,16 @@ impl Fs {
     // the time window length is in milliseconds
     // the input times contains the timestamps in unix_time format. The first 10 digits are
     // date and time in seconds and the last 9 digits show the milliseconds
-    pub fn ops_in_window(times: &Vec<SystemTime>) -> Result<Vec<Record>, Error> {
+    pub fn ops_in_window(
+        times: &Vec<SystemTime>,
+        duration: Duration,
+    ) -> Result<Vec<Record>, Error> {
         let len = times.len();
         let first = times[0]; // first timestamp
-        let last = times[len - 1]; // last timestamp
+        let mut last = times[len - 1]; // last timestamp
+        if last.duration_since(first)? > duration {
+            last = first.add(duration);
+        }
 
         // decide about the window length in millis
         let duration = last.duration_since(first)?.as_secs_f64();

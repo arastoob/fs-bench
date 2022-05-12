@@ -1,5 +1,5 @@
 use crate::data_logger::DataLogger;
-use crate::format::time_format;
+use crate::format::{percent_format, time_format};
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
@@ -10,11 +10,13 @@ use log::error;
 use rand::{thread_rng, Rng, RngCore};
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 pub struct MicroBench {
     io_size: usize,
+    run_time: f64,
     mount_path: PathBuf,
     fs_name: String,
     log_path: PathBuf,
@@ -23,6 +25,7 @@ pub struct MicroBench {
 impl MicroBench {
     pub fn new(
         io_size: String,
+        run_time: f64,
         mount_path: PathBuf,
         fs_name: String,
         log_path: PathBuf,
@@ -32,6 +35,7 @@ impl MicroBench {
 
         Ok(Self {
             io_size,
+            run_time,
             mount_path,
             fs_name,
             log_path,
@@ -39,9 +43,9 @@ impl MicroBench {
     }
 
     pub fn run(&self) -> Result<(), Error> {
-        let max_rt = Duration::from_secs(60 * 5); // maximum running time
-        let min_it = 20_000; // minimum iterations
-        self.behaviour_bench(max_rt, min_it)?;
+        let rt = Duration::from_secs(self.run_time as u64); // running time
+        self.behaviour_bench(rt)?;
+        let max_rt = Duration::from_secs(60 * 5);
         self.throughput_bench(max_rt)?;
 
         println!("results logged to: {}", Fs::path_to_str(&self.log_path)?);
@@ -49,13 +53,13 @@ impl MicroBench {
         Ok(())
     }
 
-    fn behaviour_bench(&self, max_rt: Duration, min_it: u64) -> Result<(), Error> {
+    fn behaviour_bench(&self, run_time: Duration) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
-        let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(max_rt, min_it, progress_style.clone())?;
-        let (mknod_ops_s, mknod_behaviour) = self.mknod(max_rt, min_it, progress_style.clone())?;
-        let (read_ops_s, read_behaviour) = self.read(max_rt, min_it, progress_style.clone())?;
-        let (write_ops_s, write_behaviour) = self.write(max_rt, min_it, progress_style)?;
+        let (mkdir_ops_s, mkdir_behaviour) = self.mkdir(run_time, progress_style.clone())?;
+        let (mknod_ops_s, mknod_behaviour) = self.mknod(run_time, progress_style.clone())?;
+        let (read_ops_s, read_behaviour) = self.read(run_time, progress_style.clone())?;
+        let (write_ops_s, write_behaviour) = self.write(run_time, progress_style)?;
 
         let ops_s_header = [
             "operation".to_string(),
@@ -82,6 +86,7 @@ impl MicroBench {
         plotter.bar_chart(Some("Operation"), Some("Ops/s"), None, &file_name)?;
 
         let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
+
         let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
         mkdir_behaviour_results.add_records(mkdir_behaviour)?;
         let mut file_name = self.log_path.clone();
@@ -180,8 +185,7 @@ impl MicroBench {
 
     fn mkdir(
         &self,
-        max_rt: Duration,
-        min_it: u64,
+        run_time: Duration,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
@@ -190,78 +194,60 @@ impl MicroBench {
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("{:5}", "mkdir"));
-        let progress = Progress::start(bar);
+        bar.set_message("mkdir");
+        let progress = Progress::start(bar.clone());
 
-        // creating the root directory to generate the test directories inside it
+        // creating the root directory to generate the benchmark directories inside it
         Fs::make_dir(&root_path)?;
 
-        let mut idx = 0;
-        let mut times = vec![];
-        let mut behaviour = vec![];
-
-        let timer = Timer::new(max_rt);
-        timer.start();
-        let mut interrupted = false;
-        let start = SystemTime::now();
-        loop {
-            let mut dir_name = root_path.clone();
-            dir_name.push(idx.to_string());
-            let begin = SystemTime::now();
-            match Fs::make_dir(&dir_name) {
-                Ok(()) => {
-                    let end = begin.elapsed()?.as_secs_f64();
-                    times.push(end);
-                    behaviour.push(SystemTime::now());
-                    idx = idx + 1;
+        let (sender, receiver) = channel();
+        let handle =
+            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
+                let mut times = vec![];
+                let mut behaviour = vec![];
+                let mut idx = 0;
+                loop {
+                    match receiver.try_recv() {
+                        Ok(true) => {
+                            return Ok((times, behaviour, idx));
+                        }
+                        _ => {
+                            let mut dir_name = root_path.clone();
+                            dir_name.push(idx.to_string());
+                            let begin = SystemTime::now();
+                            match Fs::make_dir(&dir_name) {
+                                Ok(()) => {
+                                    let end = begin.elapsed()?.as_secs_f64();
+                                    times.push(end);
+                                    behaviour.push(SystemTime::now());
+                                    idx = idx + 1;
+                                }
+                                Err(e) => {
+                                    error!("error: {:?}", e);
+                                }
+                            }
+                        }
+                    }
                 }
-                Err(e) => {
-                    error!("error: {:?}", e);
-                }
+            });
+
+        std::thread::sleep(run_time);
+        let (times, behaviour, idx) = match sender.send(true) {
+            Ok(_) => {
+                bar.set_message("waiting for collected data...");
+                handle.join().unwrap()?
             }
-
-            // check the stop criteria
-            if idx > min_it {
-                if self.stop(&times)? {
-                    break;
-                }
-            }
-
-            if timer.finished() {
-                interrupted = true;
-                break;
-            }
-        }
-
-        let end = start.elapsed()?.as_secs_f64();
-
-        if !interrupted {
-            progress.finish()?;
-        } else {
-            progress.abandon_with_message("mkdir exceeded the max runtime")?;
-        }
+            Err(e) => return Err(Error::SyncError(e.to_string())),
+        };
+        progress.finish_with_message("mkdir finished")?;
 
         let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
-            self.print_micro(idx - 1, end, &times)?;
-
-        // println!("iterations:        {}", idx - 1);
-        // println!("run time:          {} s", end);
-        //
-        // let sample = Sample::new(&times)?;
-        // let mean = sample.mean();
-        // let ci = sample.confidence_interval_error_margin(0.95)?;
-        // let ops_per_second = (1.0 / mean).floor();
-        // println!("ops/s:             {}", ops_per_second);
-        // println!("op time (95% CI):  [{} us, {} us]", micro_second(mean - ci), micro_second(mean + ci));
-        //
-        // let outliers = sample.outliers()?;
-        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        // println!("outliers:          {} %", outliers_percentage);
+            self.print_micro(idx, run_time.as_secs_f64(), &times)?;
 
         let ops_per_second_record = Record {
             fields: [
                 "mkdir".to_string(),
-                end.to_string(),
+                run_time.as_secs_f64().to_string(),
                 ops_per_second.to_string(),
                 ops_per_second_lb.to_string(),
                 ops_per_second_ub.to_string(),
@@ -269,16 +255,14 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour)?;
+        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
-        // println!();
         Ok((ops_per_second_record, behaviour_records))
     }
 
     fn mknod(
         &self,
-        max_rt: Duration,
-        min_it: u64,
+        run_time: Duration,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
@@ -287,79 +271,60 @@ impl MicroBench {
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("{:5}", "mknod"));
-        let progress = Progress::start(bar);
+        bar.set_message("mknod");
+        let progress = Progress::start(bar.clone());
 
-        // creating the root directory to generate the test directories inside it
+        // creating the root directory to generate the benchmark files inside it
         Fs::make_dir(&root_path)?;
 
-        let mut idx = 0;
-        let mut times = vec![];
-        let mut behaviour = vec![];
-
-        let timer = Timer::new(max_rt);
-        timer.start();
-        let mut interrupted = false;
-
-        let start = SystemTime::now();
-        loop {
-            let mut file_name = root_path.clone();
-            file_name.push(idx.to_string());
-            let begin = SystemTime::now();
-            match Fs::make_file(&file_name) {
-                Ok(_) => {
-                    let end = begin.elapsed()?.as_secs_f64();
-                    times.push(end);
-                    behaviour.push(SystemTime::now());
-                    idx = idx + 1;
+        let (sender, receiver) = channel();
+        let handle =
+            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
+                let mut times = vec![];
+                let mut behaviour = vec![];
+                let mut idx = 0;
+                loop {
+                    match receiver.try_recv() {
+                        Ok(true) => {
+                            return Ok((times, behaviour, idx));
+                        }
+                        _ => {
+                            let mut file_name = root_path.clone();
+                            file_name.push(idx.to_string());
+                            let begin = SystemTime::now();
+                            match Fs::make_file(&file_name) {
+                                Ok(_) => {
+                                    let end = begin.elapsed()?.as_secs_f64();
+                                    times.push(end);
+                                    behaviour.push(SystemTime::now());
+                                    idx = idx + 1;
+                                }
+                                Err(e) => {
+                                    error!("error: {:?}", e);
+                                }
+                            }
+                        }
+                    }
                 }
-                Err(e) => {
-                    error!("error: {:?}", e);
-                }
+            });
+
+        std::thread::sleep(run_time);
+        let (times, behaviour, idx) = match sender.send(true) {
+            Ok(_) => {
+                bar.set_message("waiting for collected data...");
+                handle.join().unwrap()?
             }
-
-            // check the stop criteria
-            if idx > min_it {
-                if self.stop(&times)? {
-                    break;
-                }
-            }
-
-            if timer.finished() {
-                interrupted = true;
-                break;
-            }
-        }
-
-        let end = start.elapsed()?.as_secs_f64();
-
-        if !interrupted {
-            progress.finish()?;
-        } else {
-            progress.abandon_with_message("mknod exceeded the max runtime")?;
-        }
+            Err(e) => return Err(Error::SyncError(e.to_string())),
+        };
+        progress.finish_with_message("mknod finished")?;
 
         let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
-            self.print_micro(idx - 1, end, &times)?;
-
-        // println!("iterations:    {}", idx - 1);
-        // println!("run time:      {} s", end);
-        //
-        // let sample = Sample::new(&times)?;
-        // let mean = sample.mean();
-        // let ops_per_second = (1.0 / mean).floor();
-        // println!("mean:          {}", mean);
-        // println!("ops/s:         {}", ops_per_second);
-        // println!("op time:       {} s", mean as f64 / 1.0);
-        //
-        // let outliers = sample.outliers()?;
-        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        // println!("outliers:      {} %", outliers_percentage);
+            self.print_micro(idx, run_time.as_secs_f64(), &times)?;
 
         let ops_per_second_record = Record {
             fields: [
                 "mknod".to_string(),
-                end.to_string(),
+                run_time.as_secs_f64().to_string(),
                 ops_per_second.to_string(),
                 ops_per_second_lb.to_string(),
                 ops_per_second_ub.to_string(),
@@ -367,16 +332,14 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour)?;
+        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
-        // println!();
         Ok((ops_per_second_record, behaviour_records))
     }
 
     fn read(
         &self,
-        max_rt: Duration,
-        min_it: u64,
+        run_time: Duration,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
@@ -385,10 +348,10 @@ impl MicroBench {
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("{:5}", "read"));
-        let progress = Progress::start(bar);
+        bar.set_message("read");
+        let progress = Progress::start(bar.clone());
 
-        // creating the root directory to generate the test files inside it
+        // creating the root directory to generate the benchmark files inside it
         Fs::make_dir(&root_path)?;
 
         let size = self.io_size;
@@ -397,7 +360,7 @@ impl MicroBench {
             file_name.push(file.to_string());
             let mut file = Fs::make_file(&file_name)?;
 
-            // generate a buffer of size write_size filled with random integer values
+            // generate a buffer of size io size filled with random data
             let mut rand_buffer = vec![0u8; size];
             let mut rng = rand::thread_rng();
             rng.fill_bytes(&mut rand_buffer);
@@ -405,75 +368,56 @@ impl MicroBench {
             file.write(&rand_buffer)?;
         }
 
-        let mut idx = 0;
-        let mut times = vec![];
-        let mut behaviour = vec![];
-        let mut read_buffer = vec![0u8; size];
-
-        let timer = Timer::new(max_rt);
-        timer.start();
-        let mut interrupted = false;
-
-        let start = SystemTime::now();
-        loop {
-            let file = thread_rng().gen_range(1..1001);
-            let mut file_name = root_path.clone();
-            file_name.push(file.to_string());
-            let begin = SystemTime::now();
-            match Fs::open_read(&file_name, &mut read_buffer) {
-                Ok(_) => {
-                    let end = begin.elapsed()?.as_secs_f64();
-                    times.push(end);
-                    behaviour.push(SystemTime::now());
-                    idx += 1;
+        let (sender, receiver) = channel();
+        let handle =
+            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
+                let mut times = vec![];
+                let mut behaviour = vec![];
+                let mut idx = 0;
+                let mut read_buffer = vec![0u8; size];
+                loop {
+                    match receiver.try_recv() {
+                        Ok(true) => {
+                            return Ok((times, behaviour, idx));
+                        }
+                        _ => {
+                            let file = thread_rng().gen_range(1..1001);
+                            let mut file_name = root_path.clone();
+                            file_name.push(file.to_string());
+                            let begin = SystemTime::now();
+                            match Fs::open_read(&file_name, &mut read_buffer) {
+                                Ok(_) => {
+                                    let end = begin.elapsed()?.as_secs_f64();
+                                    times.push(end);
+                                    behaviour.push(SystemTime::now());
+                                    idx += 1;
+                                }
+                                Err(e) => {
+                                    println!("error: {:?}", e);
+                                }
+                            }
+                        }
+                    }
                 }
-                Err(e) => {
-                    println!("error: {:?}", e);
-                }
+            });
+
+        std::thread::sleep(run_time);
+        let (times, behaviour, idx) = match sender.send(true) {
+            Ok(_) => {
+                bar.set_message("waiting for collected data...");
+                handle.join().unwrap()?
             }
-
-            // check the stop criteria
-            if idx > min_it {
-                if self.stop(&times)? {
-                    break;
-                }
-            }
-
-            if timer.finished() {
-                interrupted = true;
-                break;
-            }
-        }
-
-        let end = start.elapsed()?.as_secs_f64();
-
-        if !interrupted {
-            progress.finish()?;
-        } else {
-            progress.abandon_with_message("read exceeded the max runtime")?;
-        }
+            Err(e) => return Err(Error::SyncError(e.to_string())),
+        };
+        progress.finish_with_message("read finished")?;
 
         let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
-            self.print_micro(idx - 1, end, &times)?;
-
-        // println!("iterations:    {}", idx - 1);
-        // println!("run time:      {} s", end);
-        //
-        // let sample = Sample::new(&times)?;
-        // let mean = sample.mean();
-        // let ops_per_second = (1.0 / mean).floor();
-        // println!("mean:          {}", mean);
-        // println!("ops/s:         {}", ops_per_second);
-        // println!("op time:       {} s", mean as f64 / 1.0);
-        //
-        // let outliers = sample.outliers()?;
-        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        // println!("outliers:      {} %", outliers_percentage);
+            self.print_micro(idx, run_time.as_secs_f64(), &times)?;
 
         let ops_per_second_record = Record {
             fields: [
                 "read".to_string(),
-                end.to_string(),
+                run_time.as_secs_f64().to_string(),
                 ops_per_second.to_string(),
                 ops_per_second_lb.to_string(),
                 ops_per_second_ub.to_string(),
@@ -481,16 +425,14 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour)?;
+        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
-        // println!();
         Ok((ops_per_second_record, behaviour_records))
     }
 
     fn write(
         &self,
-        max_rt: Duration,
-        min_it: u64,
+        run_time: Duration,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>), Error> {
         let mut root_path = self.mount_path.clone();
@@ -499,10 +441,10 @@ impl MicroBench {
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("{:5}", "write"));
-        let progress = Progress::start(bar);
+        bar.set_message("write");
+        let progress = Progress::start(bar.clone());
 
-        // creating the root directory to generate the test directories inside it
+        // creating the root directory to generate the benchmark files inside it
         Fs::make_dir(&root_path)?;
 
         for file in 1..1001 {
@@ -517,78 +459,61 @@ impl MicroBench {
         let mut rng = rand::thread_rng();
         rng.fill_bytes(&mut rand_content);
 
-        let mut idx = 0;
-        let mut times = vec![];
-        let mut behaviour = vec![];
+        let (sender, receiver) = channel();
+        let handle =
+            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
+                let mut times = vec![];
+                let mut behaviour = vec![];
+                let mut idx = 0;
+                loop {
+                    match receiver.try_recv() {
+                        Ok(true) => {
+                            return Ok((times, behaviour, idx));
+                        }
+                        _ => {
+                            let rand_content_index =
+                                thread_rng().gen_range(0..(8192 * size) - size - 1);
+                            let mut content = rand_content
+                                [rand_content_index..(rand_content_index + size)]
+                                .to_vec();
 
-        let timer = Timer::new(max_rt);
-        timer.start();
-        let mut interrupted = false;
-
-        let start = SystemTime::now();
-        loop {
-            let rand_content_index = thread_rng().gen_range(0..(8192 * size) - size - 1);
-            let mut content =
-                rand_content[rand_content_index..(rand_content_index + size)].to_vec();
-
-            let file = thread_rng().gen_range(1..1001);
-            let mut file_name = root_path.clone();
-            file_name.push(file.to_string());
-            let begin = SystemTime::now();
-            match Fs::open_write(&file_name, &mut content) {
-                Ok(_) => {
-                    let end = begin.elapsed()?.as_secs_f64();
-                    times.push(end);
-                    behaviour.push(SystemTime::now());
-                    idx += 1;
+                            let file = thread_rng().gen_range(1..1001);
+                            let mut file_name = root_path.clone();
+                            file_name.push(file.to_string());
+                            let begin = SystemTime::now();
+                            match Fs::open_write(&file_name, &mut content) {
+                                Ok(_) => {
+                                    let end = begin.elapsed()?.as_secs_f64();
+                                    times.push(end);
+                                    behaviour.push(SystemTime::now());
+                                    idx += 1;
+                                }
+                                Err(e) => {
+                                    println!("error: {:?}", e);
+                                }
+                            }
+                        }
+                    }
                 }
-                Err(e) => {
-                    println!("error: {:?}", e);
-                }
+            });
+
+        std::thread::sleep(run_time);
+        let (times, behaviour, idx) = match sender.send(true) {
+            Ok(_) => {
+                bar.set_message("waiting for collected data...");
+                handle.join().unwrap()?
             }
-
-            // check the stop criteria
-            if idx > min_it {
-                if self.stop(&times)? {
-                    break;
-                }
-            }
-
-            if timer.finished() {
-                interrupted = true;
-                break;
-            }
-        }
-
-        let end = start.elapsed()?.as_secs_f64();
-
-        if !interrupted {
-            progress.finish()?;
-        } else {
-            progress.abandon_with_message("write exceeded the max runtime")?;
-        }
+            Err(e) => return Err(Error::SyncError(e.to_string())),
+        };
+        progress.finish_with_message("write finished")?;
 
         let (ops_per_second_lb, ops_per_second, ops_per_second_ub) =
-            self.print_micro(idx - 1, end, &times)?;
-
-        // println!("iterations:    {}", idx - 1);
-        // println!("run time:      {} s", end);
-        //
-        // let sample = Sample::new(&times)?;
-        // let mean = sample.mean();
-        // let ops_per_second = (1.0 / mean).floor();
-        // println!("mean:          {}", mean);
-        // println!("ops/s:         {}", ops_per_second);
-        // println!("op time:       {} s", mean as f64 / 1.0);
-        //
-        // let outliers = sample.outliers()?;
-        // let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        // println!("outliers:      {} %", outliers_percentage);
+            self.print_micro(idx, run_time.as_secs_f64(), &times)?;
 
         let ops_per_second_record = Record {
             fields: [
                 "write".to_string(),
-                end.to_string(),
+                run_time.as_secs_f64().to_string(),
                 ops_per_second.to_string(),
                 ops_per_second_lb.to_string(),
                 ops_per_second_ub.to_string(),
@@ -596,9 +521,8 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour)?;
+        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
-        // println!();
         Ok((ops_per_second_record, behaviour_records))
     }
 
@@ -803,20 +727,6 @@ impl MicroBench {
         Ok(throughput_records)
     }
 
-    // if the half-width of the confidence interval (or the error margin) is within 5% of
-    // the mean, we can stop the test
-    fn stop(&self, times: &Vec<f64>) -> Result<bool, Error> {
-        // check the stop criteria
-        let sample = Sample::new(&times)?;
-        let mean = sample.mean();
-        let error_margin = sample.confidence_interval_error_margin(0.95)?;
-        if (error_margin / mean) < 0.05 {
-            Ok(true)
-        } else {
-            Ok(false)
-        }
-    }
-
     fn print_micro(
         &self,
         iterations: u64,
@@ -828,17 +738,17 @@ impl MicroBench {
 
         let sample = Sample::new(times)?;
         let mean = sample.mean();
-        let ci = sample.confidence_interval_error_margin(0.95)?;
+        let (mean_lb, mean_ub) = sample.mean_confidence_interval(0.95, 1000)?;
         println!(
             "{:18} [{}, {}]",
             "op time (95% CI):",
-            time_format(mean - ci),
-            time_format(mean + ci)
+            time_format(mean_lb),
+            time_format(mean_ub),
         );
 
         let ops_per_second = (1f64 / mean).floor();
-        let ops_per_second_lb = (1f64 / (mean + ci)).floor();
-        let ops_per_second_ub = (1f64 / (mean - ci)).floor();
+        let ops_per_second_lb = (1f64 / (mean_ub)).floor();
+        let ops_per_second_ub = (1f64 / (mean_lb)).floor();
         println!(
             "{:18} [{}, {}]",
             "ops/s (95% CI):", ops_per_second_lb, ops_per_second_ub
@@ -846,7 +756,7 @@ impl MicroBench {
 
         let outliers = sample.outliers()?;
         let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        println!("{:18} {} %", "outliers:", outliers_percentage);
+        println!("{:18} {}", "outliers:", percent_format(outliers_percentage));
 
         println!();
         Ok((ops_per_second_lb, ops_per_second, ops_per_second_ub))

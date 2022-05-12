@@ -17,6 +17,10 @@ struct Args {
     #[clap(short, long, default_value = "4KiB")]
     size: String,
 
+    /// The running time with default value of 60
+    #[clap(short, long, default_value = "60")]
+    time: f64,
+
     /// The path to the mounted filesystem being benchmarked
     #[clap(short, long)]
     mount: PathBuf,
@@ -39,7 +43,13 @@ fn main() -> Result<(), Error> {
 
     match args.bench_mode {
         BenchMode::Micro => {
-            let micro_bench = MicroBench::new(args.size, args.mount, args.fs_name, args.log_path)?;
+            let micro_bench = MicroBench::new(
+                args.size,
+                args.time,
+                args.mount,
+                args.fs_name,
+                args.log_path,
+            )?;
             micro_bench.run()?;
         }
         BenchMode::Strace => {

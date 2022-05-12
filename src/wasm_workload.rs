@@ -147,7 +147,7 @@ impl WasmWorkloadRunner {
         let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
         println!("outliers:      {} %", outliers_percentage);
 
-        let behaviour_records = Fs::ops_in_window(&behaviour)?;
+        let behaviour_records = Fs::ops_in_window(&behaviour, Duration::from_secs(1000))?;
 
         // generate the behaviour plots
         let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();

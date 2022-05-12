@@ -1,4 +1,7 @@
 use crate::Error;
+use rand::Rng;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use std::sync::{Arc, Mutex};
 
 /// A collection of data points with some statistical functions on the data
 pub struct Sample {
@@ -11,7 +14,7 @@ pub struct Quartiles {
 }
 
 impl Sample {
-    pub fn new<T>(sample: &Vec<T>) -> Result<Self, Error>
+    pub fn new<T>(sample: &[T]) -> Result<Self, Error>
     where
         T: Clone + std::convert::Into<f64>,
     {
@@ -155,6 +158,66 @@ impl Sample {
             let t_val = self.t_value(confidence_level)?;
             Ok(t_val * (sd / sqrt_n))
         }
+    }
+
+    /// Calculate the confidence interval of mean for the sample data using bootstrap sampling.
+    /// This method returns a range for sample points' mean. For a confidence level, say 95%,
+    /// the true mean of the main population is in this range.
+    pub fn mean_confidence_interval(
+        &self,
+        confidence_level: f64,
+        iterations: usize,
+    ) -> Result<(f64, f64), Error> {
+        if confidence_level < 0f64 || confidence_level > 1f64 {
+            return Err(Error::InvalidConfig(
+                "The confidence level should be in range (0, 1)".to_string(),
+            ));
+        }
+
+        let mut means = self.bootstrap(iterations)?;
+        means.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let confidence_level = confidence_level * 100f64;
+        let first_percentile = (100f64 - confidence_level) / 2f64;
+        let last_percentile = confidence_level + first_percentile;
+
+        let lb_idx = ((first_percentile * means.len() as f64) / 100f64).ceil() as usize;
+        let ub_idx = ((last_percentile * means.len() as f64) / 100f64).floor() as usize;
+
+        Ok((means[lb_idx], means[ub_idx]))
+    }
+
+    /// Bootstrap Sampling
+    /// Bootstrap Sampling is a method that involves drawing of sample data repeatedly with
+    /// replacement, from the sample points to estimate a population parameter (https://www.analyticsvidhya.com/blog/2020/02/what-is-bootstrap-sampling-in-statistics-and-machine-learning/)
+    ///
+    /// This method returns a vector containing the means of each resample
+    fn bootstrap(&self, iterations: usize) -> Result<Vec<f64>, Error> {
+        let len = self.sample.len();
+
+        // The output of this method is a vector of size at least 30 so that we can use the z-scores
+        // for calculating confidence interval, otherwise we have to use t-values.
+        if len < 30 {
+            return Err(Error::InvalidConfig(
+                "The sample size is less than 20".to_string(),
+            ));
+        }
+
+        let resample_means = Arc::new(Mutex::new(vec![]));
+        (0..iterations).into_par_iter().for_each(|_| {
+            let mut resample = vec![];
+            while resample.len() < len {
+                // get random samples repeatedly with replacement
+                let idx = rand::thread_rng().gen_range(0..len);
+                resample.push(self.sample[idx]);
+            }
+
+            let resample = Sample::new(&resample).unwrap();
+            resample_means.lock().unwrap().push(resample.mean());
+        });
+
+        let resample_means = resample_means.lock().unwrap().clone();
+        Ok(resample_means)
     }
 
     fn z_value(&self, confidence_level: f64) -> Result<f64, Error> {
