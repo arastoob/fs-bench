@@ -53,7 +53,6 @@ pub enum ResultMode {
     Throughput,
     Behaviour,
     OpTimes,
-    IterationTimes,
 }
 
 impl FromStr for ResultMode {
@@ -65,7 +64,6 @@ impl FromStr for ResultMode {
             "throughput" => Ok(ResultMode::Throughput),
             "behaviour" => Ok(ResultMode::Behaviour),
             "op_times" => Ok(ResultMode::OpTimes),
-            "iteration_times" => Ok(ResultMode::IterationTimes),
             _ => Err("valid result modes are: ops_per_second, throughput, behaviour".to_string()),
         }
     }
@@ -78,7 +76,6 @@ impl Display for ResultMode {
             ResultMode::Behaviour => write!(f, "behaviour"),
             ResultMode::Throughput => write!(f, "throughput"),
             ResultMode::OpTimes => write!(f, "op_times"),
-            ResultMode::IterationTimes => write!(f, "iteration_times"),
         }
     }
 }

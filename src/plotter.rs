@@ -77,7 +77,6 @@ impl Plotter {
             ResultMode::Behaviour => Plotter::parse_timestamps(&file)?,
             ResultMode::Throughput => Plotter::parse_throughputs(&file)?,
             ResultMode::OpTimes => Plotter::parse_ops_timestamps(&file)?,
-            ResultMode::IterationTimes => Plotter::parse_iteration_timestamps(&file)?,
         };
 
         if !self.coordinates.is_empty() {
@@ -622,40 +621,6 @@ impl Plotter {
                 .parse::<f64>()?;
             y_axis.push(YAxis {
                 y,
-                lb: None,
-                ub: None,
-            });
-        }
-
-        assert_eq!(x_axis.len(), y_axis.len());
-
-        Ok((x_axis, y_axis))
-    }
-
-    fn parse_iteration_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
-        let mut reader = csv::Reader::from_reader(file);
-        let mut x_axis = vec![];
-        let mut y_axis = vec![];
-
-        // find the times column
-        let time_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header == "time")
-            .ok_or(Error::CsvError("header 'time' not found".to_string()))?;
-
-        for (idx, record) in reader.records().enumerate() {
-            let record = record?;
-            x_axis.push(XAxis::from(
-                record
-                    .get(time_idx)
-                    .ok_or(Error::CsvError(
-                        "failed to read from the csv file".to_string(),
-                    ))?
-                    .parse::<f64>()?
-            ));
-            y_axis.push(YAxis {
-                y: (idx + 1) as f64,
                 lb: None,
                 ub: None,
             });
