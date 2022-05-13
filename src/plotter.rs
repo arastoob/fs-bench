@@ -386,10 +386,8 @@ impl Plotter {
             .map(|x| x.get_float())
             .collect::<Result<Vec<f64>, Error>>()?;
 
-        let x_start = x_axis.iter()
-            .fold(f64::INFINITY, |a, b| a.min(*b));
-        let x_end = x_axis.iter()
-            .fold(f64::NEG_INFINITY, |a, b| a.max(*b));
+        let x_start = x_axis.iter().fold(f64::INFINITY, |a, b| a.min(*b));
+        let x_end = x_axis.iter().fold(f64::NEG_INFINITY, |a, b| a.max(*b));
 
         let y_min = self.coordinates[0]
             .y_axis
@@ -422,9 +420,7 @@ impl Plotter {
             x_axis
                 .iter()
                 .zip(self.coordinates[0].y_axis.iter())
-                .map(|(x, y_axis)| {
-                    Circle::new((*x, y_axis.y), 2, RED.filled())
-                }),
+                .map(|(x, y_axis)| Circle::new((*x, y_axis.y), 2, RED.filled())),
         )?;
 
         // to avoid the IO failure being ignored silently, we manually call the present function

@@ -1,6 +1,6 @@
 use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
 use crate::plotter::Plotter;
-use crate::sample::Sample;
+use crate::sample::{AnalysedData, Sample};
 use crate::timer::Timer;
 use crate::{BenchResult, Error, Fs, Progress, Record, ResultMode};
 use byte_unit::Byte;
@@ -55,10 +55,14 @@ impl MicroBench {
     fn behaviour_bench(&self, run_time: Duration) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
-        let (mkdir_ops_s, mkdir_behaviour, mkdir_times, mkdir_time_uint) = self.mkdir(run_time, progress_style.clone())?;
-        let (mknod_ops_s, mknod_behaviour, mknod_times, mknod_time_uint) = self.mknod(run_time, progress_style.clone())?;
-        let (read_ops_s, read_behaviour, read_times, read_time_uint) = self.read(run_time, progress_style.clone())?;
-        let (write_ops_s, write_behaviour, write_times, write_time_uint) = self.write(run_time, progress_style)?;
+        let (mkdir_ops_s, mkdir_behaviour, mkdir_times, mkdir_time_uint) =
+            self.mkdir(run_time, progress_style.clone())?;
+        let (mknod_ops_s, mknod_behaviour, mknod_times, mknod_time_uint) =
+            self.mknod(run_time, progress_style.clone())?;
+        let (read_ops_s, read_behaviour, read_times, read_time_uint) =
+            self.read(run_time, progress_style.clone())?;
+        let (write_ops_s, write_behaviour, write_times, write_time_uint) =
+            self.write(run_time, progress_style)?;
         //
         let ops_s_header = [
             "operation".to_string(),
@@ -85,8 +89,6 @@ impl MicroBench {
         file_name.set_extension("svg");
         plotter.bar_chart(Some("Operation"), Some("Ops/s"), None, &file_name)?;
 
-
-
         // sample iteration average times logs and plots
         let times_header = ["op".to_string(), format!("time ({})", mkdir_time_uint)].to_vec();
         let mut mkdir_times_results = BenchResult::new(times_header);
@@ -98,8 +100,12 @@ impl MicroBench {
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
         file_name.set_extension("svg");
-        plotter.point_series(Some("Sample iteration"), Some(format!("Average time ({})", mkdir_time_uint).as_str()), None, &file_name)?;
-
+        plotter.point_series(
+            Some("Sample iteration"),
+            Some(format!("Average time ({})", mkdir_time_uint).as_str()),
+            None,
+            &file_name,
+        )?;
 
         let times_header = ["op".to_string(), format!("time ({})", mknod_time_uint)].to_vec();
         let mut mknod_times_results = BenchResult::new(times_header);
@@ -111,8 +117,12 @@ impl MicroBench {
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
         file_name.set_extension("svg");
-        plotter.point_series(Some("Sample iteration"), Some(format!("Average time ({})", mknod_time_uint).as_str()), None, &file_name)?;
-
+        plotter.point_series(
+            Some("Sample iteration"),
+            Some(format!("Average time ({})", mknod_time_uint).as_str()),
+            None,
+            &file_name,
+        )?;
 
         let times_header = ["op".to_string(), format!("time ({})", read_time_uint)].to_vec();
         let mut read_times_results = BenchResult::new(times_header);
@@ -124,8 +134,12 @@ impl MicroBench {
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
         file_name.set_extension("svg");
-        plotter.point_series(Some("Sample iteration"), Some(format!("Average time ({})", read_time_uint).as_str()),  None, &file_name)?;
-
+        plotter.point_series(
+            Some("Sample iteration"),
+            Some(format!("Average time ({})", read_time_uint).as_str()),
+            None,
+            &file_name,
+        )?;
 
         let times_header = ["op".to_string(), format!("time ({})", write_time_uint)].to_vec();
         let mut write_times_results = BenchResult::new(times_header);
@@ -137,9 +151,12 @@ impl MicroBench {
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
         file_name.set_extension("svg");
-        plotter.point_series(Some("Sample iteration"), Some(format!("Average time ({})", write_time_uint).as_str()),  None, &file_name)?;
-
-
+        plotter.point_series(
+            Some("Sample iteration"),
+            Some(format!("Average time ({})", write_time_uint).as_str()),
+            None,
+            &file_name,
+        )?;
 
         // behaviour plots and files
         let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
@@ -294,37 +311,44 @@ impl MicroBench {
             }
             Err(e) => return Err(Error::SyncError(e.to_string())),
         };
-        progress.finish_with_message("mkdir finished")?;
 
-        let (ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means) =
-            self.print_micro(idx, run_time.as_secs_f64(), &times)?;
+        bar.set_message("analysing data...");
+        let analysed_data = Sample::new(&times)?.analyse()?;
+
+        progress.finish_with_message("mkdir finished")?;
+        self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = Record {
             fields: [
                 "mkdir".to_string(),
                 run_time.as_secs_f64().to_string(),
-                ops_per_second.to_string(),
-                ops_per_second_lb.to_string(),
-                ops_per_second_ub.to_string(),
+                analysed_data.ops_per_second.to_string(),
+                analysed_data.ops_per_second_lb.to_string(),
+                analysed_data.ops_per_second_ub.to_string(),
             ]
             .to_vec(),
         };
 
         let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
+        let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
-        for (idx, time) in sample_means.iter().enumerate() {
-            time_records.push(
-                Record {
-                    fields: [
-                        idx.to_string(),
-                        time_format_by_unit(*time, time_unit)?.to_string(),
-                    ].to_vec()
-                }
-            )
+        for (idx, time) in analysed_data.sample_means.iter().enumerate() {
+            time_records.push(Record {
+                fields: [
+                    idx.to_string(),
+                    time_format_by_unit(*time, time_unit)?.to_string(),
+                ]
+                .to_vec(),
+            })
         }
 
-        Ok((ops_per_second_record, behaviour_records, time_records, time_unit))
+        Ok((
+            ops_per_second_record,
+            behaviour_records,
+            time_records,
+            time_unit,
+        ))
     }
 
     fn mknod(
@@ -383,37 +407,44 @@ impl MicroBench {
             }
             Err(e) => return Err(Error::SyncError(e.to_string())),
         };
-        progress.finish_with_message("mknod finished")?;
 
-        let (ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means) =
-            self.print_micro(idx, run_time.as_secs_f64(), &times)?;
+        bar.set_message("analysing data...");
+        let analysed_data = Sample::new(&times)?.analyse()?;
+
+        progress.finish_with_message("mknod finished")?;
+        self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = Record {
             fields: [
                 "mknod".to_string(),
                 run_time.as_secs_f64().to_string(),
-                ops_per_second.to_string(),
-                ops_per_second_lb.to_string(),
-                ops_per_second_ub.to_string(),
+                analysed_data.ops_per_second.to_string(),
+                analysed_data.ops_per_second_lb.to_string(),
+                analysed_data.ops_per_second_ub.to_string(),
             ]
             .to_vec(),
         };
 
         let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
+        let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
-        for (idx, time) in sample_means.iter().enumerate() {
-            time_records.push(
-                Record {
-                    fields: [
-                        idx.to_string(),
-                        time_format_by_unit(*time, time_unit)?.to_string(),
-                    ].to_vec()
-                }
-            )
+        for (idx, time) in analysed_data.sample_means.iter().enumerate() {
+            time_records.push(Record {
+                fields: [
+                    idx.to_string(),
+                    time_format_by_unit(*time, time_unit)?.to_string(),
+                ]
+                .to_vec(),
+            })
         }
 
-        Ok((ops_per_second_record, behaviour_records, time_records, time_unit))
+        Ok((
+            ops_per_second_record,
+            behaviour_records,
+            time_records,
+            time_unit,
+        ))
     }
 
     fn read(
@@ -488,37 +519,44 @@ impl MicroBench {
             }
             Err(e) => return Err(Error::SyncError(e.to_string())),
         };
-        progress.finish_with_message("read finished")?;
 
-        let (ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means) =
-            self.print_micro(idx, run_time.as_secs_f64(), &times)?;
+        bar.set_message("analysing data...");
+        let analysed_data = Sample::new(&times)?.analyse()?;
+
+        progress.finish_with_message("read finished")?;
+        self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = Record {
             fields: [
                 "read".to_string(),
                 run_time.as_secs_f64().to_string(),
-                ops_per_second.to_string(),
-                ops_per_second_lb.to_string(),
-                ops_per_second_ub.to_string(),
+                analysed_data.ops_per_second.to_string(),
+                analysed_data.ops_per_second_lb.to_string(),
+                analysed_data.ops_per_second_ub.to_string(),
             ]
             .to_vec(),
         };
 
         let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
+        let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
-        for (idx, time) in sample_means.iter().enumerate() {
-            time_records.push(
-                Record {
-                    fields: [
-                        idx.to_string(),
-                        time_format_by_unit(*time, time_unit)?.to_string(),
-                    ].to_vec()
-                }
-            )
+        for (idx, time) in analysed_data.sample_means.iter().enumerate() {
+            time_records.push(Record {
+                fields: [
+                    idx.to_string(),
+                    time_format_by_unit(*time, time_unit)?.to_string(),
+                ]
+                .to_vec(),
+            })
         }
 
-        Ok((ops_per_second_record, behaviour_records, time_records, time_unit))
+        Ok((
+            ops_per_second_record,
+            behaviour_records,
+            time_records,
+            time_unit,
+        ))
     }
 
     fn write(
@@ -596,37 +634,44 @@ impl MicroBench {
             }
             Err(e) => return Err(Error::SyncError(e.to_string())),
         };
-        progress.finish_with_message("write finished")?;
 
-        let (ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means) =
-            self.print_micro(idx, run_time.as_secs_f64(), &times)?;
+        bar.set_message("analysing data...");
+        let analysed_data = Sample::new(&times)?.analyse()?;
+
+        progress.finish_with_message("write finished")?;
+        self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = Record {
             fields: [
                 "write".to_string(),
                 run_time.as_secs_f64().to_string(),
-                ops_per_second.to_string(),
-                ops_per_second_lb.to_string(),
-                ops_per_second_ub.to_string(),
+                analysed_data.ops_per_second.to_string(),
+                analysed_data.ops_per_second_lb.to_string(),
+                analysed_data.ops_per_second_ub.to_string(),
             ]
             .to_vec(),
         };
 
         let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
 
+        let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
-        for (idx, time) in sample_means.iter().enumerate() {
-            time_records.push(
-                Record {
-                    fields: [
-                        idx.to_string(),
-                        time_format_by_unit(*time, time_unit)?.to_string(),
-                    ].to_vec()
-                }
-            )
+        for (idx, time) in analysed_data.sample_means.iter().enumerate() {
+            time_records.push(Record {
+                fields: [
+                    idx.to_string(),
+                    time_format_by_unit(*time, time_unit)?.to_string(),
+                ]
+                .to_vec(),
+            })
         }
 
-        Ok((ops_per_second_record, behaviour_records, time_records, time_unit))
+        Ok((
+            ops_per_second_record,
+            behaviour_records,
+            time_records,
+            time_unit,
+        ))
     }
 
     fn read_throughput(
@@ -830,40 +875,24 @@ impl MicroBench {
         Ok(throughput_records)
     }
 
-    fn print_micro(
-        &self,
-        iterations: u64,
-        run_time: f64,
-        times: &Vec<f64>,
-    ) -> Result<(f64, f64, f64, &str, Vec<f64>), Error> {
+    fn print_micro(&self, iterations: u64, run_time: f64, analysed_data: &AnalysedData) {
         println!("{:18} {}", "iterations:", iterations);
         println!("{:18} {}", "run time:", time_format(run_time));
-
-        let sample = Sample::new(times)?;
-        let mean = sample.mean();
-        let (mean_lb, mean_ub, sample_means) = sample.mean_confidence_interval(0.95, 1000)?;
         println!(
             "{:18} [{}, {}]",
             "op time (95% CI):",
-            time_format(mean_lb),
-            time_format(mean_ub),
+            time_format(analysed_data.mean_lb),
+            time_format(analysed_data.mean_ub),
         );
-
-        let ops_per_second = (1f64 / mean).floor();
-        let ops_per_second_lb = (1f64 / (mean_ub)).floor();
-        let ops_per_second_ub = (1f64 / (mean_lb)).floor();
         println!(
             "{:18} [{}, {}]",
-            "ops/s (95% CI):", ops_per_second_lb, ops_per_second_ub
+            "ops/s (95% CI):", analysed_data.ops_per_second_lb, analysed_data.ops_per_second_ub
         );
-
-        let outliers = sample.outliers()?;
-        let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
-        println!("{:18} {}", "outliers:", percent_format(outliers_percentage));
-
-        let time_unit = time_unit(mean_ub);
-
+        println!(
+            "{:18} {}",
+            "outliers:",
+            percent_format(analysed_data.outliers_percentage)
+        );
         println!();
-        Ok((ops_per_second_lb, ops_per_second, ops_per_second_ub, time_unit, sample_means))
     }
 }

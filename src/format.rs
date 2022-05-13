@@ -42,7 +42,10 @@ pub fn time_format_by_unit(s: f64, unit: &str) -> Result<f64, Error> {
         "us" => Ok(micro_second(s)),
         "ms" => Ok(milli_second(s)),
         "s" => Ok(second(s)),
-        _ => Err(Error::format("Time conversion", format!("invalid time unit: {}", unit)))
+        _ => Err(Error::format(
+            "Time conversion",
+            format!("invalid time unit: {}", unit),
+        )),
     }
 }
 

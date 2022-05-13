@@ -62,7 +62,8 @@ impl StraceWorkloadRunner {
                 fields: [
                     idx.to_string(),
                     time_format_by_unit(*actual_behaviour_time, time_unit)?.to_string(),
-                ].to_vec(),
+                ]
+                .to_vec(),
             });
         }
         // let op_time: Vec<_> = (0..)
@@ -91,7 +92,8 @@ impl StraceWorkloadRunner {
                 fields: [
                     idx.to_string(),
                     time_format_by_unit(*parallel_time, time_unit)?.to_string(),
-                ].to_vec(),
+                ]
+                .to_vec(),
             });
         }
         // for (op, time) in op_time {
