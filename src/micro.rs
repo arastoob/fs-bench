@@ -1,4 +1,3 @@
-use crate::data_logger::DataLogger;
 use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
 use crate::plotter::Plotter;
 use crate::sample::Sample;
@@ -79,7 +78,7 @@ impl MicroBench {
 
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_ops_per_second.csv", self.fs_name));
-        DataLogger::log(ops_s_results, &file_name)?;
+        ops_s_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::OpsPerSecond)?;
@@ -94,7 +93,7 @@ impl MicroBench {
         mkdir_times_results.add_records(mkdir_times)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_mkdir_iteration_times.csv", self.fs_name));
-        DataLogger::log(mkdir_times_results, &file_name)?;
+        mkdir_times_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::IterationTimes)?;
@@ -106,7 +105,7 @@ impl MicroBench {
         mknod_times_results.add_records(mknod_times)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_mknod_iteration_times.csv", self.fs_name));
-        DataLogger::log(mknod_times_results, &file_name)?;
+        mknod_times_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::IterationTimes)?;
@@ -117,7 +116,7 @@ impl MicroBench {
         read_times_results.add_records(read_times)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_read_iteration_times.csv", self.fs_name));
-        DataLogger::log(read_times_results, &file_name)?;
+        read_times_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::IterationTimes)?;
@@ -129,7 +128,7 @@ impl MicroBench {
         write_times_results.add_records(write_times)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_write_iteration_times.csv", self.fs_name));
-        DataLogger::log(write_times_results, &file_name)?;
+        write_times_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::IterationTimes)?;
@@ -145,7 +144,7 @@ impl MicroBench {
         mkdir_behaviour_results.add_records(mkdir_behaviour)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_mkdir.csv", self.fs_name));
-        DataLogger::log(mkdir_behaviour_results, &file_name)?;
+        mkdir_behaviour_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
@@ -156,7 +155,7 @@ impl MicroBench {
         mknod_behaviour_results.add_records(mknod_behaviour)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_mknod.csv", self.fs_name));
-        DataLogger::log(mknod_behaviour_results, &file_name)?;
+        mknod_behaviour_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
@@ -167,7 +166,7 @@ impl MicroBench {
         read_behaviour_results.add_records(read_behaviour)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_read.csv", self.fs_name));
-        DataLogger::log(read_behaviour_results, &file_name)?;
+        read_behaviour_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
@@ -176,10 +175,9 @@ impl MicroBench {
 
         let mut write_behaviour_results = BenchResult::new(behaviour_header);
         write_behaviour_results.add_records(write_behaviour)?;
-        // let write_log = logger.log(write_behaviour_results, "write")?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_write.csv", self.fs_name));
-        DataLogger::log(write_behaviour_results, &file_name)?;
+        write_behaviour_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
@@ -201,7 +199,7 @@ impl MicroBench {
         read_throughput_results.add_records(read_throughput)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_read_throughput.csv", self.fs_name));
-        DataLogger::log(read_throughput_results, &file_name)?;
+        read_throughput_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::Throughput)?;
@@ -217,10 +215,9 @@ impl MicroBench {
 
         let mut write_throughput_results = BenchResult::new(throughput_header);
         write_throughput_results.add_records(write_throughput)?;
-        // let write_throughput_log = logger.log(write_throughput_results, "write_throughput")?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_write_throughput.csv", self.fs_name));
-        DataLogger::log(write_throughput_results, &file_name)?;
+        write_throughput_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::Throughput)?;

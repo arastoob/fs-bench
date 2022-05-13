@@ -1,4 +1,3 @@
-use crate::data_logger::DataLogger;
 use crate::format::time_format;
 use crate::plotter::Plotter;
 use crate::{BenchResult, Error, Fs, Progress, Record, ResultMode};
@@ -68,7 +67,7 @@ impl StraceWorkloadRunner {
         results.add_records(records)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_strace_workload_actual.csv", self.fs_name));
-        DataLogger::log(results, &file_name)?;
+        results.log(&file_name)?;
 
         let parallel_times = self.parallel(&mut base_path, progress_style)?;
 
@@ -84,7 +83,7 @@ impl StraceWorkloadRunner {
         results.add_records(records)?;
         let mut file_name_p = self.log_path.clone();
         file_name_p.push(format!("{}_strace_workload_parallel.csv", self.fs_name));
-        DataLogger::log(results, &file_name_p)?;
+        results.log(&file_name_p)?;
 
         // plot both results
         let mut plotter = Plotter::new();
