@@ -1,3 +1,5 @@
+use crate::Error;
+
 pub fn time_format(s: f64) -> String {
     if s * 1e9 < 1000f64 {
         let nano = nano_second(s);
@@ -19,6 +21,31 @@ pub fn time_format(s: f64) -> String {
         let min = ((s % 3600f64) / 60f64) as i64;
         let second = second(s % 60f64);
         format!("{}:{}:{}", hour, min, second)
+    }
+}
+
+pub fn time_unit(s: f64) -> &'static str {
+    if s * 1e9 < 1000f64 {
+        "ns"
+    } else if s * 1e6 < 1000f64 {
+        "us"
+    } else if s * 1000f64 < 1000f64 {
+        "ms"
+    } else {
+        "s"
+    }
+}
+
+pub fn time_format_by_unit(s: f64, unit: &str) -> Result<f64, Error> {
+    match unit {
+        "ns" => Ok(nano_second(s)),
+        "us" => Ok(micro_second(s)),
+        "ms" => Ok(milli_second(s)),
+        "s" => Ok(second(s)),
+        _ => Err(Error::format(
+            "Time conversion",
+            format!("invalid time unit: {}", unit),
+        )),
     }
 }
 

@@ -1,4 +1,3 @@
-use crate::data_logger::DataLogger;
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
@@ -155,7 +154,7 @@ impl WasmWorkloadRunner {
         workload_behaviour_results.add_records(behaviour_records)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_workload.csv", self.fs_name));
-        DataLogger::log(workload_behaviour_results, &file_name)?;
+        workload_behaviour_results.log(&file_name)?;
 
         let mut plotter = Plotter::new();
         plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;

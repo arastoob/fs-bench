@@ -1,5 +1,4 @@
-use crate::data_logger::DataLogger;
-use crate::format::time_format;
+use crate::format::{time_format, time_format_by_unit, time_unit};
 use crate::plotter::Plotter;
 use crate::{BenchResult, Error, Fs, Progress, Record, ResultMode};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -49,42 +48,63 @@ impl StraceWorkloadRunner {
 
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
-        let header = ["op".to_string(), "time".to_string()].to_vec();
-        let mut results = BenchResult::new(header.clone());
-
         let actual_behaviour_times =
             self.actual_behaviour(&mut base_path, progress_style.clone())?;
+
+        let time_unit = time_unit(actual_behaviour_times[0]);
+        let header = ["op".to_string(), format!("time ({})", time_unit)].to_vec();
+
         // log the actual results
-        let op_time: Vec<_> = (0..)
-            .into_iter()
-            .zip(actual_behaviour_times.into_iter())
-            .collect();
         let mut records = vec![];
-        for (op, time) in op_time {
+        let mut results = BenchResult::new(header.clone());
+        for (idx, actual_behaviour_time) in actual_behaviour_times.iter().enumerate() {
             records.push(Record {
-                fields: [op.to_string(), time.to_string()].to_vec(),
+                fields: [
+                    idx.to_string(),
+                    time_format_by_unit(*actual_behaviour_time, time_unit)?.to_string(),
+                ]
+                .to_vec(),
             });
         }
+        // let op_time: Vec<_> = (0..)
+        //     .into_iter()
+        //     .zip(actual_behaviour_times.into_iter())
+        //     .collect();
+        // let mut records = vec![];
+        // for (op, time) in op_time {
+        //     records.push(Record {
+        //         fields: [op.to_string(), time.to_string()].to_vec(),
+        //     });
+        // }
         results.add_records(records)?;
         let mut file_name = self.log_path.clone();
         file_name.push(format!("{}_strace_workload_actual.csv", self.fs_name));
-        DataLogger::log(results, &file_name)?;
+        results.log(&file_name)?;
 
         let parallel_times = self.parallel(&mut base_path, progress_style)?;
 
         // log the parallel results
-        let op_time: Vec<_> = (0..).into_iter().zip(parallel_times.into_iter()).collect();
+        // let op_time: Vec<_> = (0..).into_iter().zip(parallel_times.into_iter()).collect();
         let mut results = BenchResult::new(header);
         let mut records = vec![];
-        for (op, time) in op_time {
+        for (idx, parallel_time) in parallel_times.iter().enumerate() {
             records.push(Record {
-                fields: [op.to_string(), time.to_string()].to_vec(),
+                fields: [
+                    idx.to_string(),
+                    time_format_by_unit(*parallel_time, time_unit)?.to_string(),
+                ]
+                .to_vec(),
             });
         }
+        // for (op, time) in op_time {
+        //     records.push(Record {
+        //         fields: [op.to_string(), time.to_string()].to_vec(),
+        //     });
+        // }
         results.add_records(records)?;
         let mut file_name_p = self.log_path.clone();
         file_name_p.push(format!("{}_strace_workload_parallel.csv", self.fs_name));
-        DataLogger::log(results, &file_name_p)?;
+        results.log(&file_name_p)?;
 
         // plot both results
         let mut plotter = Plotter::new();
@@ -103,7 +123,7 @@ impl StraceWorkloadRunner {
         file_name.push(format!("{}_strace_workload.svg", self.fs_name));
         plotter.line_chart(
             Some("Operations"),
-            Some("Time [s]"),
+            Some(&format!("Time ({})", time_unit)),
             None,
             false,
             false,

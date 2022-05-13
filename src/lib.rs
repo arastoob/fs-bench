@@ -1,4 +1,3 @@
-pub mod data_logger;
 pub mod error;
 mod format;
 pub mod micro;
@@ -64,6 +63,7 @@ impl FromStr for ResultMode {
             "ops_per_second" => Ok(ResultMode::OpsPerSecond),
             "throughput" => Ok(ResultMode::Throughput),
             "behaviour" => Ok(ResultMode::Behaviour),
+            "op_times" => Ok(ResultMode::OpTimes),
             _ => Err("valid result modes are: ops_per_second, throughput, behaviour".to_string()),
         }
     }
@@ -114,6 +114,33 @@ impl BenchResult {
         for record in records {
             self.records.push(record);
         }
+
+        Ok(())
+    }
+
+    pub fn log<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
+        &self,
+        file_name: &P,
+    ) -> Result<(), Error> {
+        let path = Path::new(file_name);
+        let path = PathBuf::from(path);
+        if path.exists() {
+            remove_file(path.clone())?;
+        }
+
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(true)
+            .open(path.clone())?;
+
+        let mut writer = csv::Writer::from_writer(file);
+        writer.write_record(&self.header)?;
+        for record in self.records.iter() {
+            writer.write_record(&record.fields)?;
+        }
+
+        writer.flush()?;
 
         Ok(())
     }
