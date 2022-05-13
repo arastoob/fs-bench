@@ -600,7 +600,7 @@ impl Plotter {
         let time_idx = reader
             .headers()?
             .iter()
-            .position(|header| header == "time")
+            .position(|header| header.contains("time"))
             .ok_or(Error::CsvError("header 'time' not found".to_string()))?;
 
         for record in reader.records() {
