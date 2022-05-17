@@ -9,8 +9,8 @@ use std::time::SystemTime;
 use strace_parser::{FileDir, Operation, Parser, Process};
 
 pub struct StraceWorkloadRunner {
-    mount_path: PathBuf,
-    fs_name: String,
+    mount_paths: Vec<PathBuf>,
+    fs_names: Vec<String>,
     log_path: PathBuf,
     processes: Vec<Process>, // list of processes that their ops can be run concurrently
     postponed_processes: Vec<Process>, // list of processes that their ops should be run at end
@@ -19,8 +19,8 @@ pub struct StraceWorkloadRunner {
 
 impl StraceWorkloadRunner {
     pub fn new(
-        mount_path: PathBuf,
-        fs_name: String,
+        mount_paths: Vec<PathBuf>,
+        fs_names: Vec<String>,
         log_path: PathBuf,
         strace_path: PathBuf,
     ) -> Result<Self, Error> {
@@ -33,8 +33,8 @@ impl StraceWorkloadRunner {
         files.retain(|file_dir| file_dir.path() != "/");
 
         Ok(Self {
-            mount_path,
-            fs_name,
+            mount_paths,
+            fs_names,
             log_path,
             processes,
             postponed_processes,
@@ -43,92 +43,85 @@ impl StraceWorkloadRunner {
     }
 
     pub fn replay(&mut self) -> Result<(), Error> {
-        let mut base_path = self.mount_path.clone();
-        base_path.push("strace_workload");
 
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
-        let actual_behaviour_times =
-            self.actual_behaviour(&mut base_path, progress_style.clone())?;
+        let mount_paths = self.mount_paths.clone();
+        let fs_names = self.fs_names.clone();
+        for (idx, mount_path)  in mount_paths.iter().enumerate() {
+            let mut base_path = mount_path.clone();
+            base_path.push("strace_workload");
 
-        let time_unit = time_unit(actual_behaviour_times[0]);
-        let header = ["op".to_string(), format!("time ({})", time_unit)].to_vec();
+            let actual_behaviour_times =
+                self.actual_behaviour(&base_path, &fs_names[idx], progress_style.clone())?;
 
-        // log the actual results
-        let mut records = vec![];
-        let mut results = BenchResult::new(header.clone());
-        for (idx, actual_behaviour_time) in actual_behaviour_times.iter().enumerate() {
-            records.push(Record {
-                fields: [
-                    idx.to_string(),
-                    time_format_by_unit(*actual_behaviour_time, time_unit)?.to_string(),
-                ]
-                .to_vec(),
-            });
+            let time_unit = time_unit(actual_behaviour_times[0]);
+            let header = ["op".to_string(), format!("time ({})", time_unit)].to_vec();
+
+            // log the actual results
+            let mut records = vec![];
+            let mut results = BenchResult::new(header.clone());
+            for (idx, actual_behaviour_time) in actual_behaviour_times.iter().enumerate() {
+                records.push(Record {
+                    fields: [
+                        idx.to_string(),
+                        time_format_by_unit(*actual_behaviour_time, time_unit)?.to_string(),
+                    ]
+                        .to_vec(),
+                });
+            }
+            results.add_records(records)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_strace_workload_actual.csv", self.fs_names[idx]));
+            results.log(&file_name)?;
+
+            let mut plotter = Plotter::new();
+            plotter.add_coordinates(
+                &file_name,
+                Some("actual order".to_string()),
+                &ResultMode::OpTimes,
+            )?;
+
+
+
+
+            let parallel_times = self.parallel(&base_path, &fs_names[idx], progress_style.clone())?;
+
+            // log the parallel results
+            let mut results = BenchResult::new(header);
+            let mut records = vec![];
+            for (idx, parallel_time) in parallel_times.iter().enumerate() {
+                records.push(Record {
+                    fields: [
+                        idx.to_string(),
+                        time_format_by_unit(*parallel_time, time_unit)?.to_string(),
+                    ]
+                        .to_vec(),
+                });
+            }
+            results.add_records(records)?;
+            let mut file_name_p = self.log_path.clone();
+            file_name_p.push(format!("{}_strace_workload_parallel.csv", self.fs_names[idx]));
+            results.log(&file_name_p)?;
+
+            plotter.add_coordinates(
+                &file_name_p,
+                Some("parallel".to_string()),
+                &ResultMode::OpTimes,
+            )?;
+
+            // plot the results
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_strace_workload.svg", self.fs_names[idx]));
+            plotter.line_chart(
+                Some("Operations"),
+                Some(&format!("Time ({})", time_unit)),
+                None,
+                false,
+                false,
+                &file_name,
+            )?;
         }
-        // let op_time: Vec<_> = (0..)
-        //     .into_iter()
-        //     .zip(actual_behaviour_times.into_iter())
-        //     .collect();
-        // let mut records = vec![];
-        // for (op, time) in op_time {
-        //     records.push(Record {
-        //         fields: [op.to_string(), time.to_string()].to_vec(),
-        //     });
-        // }
-        results.add_records(records)?;
-        let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_strace_workload_actual.csv", self.fs_name));
-        results.log(&file_name)?;
-
-        let parallel_times = self.parallel(&mut base_path, progress_style)?;
-
-        // log the parallel results
-        // let op_time: Vec<_> = (0..).into_iter().zip(parallel_times.into_iter()).collect();
-        let mut results = BenchResult::new(header);
-        let mut records = vec![];
-        for (idx, parallel_time) in parallel_times.iter().enumerate() {
-            records.push(Record {
-                fields: [
-                    idx.to_string(),
-                    time_format_by_unit(*parallel_time, time_unit)?.to_string(),
-                ]
-                .to_vec(),
-            });
-        }
-        // for (op, time) in op_time {
-        //     records.push(Record {
-        //         fields: [op.to_string(), time.to_string()].to_vec(),
-        //     });
-        // }
-        results.add_records(records)?;
-        let mut file_name_p = self.log_path.clone();
-        file_name_p.push(format!("{}_strace_workload_parallel.csv", self.fs_name));
-        results.log(&file_name_p)?;
-
-        // plot both results
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(
-            &file_name,
-            Some("actual order".to_string()),
-            &ResultMode::OpTimes,
-        )?;
-        plotter.add_coordinates(
-            &file_name_p,
-            Some("parallel".to_string()),
-            &ResultMode::OpTimes,
-        )?;
-
-        let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_strace_workload.svg", self.fs_name));
-        plotter.line_chart(
-            Some("Operations"),
-            Some(&format!("Time ({})", time_unit)),
-            None,
-            false,
-            false,
-            &file_name,
-        )?;
 
         println!("results logged to: {}", Fs::path_to_str(&self.log_path)?);
 
@@ -140,14 +133,15 @@ impl StraceWorkloadRunner {
     // when it reaches the clone operation to replay p2's operations
     fn actual_behaviour(
         &mut self,
-        base_path: &mut PathBuf,
+        base_path: &PathBuf,
+        fs_name: &str,
         style: ProgressStyle,
     ) -> Result<Vec<f64>, Error> {
         self.setup(&base_path)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("{:5}", "replaying in the actual order"));
+        bar.set_message(format!("replaying in the actual order ({})", fs_name));
         let progress = Progress::start(bar);
 
         let start = SystemTime::now();
@@ -181,14 +175,15 @@ impl StraceWorkloadRunner {
     // replay the processes' operations (except the postponed operations) all in parallel
     fn parallel(
         &mut self,
-        base_path: &mut PathBuf,
+        base_path: &PathBuf,
+        fs_name: &str,
         style: ProgressStyle,
     ) -> Result<Vec<f64>, Error> {
         self.setup(&base_path)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("{:5}", "replaying in parallel"));
+        bar.set_message(format!("replaying in parallel ({})", fs_name));
         let progress = Progress::start(bar);
 
         let start = SystemTime::now();

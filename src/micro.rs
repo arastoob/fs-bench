@@ -16,8 +16,8 @@ use std::time::{Duration, SystemTime};
 pub struct MicroBench {
     io_size: usize,
     run_time: f64,
-    mount_path: PathBuf,
-    fs_name: String,
+    mount_paths: Vec<PathBuf>,
+    fs_names: Vec<String>,
     log_path: PathBuf,
 }
 
@@ -25,8 +25,8 @@ impl MicroBench {
     pub fn new(
         io_size: String,
         run_time: f64,
-        mount_path: PathBuf,
-        fs_name: String,
+        mount_paths: Vec<PathBuf>,
+        fs_names: Vec<String>,
         log_path: PathBuf,
     ) -> Result<Self, Error> {
         let io_size = Byte::from_str(io_size)?;
@@ -35,8 +35,8 @@ impl MicroBench {
         Ok(Self {
             io_size,
             run_time,
-            mount_path,
-            fs_name,
+            mount_paths,
+            fs_names,
             log_path,
         })
     }
@@ -55,155 +55,166 @@ impl MicroBench {
     fn behaviour_bench(&self, run_time: Duration) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
-        let (mkdir_ops_s, mkdir_behaviour, mkdir_times, mkdir_time_uint) =
-            self.mkdir(run_time, progress_style.clone())?;
-        let (mknod_ops_s, mknod_behaviour, mknod_times, mknod_time_uint) =
-            self.mknod(run_time, progress_style.clone())?;
-        let (read_ops_s, read_behaviour, read_times, read_time_uint) =
-            self.read(run_time, progress_style.clone())?;
-        let (write_ops_s, write_behaviour, write_times, write_time_uint) =
-            self.write(run_time, progress_style)?;
-        //
-        let ops_s_header = [
-            "operation".to_string(),
-            "runtime(s)".to_string(),
-            "ops/s".to_string(),
-            "ops/s_lb".to_string(),
-            "ops/s_ub".to_string(),
-        ]
-        .to_vec();
-
-        // ops/s logs and plots
-        let mut ops_s_results = BenchResult::new(ops_s_header);
-        ops_s_results.add_record(mkdir_ops_s)?;
-        ops_s_results.add_record(mknod_ops_s)?;
-        ops_s_results.add_record(read_ops_s)?;
-        ops_s_results.add_record(write_ops_s)?;
-
-        let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_ops_per_second.csv", self.fs_name));
-        ops_s_results.log(&file_name)?;
-
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::OpsPerSecond)?;
-        file_name.set_extension("svg");
-        plotter.bar_chart(Some("Operation"), Some("Ops/s"), None, &file_name)?;
-
-        // sample iteration average times logs and plots
-        let times_header = ["op".to_string(), format!("time ({})", mkdir_time_uint)].to_vec();
-        let mut mkdir_times_results = BenchResult::new(times_header);
-        mkdir_times_results.add_records(mkdir_times)?;
-        let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_mkdir_iteration_times.csv", self.fs_name));
-        mkdir_times_results.log(&file_name)?;
-
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
-        file_name.set_extension("svg");
-        plotter.point_series(
-            Some("Sample iteration"),
-            Some(format!("Average time ({})", mkdir_time_uint).as_str()),
-            None,
-            &file_name,
-        )?;
-
-        let times_header = ["op".to_string(), format!("time ({})", mknod_time_uint)].to_vec();
-        let mut mknod_times_results = BenchResult::new(times_header);
-        mknod_times_results.add_records(mknod_times)?;
-        let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_mknod_iteration_times.csv", self.fs_name));
-        mknod_times_results.log(&file_name)?;
-
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
-        file_name.set_extension("svg");
-        plotter.point_series(
-            Some("Sample iteration"),
-            Some(format!("Average time ({})", mknod_time_uint).as_str()),
-            None,
-            &file_name,
-        )?;
-
-        let times_header = ["op".to_string(), format!("time ({})", read_time_uint)].to_vec();
-        let mut read_times_results = BenchResult::new(times_header);
-        read_times_results.add_records(read_times)?;
-        let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_read_iteration_times.csv", self.fs_name));
-        read_times_results.log(&file_name)?;
-
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
-        file_name.set_extension("svg");
-        plotter.point_series(
-            Some("Sample iteration"),
-            Some(format!("Average time ({})", read_time_uint).as_str()),
-            None,
-            &file_name,
-        )?;
-
-        let times_header = ["op".to_string(), format!("time ({})", write_time_uint)].to_vec();
-        let mut write_times_results = BenchResult::new(times_header);
-        write_times_results.add_records(write_times)?;
-        let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_write_iteration_times.csv", self.fs_name));
-        write_times_results.log(&file_name)?;
-
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
-        file_name.set_extension("svg");
-        plotter.point_series(
-            Some("Sample iteration"),
-            Some(format!("Average time ({})", write_time_uint).as_str()),
-            None,
-            &file_name,
-        )?;
-
-        // behaviour plots and files
+        let mut plotter_mkdir_behaviour = Plotter::new();
+        let mut plotter_mknod_behaviour = Plotter::new();
+        let mut plotter_read_behaviour = Plotter::new();
+        let mut plotter_write_behaviour = Plotter::new();
         let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
 
-        let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
-        mkdir_behaviour_results.add_records(mkdir_behaviour)?;
+        for (idx, mount_path) in self.mount_paths.iter().enumerate() {
+            let (mkdir_ops_s, mkdir_behaviour, mkdir_times, mkdir_time_uint) =
+                self.mkdir(run_time, mount_path, &self.fs_names[idx], progress_style.clone())?;
+            let (mknod_ops_s, mknod_behaviour, mknod_times, mknod_time_uint) =
+                self.mknod(run_time, mount_path, &self.fs_names[idx], progress_style.clone())?;
+            let (read_ops_s, read_behaviour, read_times, read_time_uint) =
+                self.read(run_time, mount_path, &self.fs_names[idx], progress_style.clone())?;
+            let (write_ops_s, write_behaviour, write_times, write_time_uint) =
+                self.write(run_time, mount_path, &self.fs_names[idx], progress_style.clone())?;
+
+            let ops_s_header = [
+                "operation".to_string(),
+                "runtime(s)".to_string(),
+                "ops/s".to_string(),
+                "ops/s_lb".to_string(),
+                "ops/s_ub".to_string(),
+            ]
+                .to_vec();
+
+            // log and plot ops/s
+            let mut ops_s_results = BenchResult::new(ops_s_header);
+            ops_s_results.add_record(mkdir_ops_s)?;
+            ops_s_results.add_record(mknod_ops_s)?;
+            ops_s_results.add_record(read_ops_s)?;
+            ops_s_results.add_record(write_ops_s)?;
+
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_ops_per_second.csv", self.fs_names[idx]));
+            ops_s_results.log(&file_name)?;
+
+            let mut plotter = Plotter::new();
+            plotter.add_coordinates(&file_name, None, &ResultMode::OpsPerSecond)?;
+            file_name.set_extension("svg");
+            plotter.bar_chart(Some("Operation"), Some("Ops/s"), None, &file_name)?;
+
+
+
+            // log behaviour results
+            let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
+            mkdir_behaviour_results.add_records(mkdir_behaviour)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_mkdir.csv", self.fs_names[idx]));
+            mkdir_behaviour_results.log(&file_name)?;
+            plotter_mkdir_behaviour.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Behaviour)?;
+
+            let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
+            mknod_behaviour_results.add_records(mknod_behaviour)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_mknod.csv", self.fs_names[idx]));
+            mknod_behaviour_results.log(&file_name)?;
+            plotter_mknod_behaviour.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Behaviour)?;
+
+            let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
+            read_behaviour_results.add_records(read_behaviour)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_read.csv", self.fs_names[idx]));
+            read_behaviour_results.log(&file_name)?;
+            plotter_read_behaviour.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Behaviour)?;
+
+            let mut write_behaviour_results = BenchResult::new(behaviour_header.clone());
+            write_behaviour_results.add_records(write_behaviour)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_write.csv", self.fs_names[idx]));
+            write_behaviour_results.log(&file_name)?;
+            plotter_write_behaviour.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Behaviour)?;
+
+
+
+            // log and plot sample iteration average times
+            let times_header = ["op".to_string(), format!("time ({})", mkdir_time_uint)].to_vec();
+            let mut mkdir_times_results = BenchResult::new(times_header);
+            mkdir_times_results.add_records(mkdir_times)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_mkdir_iteration_times.csv", self.fs_names[idx]));
+            mkdir_times_results.log(&file_name)?;
+
+            let mut plotter = Plotter::new();
+            plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            file_name.set_extension("svg");
+            plotter.point_series(
+                Some("Sample iteration"),
+                Some(format!("Average time ({})", mkdir_time_uint).as_str()),
+                None,
+                &file_name,
+            )?;
+
+            let times_header = ["op".to_string(), format!("time ({})", mknod_time_uint)].to_vec();
+            let mut mknod_times_results = BenchResult::new(times_header);
+            mknod_times_results.add_records(mknod_times)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_mknod_iteration_times.csv", self.fs_names[idx]));
+            mknod_times_results.log(&file_name)?;
+
+            let mut plotter = Plotter::new();
+            plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            file_name.set_extension("svg");
+            plotter.point_series(
+                Some("Sample iteration"),
+                Some(format!("Average time ({})", mknod_time_uint).as_str()),
+                None,
+                &file_name,
+            )?;
+
+            let times_header = ["op".to_string(), format!("time ({})", read_time_uint)].to_vec();
+            let mut read_times_results = BenchResult::new(times_header);
+            read_times_results.add_records(read_times)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_read_iteration_times.csv", self.fs_names[idx]));
+            read_times_results.log(&file_name)?;
+
+            let mut plotter = Plotter::new();
+            plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            file_name.set_extension("svg");
+            plotter.point_series(
+                Some("Sample iteration"),
+                Some(format!("Average time ({})", read_time_uint).as_str()),
+                None,
+                &file_name,
+            )?;
+
+            let times_header = ["op".to_string(), format!("time ({})", write_time_uint)].to_vec();
+            let mut write_times_results = BenchResult::new(times_header);
+            write_times_results.add_records(write_times)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_write_iteration_times.csv", self.fs_names[idx]));
+            write_times_results.log(&file_name)?;
+
+            let mut plotter = Plotter::new();
+            plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            file_name.set_extension("svg");
+            plotter.point_series(
+                Some("Sample iteration"),
+                Some(format!("Average time ({})", write_time_uint).as_str()),
+                None,
+                &file_name,
+            )?;
+        }
+
+        // plot the behaviour results
         let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_mkdir.csv", self.fs_name));
-        mkdir_behaviour_results.log(&file_name)?;
+        file_name.push("mkdir.svg");
+        plotter_mkdir_behaviour.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
-        file_name.set_extension("svg");
-        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
-
-        let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
-        mknod_behaviour_results.add_records(mknod_behaviour)?;
         let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_mknod.csv", self.fs_name));
-        mknod_behaviour_results.log(&file_name)?;
+        file_name.push("mknod.svg");
+        plotter_mknod_behaviour.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
-        file_name.set_extension("svg");
-        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
-
-        let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
-        read_behaviour_results.add_records(read_behaviour)?;
         let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_read.csv", self.fs_name));
-        read_behaviour_results.log(&file_name)?;
+        file_name.push("read.svg");
+        plotter_read_behaviour.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
-        file_name.set_extension("svg");
-        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
-
-        let mut write_behaviour_results = BenchResult::new(behaviour_header);
-        write_behaviour_results.add_records(write_behaviour)?;
         let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_write.csv", self.fs_name));
-        write_behaviour_results.log(&file_name)?;
-
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::Behaviour)?;
-        file_name.set_extension("svg");
-        plotter.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
+        file_name.push("write.svg");
+        plotter_write_behaviour.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
 
         Ok(())
     }
@@ -213,19 +224,34 @@ impl MicroBench {
 
         let throughput_header = ["file_size".to_string(), "throughput".to_string()].to_vec();
 
-        let read_throughput = self.read_throughput(max_rt, progress_style.clone())?;
-        let write_throughput = self.write_throughput(max_rt, progress_style)?;
 
-        let mut read_throughput_results = BenchResult::new(throughput_header.clone());
-        read_throughput_results.add_records(read_throughput)?;
+        let mut read_plotter = Plotter::new();
+        let mut write_plotter = Plotter::new();
+        for (idx, mount_path) in self.mount_paths.iter().enumerate() {
+            let read_throughput = self.read_throughput(max_rt, &mount_path, &self.fs_names[idx], progress_style.clone())?;
+            let write_throughput = self.write_throughput(max_rt, &mount_path, &self.fs_names[idx], progress_style.clone())?;
+
+            let mut read_throughput_results = BenchResult::new(throughput_header.clone());
+            read_throughput_results.add_records(read_throughput)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_read_throughput.csv", self.fs_names[idx]));
+            read_throughput_results.log(&file_name)?;
+
+            read_plotter.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Throughput)?;
+
+            let mut write_throughput_results = BenchResult::new(throughput_header.clone());
+            write_throughput_results.add_records(write_throughput)?;
+            let mut file_name = self.log_path.clone();
+            file_name.push(format!("{}_write_throughput.csv", self.fs_names[idx]));
+            write_throughput_results.log(&file_name)?;
+
+            write_plotter.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Throughput)?;
+        }
+
+
         let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_read_throughput.csv", self.fs_name));
-        read_throughput_results.log(&file_name)?;
-
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::Throughput)?;
-        file_name.set_extension("svg");
-        plotter.line_chart(
+        file_name.push("read_throughput.svg");
+        read_plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
             None,
@@ -234,16 +260,12 @@ impl MicroBench {
             &file_name,
         )?;
 
-        let mut write_throughput_results = BenchResult::new(throughput_header);
-        write_throughput_results.add_records(write_throughput)?;
-        let mut file_name = self.log_path.clone();
-        file_name.push(format!("{}_write_throughput.csv", self.fs_name));
-        write_throughput_results.log(&file_name)?;
 
-        let mut plotter = Plotter::new();
-        plotter.add_coordinates(&file_name, None, &ResultMode::Throughput)?;
-        file_name.set_extension("svg");
-        plotter.line_chart(
+
+
+        let mut file_name = self.log_path.clone();
+        file_name.push("write_throughput.svg");
+        write_plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
             None,
@@ -258,15 +280,17 @@ impl MicroBench {
     fn mkdir(
         &self,
         run_time: Duration,
+        mount_path: &PathBuf,
+        fs_name: &str,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
-        let mut root_path = self.mount_path.clone();
+        let mut root_path = mount_path.clone();
         root_path.push("mkdir");
         Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message("mkdir");
+        bar.set_message(format!("mkdir ({})", fs_name));
         let progress = Progress::start(bar.clone());
 
         // creating the root directory to generate the benchmark directories inside it
@@ -315,7 +339,7 @@ impl MicroBench {
         bar.set_message("analysing data...");
         let analysed_data = Sample::new(&times)?.analyse()?;
 
-        progress.finish_with_message("mkdir finished")?;
+        progress.finish_with_message(&format!("mkdir ({}) finished", fs_name))?;
         self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = Record {
@@ -354,15 +378,17 @@ impl MicroBench {
     fn mknod(
         &self,
         run_time: Duration,
+        mount_path: &PathBuf,
+        fs_name: &str,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
-        let mut root_path = self.mount_path.clone();
+        let mut root_path = mount_path.clone();
         root_path.push("mknod");
         Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message("mknod");
+        bar.set_message(format!("mknod ({})", fs_name));
         let progress = Progress::start(bar.clone());
 
         // creating the root directory to generate the benchmark files inside it
@@ -411,7 +437,7 @@ impl MicroBench {
         bar.set_message("analysing data...");
         let analysed_data = Sample::new(&times)?.analyse()?;
 
-        progress.finish_with_message("mknod finished")?;
+        progress.finish_with_message(&format!("mknod ({}) finished", fs_name))?;
         self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = Record {
@@ -450,15 +476,17 @@ impl MicroBench {
     fn read(
         &self,
         run_time: Duration,
+        mount_path: &PathBuf,
+        fs_name: &str,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
-        let mut root_path = self.mount_path.clone();
+        let mut root_path = mount_path.clone();
         root_path.push("read");
         Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message("read");
+        bar.set_message(format!("read ({})", fs_name));
         let progress = Progress::start(bar.clone());
 
         // creating the root directory to generate the benchmark files inside it
@@ -523,7 +551,7 @@ impl MicroBench {
         bar.set_message("analysing data...");
         let analysed_data = Sample::new(&times)?.analyse()?;
 
-        progress.finish_with_message("read finished")?;
+        progress.finish_with_message(&format!("read ({}) finished", fs_name))?;
         self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = Record {
@@ -562,15 +590,17 @@ impl MicroBench {
     fn write(
         &self,
         run_time: Duration,
+        mount_path: &PathBuf,
+        fs_name: &str,
         style: ProgressStyle,
     ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
-        let mut root_path = self.mount_path.clone();
+        let mut root_path = mount_path.clone();
         root_path.push("write");
         Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message("write");
+        bar.set_message(format!("write ({})", fs_name));
         let progress = Progress::start(bar.clone());
 
         // creating the root directory to generate the benchmark files inside it
@@ -638,7 +668,7 @@ impl MicroBench {
         bar.set_message("analysing data...");
         let analysed_data = Sample::new(&times)?.analyse()?;
 
-        progress.finish_with_message("write finished")?;
+        progress.finish_with_message(&format!("write ({}) finished", fs_name))?;
         self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = Record {
@@ -677,15 +707,17 @@ impl MicroBench {
     fn read_throughput(
         &self,
         max_rt: Duration,
+        mount_path: &PathBuf,
+        fs_name: &str,
         style: ProgressStyle,
     ) -> Result<Vec<Record>, Error> {
-        let mut root_path = self.mount_path.clone();
+        let mut root_path = mount_path.clone();
         root_path.push("read");
         Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("{:5}", "read_throughput"));
+        bar.set_message(format!("read_throughput ({})", fs_name));
         let progress = Progress::start(bar);
 
         // creating the root directory to generate the test files inside it
@@ -747,7 +779,7 @@ impl MicroBench {
         if !interrupted {
             progress.finish()?;
         } else {
-            progress.abandon_with_message("read exceeded the max runtime")?;
+            progress.abandon_with_message(&format!("read_throughput ({}) exceeded the max runtime", fs_name))?;
         }
 
         println!("{:11} {}", "run time:", time_format(end));
@@ -777,15 +809,17 @@ impl MicroBench {
     fn write_throughput(
         &self,
         max_rt: Duration,
+        mount_path: &PathBuf,
+        fs_name: &str,
         style: ProgressStyle,
     ) -> Result<Vec<Record>, Error> {
-        let mut root_path = self.mount_path.clone();
+        let mut root_path = mount_path.clone();
         root_path.push("write");
         Fs::cleanup(&root_path)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("{:5}", "write_throughput"));
+        bar.set_message(format!("write_throughput ({})", fs_name));
         let progress = Progress::start(bar);
 
         // creating the root directory to generate the test files inside it
@@ -848,7 +882,7 @@ impl MicroBench {
         if !interrupted {
             progress.finish()?;
         } else {
-            progress.abandon_with_message("write exceeded the max runtime")?;
+            progress.abandon_with_message(&format!("write_throughput ({}) exceeded the max runtime", fs_name))?;
         }
 
         println!("{:11} {}", "run time:", time_format(end));
