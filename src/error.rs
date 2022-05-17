@@ -2,7 +2,7 @@ use byte_unit::ByteError;
 use plotters::drawing::DrawingAreaErrorKind;
 use std::fmt;
 use std::io::ErrorKind;
-use std::num::ParseFloatError;
+use std::num::{ParseFloatError, ParseIntError};
 use std::time::SystemTimeError;
 
 ///
@@ -10,12 +10,6 @@ use std::time::SystemTimeError;
 ///
 #[derive(Debug)]
 pub enum Error {
-    ObjNotDirectory,
-    ObjNotFile,
-
-    /// A new entry already exists in this directory
-    DirEntryExist,
-
     /// There was an error reading formatted data
     FormatError {
         format_of: String,
@@ -45,6 +39,8 @@ pub enum Error {
     SystemTimeError(String),
 
     Unknown(String),
+
+    ParseError(String),
 
     WasmerError(String),
 
@@ -129,7 +125,13 @@ impl From<SystemTimeError> for Error {
 
 impl From<ParseFloatError> for Error {
     fn from(err: ParseFloatError) -> Self {
-        Error::Unknown(err.to_string())
+        Error::ParseError(err.to_string())
+    }
+}
+
+impl From<ParseIntError> for Error {
+    fn from(err: ParseIntError) -> Self {
+        Error::ParseError(err.to_string())
     }
 }
 
@@ -142,7 +144,6 @@ impl<T> From<std::sync::mpsc::SendError<T>> for Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            &Error::DirEntryExist => write!(f, "Directory Entry already exists"),
             &Error::FormatError {
                 ref format_of,
                 ref detail,
@@ -155,12 +156,11 @@ impl fmt::Display for Error {
                 max,
             } => write!(f, "Invalid {} index: {} (max: {})", kind, index, max),
             &Error::InvalidPath(ref path) => write!(f, "Invalid path: '{}'", path),
-            &Error::ObjNotDirectory => write!(f, "Object is not of type Directory"),
-            &Error::ObjNotFile => write!(f, "Object is not of type File"),
             &Error::PlottersError(ref detail) => write!(f, "Plotters error: {}", detail),
             &Error::CsvError(ref detail) => write!(f, "Csv error: {}", detail),
             &Error::SystemTimeError(ref detail) => write!(f, "SystemTime error: {}", detail),
             &Error::Unknown(ref detail) => write!(f, "Unknown error: {}", detail),
+            &Error::ParseError(ref detail) => write!(f, "Parse error: {}", detail),
             &Error::WasmerError(ref detail) => write!(f, "Wasmer error: {}", detail),
             Error::SyncError(ref detail) => write!(f, "Sync error: {}", detail),
         }
