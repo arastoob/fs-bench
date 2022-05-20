@@ -23,11 +23,11 @@ struct Args {
 
     /// The path to the mounted filesystem being benchmarked
     #[clap(short, long)]
-    mount: PathBuf,
+    mount: Vec<PathBuf>,
 
     /// Filesystem name that is being benchmarked
     #[clap(short, long)]
-    fs_name: String,
+    fs_name: Vec<String>,
 
     /// The path to store benchmark results
     #[clap(short, long)]
@@ -41,15 +41,19 @@ struct Args {
 fn main() -> Result<(), Error> {
     let args = Args::parse();
 
+    let fs_names = args.fs_name.into_iter().collect::<Vec<_>>();
+    let mount_paths = args.mount.into_iter().collect::<Vec<_>>();
+
+    if fs_names.len() != mount_paths.len() {
+        return Err(Error::InvalidConfig(
+            "There should be one fs-name per each mount argument".to_string(),
+        ));
+    }
+
     match args.bench_mode {
         BenchMode::Micro => {
-            let micro_bench = MicroBench::new(
-                args.size,
-                args.time,
-                args.mount,
-                args.fs_name,
-                args.log_path,
-            )?;
+            let micro_bench =
+                MicroBench::new(args.size, args.time, mount_paths, fs_names, args.log_path)?;
             micro_bench.run()?;
         }
         BenchMode::Strace => {
@@ -62,7 +66,7 @@ fn main() -> Result<(), Error> {
                 }
             };
             let mut strace_workload =
-                StraceWorkloadRunner::new(args.mount, args.fs_name, args.log_path, strace_path)?;
+                StraceWorkloadRunner::new(mount_paths, fs_names, args.log_path, strace_path)?;
             strace_workload.replay()?;
         }
     }

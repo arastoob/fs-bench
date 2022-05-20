@@ -47,7 +47,7 @@ impl Display for BenchMode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ResultMode {
     OpsPerSecond,
     Throughput,
