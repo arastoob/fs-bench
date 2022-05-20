@@ -146,7 +146,7 @@ impl StraceWorkloadRunner {
             op_times_plotter.line_chart(
                 Some("Operations"),
                 Some(&format!("Time ({})", op_time_unit)),
-                None,
+                Some(&format!("Operation times from replayed logs ({})", self.fs_names[idx])),
                 false,
                 false,
                 &file_name,
@@ -161,7 +161,7 @@ impl StraceWorkloadRunner {
             accumulated_times_plotter.line_chart(
                 Some(&format!("Time ({})", accumulated_time_unit)),
                 Some("Operations"),
-                None,
+                Some(&format!("Accumulated times from replayed logs ({})", self.fs_names[idx])),
                 false,
                 false,
                 &file_name,

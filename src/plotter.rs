@@ -149,7 +149,7 @@ impl Plotter {
                 .set_label_area_size(LabelAreaPosition::Left, 100.0)
                 .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
                 .margin(30.0)
-                .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+                .caption(caption.unwrap_or(""), ("sans-serif", 30.0))
                 .build_cartesian_2d(
                     (ticks[0]..ticks[ticks.len() - 1])
                         .log_scale()
@@ -209,7 +209,7 @@ impl Plotter {
                 .set_label_area_size(LabelAreaPosition::Left, 100.0)
                 .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
                 .margin(30.0)
-                .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+                .caption(caption.unwrap_or(""), ("sans-serif", 30.0))
                 .build_cartesian_2d(0.0..x_max, y_start..y_end)?;
 
             ctx.configure_mesh()
@@ -301,7 +301,7 @@ impl Plotter {
         let mut ctx = ChartBuilder::on(&root_area)
             .set_label_area_size(LabelAreaPosition::Left, 100.0)
             .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
-            .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+            .caption(caption.unwrap_or(""), ("sans-serif", 30.0))
             .margin(5.0)
             .build_cartesian_2d(custom_x_axes.clone(), y_start..y_end)?;
 
@@ -347,7 +347,7 @@ impl Plotter {
                 .zip(self.coordinates[0].y_axis.iter())
                 .map(|(x, y_axis)| {
                     EmptyElement::at((x.clone(), y_axis.y))
-                        + Text::new(y_axis.y.to_string(), (-20, -30), ("sans-serif", 15))
+                        + Text::new(y_axis.y.to_string(), (20, -5), ("sans-serif", 15))
                 }),
         )?;
 
@@ -401,7 +401,7 @@ impl Plotter {
         let mut ctx = ChartBuilder::on(&root_area)
             .set_label_area_size(LabelAreaPosition::Left, 100.0)
             .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
-            .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
+            .caption(caption.unwrap_or(""), ("sans-serif", 30.0))
             .margin(5.0)
             .build_cartesian_2d(x_start..x_end, y_start..y_end)?;
 
