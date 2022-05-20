@@ -59,17 +59,33 @@ impl MicroBench {
         let mut plotter_mknod_behaviour = Plotter::new();
         let mut plotter_read_behaviour = Plotter::new();
         let mut plotter_write_behaviour = Plotter::new();
-        let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();
+        let behaviour_header = ["time".to_string(), "ops".to_string()].to_vec();
 
         for (idx, mount_path) in self.mount_paths.iter().enumerate() {
-            let (mkdir_ops_s, mkdir_behaviour, mkdir_times, mkdir_time_uint) =
-                self.mkdir(run_time, mount_path, &self.fs_names[idx], progress_style.clone())?;
-            let (mknod_ops_s, mknod_behaviour, mknod_times, mknod_time_uint) =
-                self.mknod(run_time, mount_path, &self.fs_names[idx], progress_style.clone())?;
-            let (read_ops_s, read_behaviour, read_times, read_time_uint) =
-                self.read(run_time, mount_path, &self.fs_names[idx], progress_style.clone())?;
-            let (write_ops_s, write_behaviour, write_times, write_time_uint) =
-                self.write(run_time, mount_path, &self.fs_names[idx], progress_style.clone())?;
+            let (mkdir_ops_s, mkdir_behaviour, mkdir_times, mkdir_time_uint) = self.mkdir(
+                run_time,
+                mount_path,
+                &self.fs_names[idx],
+                progress_style.clone(),
+            )?;
+            let (mknod_ops_s, mknod_behaviour, mknod_times, mknod_time_uint) = self.mknod(
+                run_time,
+                mount_path,
+                &self.fs_names[idx],
+                progress_style.clone(),
+            )?;
+            let (read_ops_s, read_behaviour, read_times, read_time_uint) = self.read(
+                run_time,
+                mount_path,
+                &self.fs_names[idx],
+                progress_style.clone(),
+            )?;
+            let (write_ops_s, write_behaviour, write_times, write_time_uint) = self.write(
+                run_time,
+                mount_path,
+                &self.fs_names[idx],
+                progress_style.clone(),
+            )?;
 
             let ops_s_header = [
                 "operation".to_string(),
@@ -78,7 +94,7 @@ impl MicroBench {
                 "ops/s_lb".to_string(),
                 "ops/s_ub".to_string(),
             ]
-                .to_vec();
+            .to_vec();
 
             // log and plot ops/s
             let mut ops_s_results = BenchResult::new(ops_s_header);
@@ -96,38 +112,50 @@ impl MicroBench {
             file_name.set_extension("svg");
             plotter.bar_chart(Some("Operation"), Some("Ops/s"), None, &file_name)?;
 
-
-
             // log behaviour results
             let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
             mkdir_behaviour_results.add_records(mkdir_behaviour)?;
             let mut file_name = self.log_path.clone();
             file_name.push(format!("{}_mkdir.csv", self.fs_names[idx]));
             mkdir_behaviour_results.log(&file_name)?;
-            plotter_mkdir_behaviour.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Behaviour)?;
+            plotter_mkdir_behaviour.add_coordinates(
+                &file_name,
+                Some(self.fs_names[idx].clone()),
+                &ResultMode::Behaviour,
+            )?;
 
             let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
             mknod_behaviour_results.add_records(mknod_behaviour)?;
             let mut file_name = self.log_path.clone();
             file_name.push(format!("{}_mknod.csv", self.fs_names[idx]));
             mknod_behaviour_results.log(&file_name)?;
-            plotter_mknod_behaviour.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Behaviour)?;
+            plotter_mknod_behaviour.add_coordinates(
+                &file_name,
+                Some(self.fs_names[idx].clone()),
+                &ResultMode::Behaviour,
+            )?;
 
             let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
             read_behaviour_results.add_records(read_behaviour)?;
             let mut file_name = self.log_path.clone();
             file_name.push(format!("{}_read.csv", self.fs_names[idx]));
             read_behaviour_results.log(&file_name)?;
-            plotter_read_behaviour.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Behaviour)?;
+            plotter_read_behaviour.add_coordinates(
+                &file_name,
+                Some(self.fs_names[idx].clone()),
+                &ResultMode::Behaviour,
+            )?;
 
             let mut write_behaviour_results = BenchResult::new(behaviour_header.clone());
             write_behaviour_results.add_records(write_behaviour)?;
             let mut file_name = self.log_path.clone();
             file_name.push(format!("{}_write.csv", self.fs_names[idx]));
             write_behaviour_results.log(&file_name)?;
-            plotter_write_behaviour.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Behaviour)?;
-
-
+            plotter_write_behaviour.add_coordinates(
+                &file_name,
+                Some(self.fs_names[idx].clone()),
+                &ResultMode::Behaviour,
+            )?;
 
             // log and plot sample iteration average times
             let times_header = ["op".to_string(), format!("time ({})", mkdir_time_uint)].to_vec();
@@ -202,19 +230,47 @@ impl MicroBench {
         // plot the behaviour results
         let mut file_name = self.log_path.clone();
         file_name.push("mkdir.svg");
-        plotter_mkdir_behaviour.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
+        plotter_mkdir_behaviour.line_chart(
+            Some("Time"),
+            Some("Ops/s"),
+            None,
+            false,
+            false,
+            &file_name,
+        )?;
 
         let mut file_name = self.log_path.clone();
         file_name.push("mknod.svg");
-        plotter_mknod_behaviour.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
+        plotter_mknod_behaviour.line_chart(
+            Some("Time"),
+            Some("Ops/s"),
+            None,
+            false,
+            false,
+            &file_name,
+        )?;
 
         let mut file_name = self.log_path.clone();
         file_name.push("read.svg");
-        plotter_read_behaviour.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
+        plotter_read_behaviour.line_chart(
+            Some("Time"),
+            Some("Ops/s"),
+            None,
+            false,
+            false,
+            &file_name,
+        )?;
 
         let mut file_name = self.log_path.clone();
         file_name.push("write.svg");
-        plotter_write_behaviour.line_chart(Some("Time"), Some("Ops/s"), None, false, false, &file_name)?;
+        plotter_write_behaviour.line_chart(
+            Some("Time"),
+            Some("Ops/s"),
+            None,
+            false,
+            false,
+            &file_name,
+        )?;
 
         Ok(())
     }
@@ -224,12 +280,21 @@ impl MicroBench {
 
         let throughput_header = ["file_size".to_string(), "throughput".to_string()].to_vec();
 
-
         let mut read_plotter = Plotter::new();
         let mut write_plotter = Plotter::new();
         for (idx, mount_path) in self.mount_paths.iter().enumerate() {
-            let read_throughput = self.read_throughput(max_rt, &mount_path, &self.fs_names[idx], progress_style.clone())?;
-            let write_throughput = self.write_throughput(max_rt, &mount_path, &self.fs_names[idx], progress_style.clone())?;
+            let read_throughput = self.read_throughput(
+                max_rt,
+                &mount_path,
+                &self.fs_names[idx],
+                progress_style.clone(),
+            )?;
+            let write_throughput = self.write_throughput(
+                max_rt,
+                &mount_path,
+                &self.fs_names[idx],
+                progress_style.clone(),
+            )?;
 
             let mut read_throughput_results = BenchResult::new(throughput_header.clone());
             read_throughput_results.add_records(read_throughput)?;
@@ -237,7 +302,11 @@ impl MicroBench {
             file_name.push(format!("{}_read_throughput.csv", self.fs_names[idx]));
             read_throughput_results.log(&file_name)?;
 
-            read_plotter.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Throughput)?;
+            read_plotter.add_coordinates(
+                &file_name,
+                Some(self.fs_names[idx].clone()),
+                &ResultMode::Throughput,
+            )?;
 
             let mut write_throughput_results = BenchResult::new(throughput_header.clone());
             write_throughput_results.add_records(write_throughput)?;
@@ -245,9 +314,12 @@ impl MicroBench {
             file_name.push(format!("{}_write_throughput.csv", self.fs_names[idx]));
             write_throughput_results.log(&file_name)?;
 
-            write_plotter.add_coordinates(&file_name, Some(self.fs_names[idx].clone()), &ResultMode::Throughput)?;
+            write_plotter.add_coordinates(
+                &file_name,
+                Some(self.fs_names[idx].clone()),
+                &ResultMode::Throughput,
+            )?;
         }
-
 
         let mut file_name = self.log_path.clone();
         file_name.push("read_throughput.svg");
@@ -259,9 +331,6 @@ impl MicroBench {
             true,
             &file_name,
         )?;
-
-
-
 
         let mut file_name = self.log_path.clone();
         file_name.push("write_throughput.svg");
@@ -779,7 +848,10 @@ impl MicroBench {
         if !interrupted {
             progress.finish()?;
         } else {
-            progress.abandon_with_message(&format!("read_throughput ({}) exceeded the max runtime", fs_name))?;
+            progress.abandon_with_message(&format!(
+                "read_throughput ({}) exceeded the max runtime",
+                fs_name
+            ))?;
         }
 
         println!("{:11} {}", "run time:", time_format(end));
@@ -882,7 +954,10 @@ impl MicroBench {
         if !interrupted {
             progress.finish()?;
         } else {
-            progress.abandon_with_message(&format!("write_throughput ({}) exceeded the max runtime", fs_name))?;
+            progress.abandon_with_message(&format!(
+                "write_throughput ({}) exceeded the max runtime",
+                fs_name
+            ))?;
         }
 
         println!("{:11} {}", "run time:", time_format(end));

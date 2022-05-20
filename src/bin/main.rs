@@ -45,18 +45,15 @@ fn main() -> Result<(), Error> {
     let mount_paths = args.mount.into_iter().collect::<Vec<_>>();
 
     if fs_names.len() != mount_paths.len() {
-        return Err(Error::InvalidConfig("There should be one fs-name per each mount argument".to_string()));
+        return Err(Error::InvalidConfig(
+            "There should be one fs-name per each mount argument".to_string(),
+        ));
     }
 
     match args.bench_mode {
         BenchMode::Micro => {
-            let micro_bench = MicroBench::new(
-                args.size,
-                args.time,
-                mount_paths,
-                fs_names,
-                args.log_path,
-            )?;
+            let micro_bench =
+                MicroBench::new(args.size, args.time, mount_paths, fs_names, args.log_path)?;
             micro_bench.run()?;
         }
         BenchMode::Strace => {

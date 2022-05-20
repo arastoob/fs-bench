@@ -143,8 +143,7 @@ impl Plotter {
         root_area.fill(&WHITE)?;
 
         if fixed_ticks {
-            let ticks = max_x_axis.iter()
-                .map(|x| *x as i64).collect::<Vec<_>>();
+            let ticks = max_x_axis.iter().map(|x| *x as i64).collect::<Vec<_>>();
 
             let mut ctx = ChartBuilder::on(&root_area)
                 .set_label_area_size(LabelAreaPosition::Left, 100.0)
@@ -152,8 +151,10 @@ impl Plotter {
                 .margin(30.0)
                 .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
                 .build_cartesian_2d(
-                    (ticks[0]..ticks[ticks.len() - 1]).log_scale().with_key_points(ticks),
-                    y_start..y_end
+                    (ticks[0]..ticks[ticks.len() - 1])
+                        .log_scale()
+                        .with_key_points(ticks),
+                    y_start..y_end,
                 )?;
 
             ctx.configure_mesh()
@@ -161,7 +162,6 @@ impl Plotter {
                 .x_desc(x_label.unwrap_or(""))
                 .y_desc(y_label.unwrap_or(""))
                 .draw()?;
-
 
             // plot the coordinates
             let mut has_legend = false;
@@ -173,8 +173,7 @@ impl Plotter {
                     .iter()
                     .map(|x| x.get_float())
                     .collect::<Result<Vec<f64>, Error>>()?;
-                let x_axis = x_axis.iter()
-                    .map(|x| *x as i64).collect::<Vec<_>>();
+                let x_axis = x_axis.iter().map(|x| *x as i64).collect::<Vec<_>>();
                 let y_axis = coordinate.y_axis.clone();
 
                 let color = colors.next().unwrap();
@@ -205,24 +204,19 @@ impl Plotter {
                 // draw the legend
                 ctx.configure_series_labels().border_style(&BLACK).draw()?;
             }
-
         } else {
             let mut ctx = ChartBuilder::on(&root_area)
                 .set_label_area_size(LabelAreaPosition::Left, 100.0)
                 .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
                 .margin(30.0)
                 .caption(caption.unwrap_or(""), ("sans-serif", 40.0))
-                .build_cartesian_2d(
-                    0.0..x_max,
-                    y_start..y_end
-                )?;
+                .build_cartesian_2d(0.0..x_max, y_start..y_end)?;
 
             ctx.configure_mesh()
                 .axis_desc_style(("sans-serif", 20.0))
                 .x_desc(x_label.unwrap_or(""))
                 .y_desc(y_label.unwrap_or(""))
                 .draw()?;
-
 
             // plot the coordinates
             let mut has_legend = false;
@@ -266,8 +260,6 @@ impl Plotter {
                 ctx.configure_series_labels().border_style(&BLACK).draw()?;
             }
         };
-
-
 
         // to avoid the IO failure being ignored silently, we manually call the present function
         root_area.present()?;
@@ -502,22 +494,22 @@ impl Plotter {
         let mut y_axis = vec![];
 
         // find the seconds and ops columns
-        let seconds_idx = reader
+        let times_idx = reader
             .headers()?
             .iter()
-            .position(|header| header == "second")
-            .ok_or(Error::CsvError("header 'second' not found".to_string()))?;
+            .position(|header| header.contains("time"))
+            .ok_or(Error::CsvError("header 'time' not found".to_string()))?;
         let ops_idx = reader
             .headers()?
             .iter()
-            .position(|header| header == "ops")
+            .position(|header| header.contains("ops"))
             .ok_or(Error::CsvError("header 'ops' not found".to_string()))?;
 
         for record in reader.records() {
             let record = record?;
             x_axis.push(XAxis::from(
                 record
-                    .get(seconds_idx)
+                    .get(times_idx)
                     .ok_or(Error::CsvError(
                         "failed to read from the csv file".to_string(),
                     ))?
@@ -678,7 +670,10 @@ impl Ranged for CustomXAxis {
         return 0;
     }
 
-    fn key_points<Hint: plotters::coord::ranged1d::KeyPointHint>(&self, hint: Hint) -> Vec<Self::ValueType> {
+    fn key_points<Hint: plotters::coord::ranged1d::KeyPointHint>(
+        &self,
+        hint: Hint,
+    ) -> Vec<Self::ValueType> {
         if hint.max_num_points() < 3 {
             vec![]
         } else {
