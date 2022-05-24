@@ -53,6 +53,52 @@ pub fn percent_format(p: f64) -> String {
     format!("{:.2} %", p)
 }
 
+// convert two f64 numbers, which specify the start and end of a range, to scientific notation
+pub fn range_format(s: f64, e: f64) -> (f64, f64, &'static str) {
+    // we should decide based on the start range number, otherwise our result is incorrect, e.g,
+    // (60000, 450000): if we do the convert based on the end ragne number, the result
+    // would be (6.0000, 4.50000, 1e4), where the start range becomes bigger than the end range.
+    // if the start range number is less than 10, we decide based on the end range number
+
+    // if the end range number if less than 100, don't convert to scientific notation
+    if e < 100f64 {
+        return (s, e, "1");
+    }
+
+    let digit_num = if s < 10f64 {
+        e.trunc().to_string().len() // number of digits of the integer part
+    } else { s.trunc().to_string().len() };
+
+    return match digit_num {
+        1 => { (s, e, "1") },
+        2 => { (s / 1e1, e / 1e1, "1e1") },
+        3 => { (s / 1e2, e / 1e2, "1e2") },
+        4 => { (s / 1e3, e / 1e3, "1e3") },
+        5 => { (s / 1e4, e / 1e4, "1e4") },
+        6 => { (s / 1e5, e / 1e5, "1e5") },
+        7 => { (s / 1e6, e / 1e6, "1e6") },
+        8 => { (s / 1e7, e / 1e7, "1e7") },
+        9 => { (s / 1e8, e / 1e8, "1e8") },
+        _ => { (s / 1e9, e / 1e9, "1e9") }
+    }
+}
+
+pub fn float_format_by_notation(f: f64, n: &str) -> f64 {
+    match n {
+        "1" => { f },
+        "1e1" => { f / 1e1 },
+        "1e2" => { f / 1e2 },
+        "1e3" => { f / 1e3 },
+        "1e4" => { f / 1e4 },
+        "1e5" => { f / 1e5 },
+        "1e6" => { f / 1e6 },
+        "1e7" => { f / 1e7 },
+        "1e8" => { f / 1e8 },
+        "1e9" => { f / 1e9 },
+        _ => { f },
+    }
+}
+
 fn micro_second(s: f64) -> f64 {
     let micro = s * 1e6;
     // output to 4 floating points
@@ -78,7 +124,7 @@ fn second(s: f64) -> f64 {
 
 #[cfg(test)]
 mod test {
-    use crate::format::time_format;
+    use crate::format::{time_format, range_format};
 
     #[test]
     fn time_format_test() {
@@ -95,5 +141,13 @@ mod test {
 
         assert_eq!(time_format(65.126543), "1:5.1265".to_string());
         assert_eq!(time_format(3601.15236), "1:0:1.1523".to_string());
+    }
+
+    #[test]
+    fn range_format_test() {
+        assert_eq!(range_format(60000f64, 460000f64), (6f64, 46f64, "1e4"));
+        assert_eq!(range_format(61234f64, 461234f64), (6.1234f64, 46.1234f64, "1e4"));
+        assert_eq!(range_format(2354f64, 15147f64), (2.354f64, 15.147f64, "1e3"));
+        assert_eq!(range_format(1f64, 127f64), (0.01f64, 1.27f64, "1e2"));
     }
 }
