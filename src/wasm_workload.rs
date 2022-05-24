@@ -1,7 +1,7 @@
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
-use crate::{BenchResult, Error, Fs, ResultMode};
+use crate::{BenchResult, Error, Fs, ops_in_window, ResultMode};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
@@ -146,7 +146,7 @@ impl WasmWorkloadRunner {
         let outliers_percentage = (outliers.len() as f64 / times.len() as f64) * 100f64;
         println!("outliers:      {} %", outliers_percentage);
 
-        let behaviour_records = Fs::ops_in_window(&behaviour, Duration::from_secs(1000))?;
+        let behaviour_records = ops_in_window(&behaviour, Duration::from_secs(1000))?;
 
         // generate the behaviour plots
         let behaviour_header = ["second".to_string(), "ops".to_string()].to_vec();

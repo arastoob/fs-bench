@@ -331,94 +331,94 @@ impl Fs {
 
         Ok(new_path)
     }
+}
 
-    // count the number of operations in a time window
-    // the time window length is in milliseconds
-    // the input times contains the timestamps in unix_time format. The first 10 digits are
-    // date and time in seconds and the last 9 digits show the milliseconds
-    pub fn ops_in_window(
-        times: &Vec<SystemTime>,
-        duration: Duration,
-    ) -> Result<Vec<Record>, Error> {
-        let len = times.len();
-        let first = times[0]; // first timestamp
-        let mut last = times[len - 1]; // last timestamp
-        if last.duration_since(first)? > duration {
-            last = first.add(duration);
-        }
-
-        // decide about the window length in millis
-        let duration = last.duration_since(first)?.as_secs_f64();
-        let window = if duration < 0.5 {
-            2
-        } else if duration < 1f64 {
-            5
-        } else if duration < 3f64 {
-            10
-        } else if duration < 5f64 {
-            20
-        } else if duration < 10f64 {
-            50
-        } else if duration < 20f64 {
-            70
-        } else if duration < 50f64 {
-            100
-        } else if duration < 100f64 {
-            150
-        } else if duration < 150f64 {
-            200
-        } else if duration < 200f64 {
-            500
-        } else if duration < 300f64 {
-            1000
-        } else {
-            5000
-        };
-
-        let mut records = vec![];
-
-        let mut next = first.add(Duration::from_millis(window));
-        let mut idx = 0;
-        let mut ops = 0;
-        while next < last {
-            while times[idx] < next {
-                // count ops in this time window
-                ops += 1;
-                idx += 1;
-            }
-            let time = next.duration_since(first)?.as_secs_f64();
-            let record = Record {
-                fields: [
-                    time.to_string(),
-                    // we have counted ops in a window length milliseconds, so the ops in
-                    // a second is (ops * 1000) / window
-                    ((ops * 1000) / window as usize).to_string(),
-                ]
-                .to_vec(),
-            };
-            records.push(record);
-
-            // go the next time window
-            next = next.add(Duration::from_millis(window));
-            ops = 0;
-        }
-
-        // count the remaining
-        if idx < len {
-            ops = len - idx;
-            let time = last.duration_since(first)?.as_secs_f64();
-            let record = Record {
-                fields: [
-                    time.to_string(),
-                    // we have counted ops in a window length milliseconds, so the ops in
-                    // a second is (ops * 1000) / window
-                    ((ops * 1000) / window as usize).to_string(),
-                ]
-                .to_vec(),
-            };
-            records.push(record);
-        }
-
-        Ok(records)
+// count the number of operations in a time window
+// the time window length is in milliseconds
+// the input times contains the timestamps in unix_time format. The first 10 digits are
+// date and time in seconds and the last 9 digits show the milliseconds
+pub fn ops_in_window(
+    times: &Vec<SystemTime>,
+    duration: Duration,
+) -> Result<Vec<Record>, Error> {
+    let len = times.len();
+    let first = times[0]; // first timestamp
+    let mut last = times[len - 1]; // last timestamp
+    if last.duration_since(first)? > duration {
+        last = first.add(duration);
     }
+
+    // decide about the window length in millis
+    let duration = last.duration_since(first)?.as_secs_f64();
+    let window = if duration < 0.5 {
+        2
+    } else if duration < 1f64 {
+        5
+    } else if duration < 3f64 {
+        10
+    } else if duration < 5f64 {
+        20
+    } else if duration < 10f64 {
+        50
+    } else if duration < 20f64 {
+        70
+    } else if duration < 50f64 {
+        100
+    } else if duration < 100f64 {
+        150
+    } else if duration < 150f64 {
+        200
+    } else if duration < 200f64 {
+        500
+    } else if duration < 300f64 {
+        1000
+    } else {
+        5000
+    };
+
+    let mut records = vec![];
+
+    let mut next = first.add(Duration::from_millis(window));
+    let mut idx = 0;
+    let mut ops = 0;
+    while next < last {
+        while times[idx] < next {
+            // count ops in this time window
+            ops += 1;
+            idx += 1;
+        }
+        let time = next.duration_since(first)?.as_secs_f64();
+        let record = Record {
+            fields: [
+                time.to_string(),
+                // we have counted ops in a window length milliseconds, so the ops in
+                // a second is (ops * 1000) / window
+                ((ops * 1000) / window as usize).to_string(),
+            ]
+                .to_vec(),
+        };
+        records.push(record);
+
+        // go the next time window
+        next = next.add(Duration::from_millis(window));
+        ops = 0;
+    }
+
+    // count the remaining
+    if idx < len {
+        ops = len - idx;
+        let time = last.duration_since(first)?.as_secs_f64();
+        let record = Record {
+            fields: [
+                time.to_string(),
+                // we have counted ops in a window length milliseconds, so the ops in
+                // a second is (ops * 1000) / window
+                ((ops * 1000) / window as usize).to_string(),
+            ]
+                .to_vec(),
+        };
+        records.push(record);
+    }
+
+    Ok(records)
 }

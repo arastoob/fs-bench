@@ -2,7 +2,7 @@ use crate::format::{percent_format, time_format, time_format_by_unit, time_unit}
 use crate::plotter::Plotter;
 use crate::sample::{AnalysedData, Sample};
 use crate::timer::Timer;
-use crate::{BenchResult, Error, Fs, Progress, Record, ResultMode};
+use crate::{BenchResult, Error, Fs, ops_in_window, Progress, Record, ResultMode};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -110,7 +110,7 @@ impl MicroBench {
             let mut plotter = Plotter::new();
             plotter.add_coordinates(&file_name, None, &ResultMode::OpsPerSecond)?;
             file_name.set_extension("svg");
-            plotter.bar_chart(Some("Operation"), Some("Ops/s"), None, &file_name)?;
+            plotter.bar_chart(Some("Operation"), Some("Ops/s"), Some(&format!("Ops/s ({})", self.fs_names[idx])), &file_name)?;
 
             // log behaviour results
             let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
@@ -171,7 +171,7 @@ impl MicroBench {
             plotter.point_series(
                 Some("Sample iteration"),
                 Some(format!("Average time ({})", mkdir_time_uint).as_str()),
-                None,
+                Some(&format!("Mkdir ({})", self.fs_names[idx])),
                 &file_name,
             )?;
 
@@ -188,7 +188,7 @@ impl MicroBench {
             plotter.point_series(
                 Some("Sample iteration"),
                 Some(format!("Average time ({})", mknod_time_uint).as_str()),
-                None,
+                Some(&format!("Mknod ({})", self.fs_names[idx])),
                 &file_name,
             )?;
 
@@ -205,7 +205,7 @@ impl MicroBench {
             plotter.point_series(
                 Some("Sample iteration"),
                 Some(format!("Average time ({})", read_time_uint).as_str()),
-                None,
+                Some(&format!("Read ({})", self.fs_names[idx])),
                 &file_name,
             )?;
 
@@ -222,7 +222,7 @@ impl MicroBench {
             plotter.point_series(
                 Some("Sample iteration"),
                 Some(format!("Average time ({})", write_time_uint).as_str()),
-                None,
+                Some(&format!("Write ({})", self.fs_names[idx])),
                 &file_name,
             )?;
         }
@@ -233,7 +233,7 @@ impl MicroBench {
         plotter_mkdir_behaviour.line_chart(
             Some("Time"),
             Some("Ops/s"),
-            None,
+            Some("Mkdir"),
             false,
             false,
             &file_name,
@@ -244,7 +244,7 @@ impl MicroBench {
         plotter_mknod_behaviour.line_chart(
             Some("Time"),
             Some("Ops/s"),
-            None,
+            Some("Mknod"),
             false,
             false,
             &file_name,
@@ -255,7 +255,7 @@ impl MicroBench {
         plotter_read_behaviour.line_chart(
             Some("Time"),
             Some("Ops/s"),
-            None,
+            Some("Read"),
             false,
             false,
             &file_name,
@@ -266,7 +266,7 @@ impl MicroBench {
         plotter_write_behaviour.line_chart(
             Some("Time"),
             Some("Ops/s"),
-            None,
+            Some("Write"),
             false,
             false,
             &file_name,
@@ -326,7 +326,7 @@ impl MicroBench {
         read_plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
-            None,
+            Some("Read Throughput"),
             true,
             true,
             &file_name,
@@ -337,7 +337,7 @@ impl MicroBench {
         write_plotter.line_chart(
             Some("File size [B]"),
             Some("Throughput [B/s]"),
-            None,
+            Some("Write Throughput"),
             true,
             true,
             &file_name,
@@ -422,7 +422,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
@@ -520,7 +520,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
@@ -634,7 +634,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
@@ -751,7 +751,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
