@@ -2,7 +2,7 @@ use crate::format::{percent_format, time_format, time_format_by_unit, time_unit}
 use crate::plotter::Plotter;
 use crate::sample::{AnalysedData, Sample};
 use crate::timer::Timer;
-use crate::{BenchResult, Error, Fs, Progress, Record, ResultMode};
+use crate::{BenchResult, Error, Fs, ops_in_window, Progress, Record, ResultMode};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -422,7 +422,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
@@ -520,7 +520,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
@@ -634,7 +634,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
@@ -751,7 +751,7 @@ impl MicroBench {
             .to_vec(),
         };
 
-        let behaviour_records = Fs::ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
