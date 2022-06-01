@@ -1,19 +1,20 @@
-use crate::format::{time_format, time_format_by_unit, time_unit};
+use std::collections::HashMap;
+use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
 use crate::plotter::Plotter;
 use crate::{BenchResult, Error, Fs, Progress, Record, ResultMode};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::RngCore;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
-use strace_parser::{FileDir, Operation, Parser, Process};
+use strace_parser::{FileDir, Operation, OperationType, Parser, Process};
 
 pub struct StraceWorkloadRunner {
     mount_paths: Vec<PathBuf>,
     fs_names: Vec<String>,
     log_path: PathBuf,
-    processes: Vec<Process>, // list of processes that their ops can be run concurrently
-    postponed_processes: Vec<Process>, // list of processes that their ops should be run at end
+    processes: Vec<Arc<Mutex<Process>>>, // list of processes with their operations list
     files: Vec<FileDir>,     // the files and directories accessed and logged by strace
 }
 
@@ -26,7 +27,10 @@ impl StraceWorkloadRunner {
     ) -> Result<Self, Error> {
         // parse the strace log file and extract the operations
         let mut parser = Parser::new(strace_path);
-        let (processes, postponed_processes) = parser.parse()?;
+        let processes = parser.parse()?;
+        let processes = processes.into_iter()
+            .map(|process| Arc::new(Mutex::new(process)))
+            .collect::<Vec<_>>();
         let files = parser.existing_files()?;
         let mut files = Vec::from_iter(files.into_iter());
 
@@ -37,7 +41,6 @@ impl StraceWorkloadRunner {
             fs_names,
             log_path,
             processes,
-            postponed_processes,
             files,
         })
     }
@@ -53,84 +56,47 @@ impl StraceWorkloadRunner {
             base_path.push("strace_workload");
 
             let (
-                op_times_records_actual,
-                accumulated_times_records_actual,
+                op_times_records,
+                accumulated_times_records,
                 op_time_unit,
                 accumulated_time_unit,
-            ) = self.actual_behaviour(&base_path, &fs_names[idx], progress_style.clone())?;
+            ) = self.parallel(&base_path, &fs_names[idx], progress_style.clone())?;
 
             let op_times_header = ["op".to_string(), format!("time ({})", op_time_unit)].to_vec();
             let accumulated_times_header = [
                 format!("time ({})", accumulated_time_unit),
                 "ops".to_string(),
             ]
-            .to_vec();
+                .to_vec();
 
-            // log the actual results
+            // log the results
             let mut results = BenchResult::new(op_times_header.clone());
-            results.add_records(op_times_records_actual)?;
-            let mut file_name = self.log_path.clone();
-            file_name.push(format!(
-                "{}_op_times_strace_workload_actual.csv",
-                self.fs_names[idx]
-            ));
-            results.log(&file_name)?;
-
-            let mut op_times_plotter = Plotter::new();
-            op_times_plotter.add_coordinates(
-                &file_name,
-                Some("actual order".to_string()),
-                &ResultMode::OpTimes,
-            )?;
-
-            let mut accumulated_times_results_actual =
-                BenchResult::new(accumulated_times_header.clone());
-            accumulated_times_results_actual.add_records(accumulated_times_records_actual)?;
-            let mut file_name = self.log_path.clone();
-            file_name.push(format!(
-                "{}_accumulated_times_workload_actual.csv",
-                self.fs_names[idx]
-            ));
-            accumulated_times_results_actual.log(&file_name)?;
-
-            let mut accumulated_times_plotter = Plotter::new();
-            accumulated_times_plotter.add_coordinates(
-                &file_name,
-                Some("actual".to_string()),
-                &ResultMode::Behaviour,
-            )?;
-
-            let (
-                op_times_records_parallel,
-                accumulated_times_records_parallel,
-                _op_time_unit,
-                _accumulated_time_unit,
-            ) = self.parallel(&base_path, &fs_names[idx], progress_style.clone())?;
-
-            // log the parallel results
-            let mut results = BenchResult::new(op_times_header.clone());
-            results.add_records(op_times_records_parallel)?;
+            results.add_records(op_times_records)?;
             let mut file_name_p = self.log_path.clone();
             file_name_p.push(format!(
-                "{}_op_times_strace_workload_parallel.csv",
+                "{}_op_times_strace_workload.csv",
                 self.fs_names[idx]
             ));
             results.log(&file_name_p)?;
+
+            let mut op_times_plotter = Plotter::new();
             op_times_plotter.add_coordinates(
                 &file_name_p,
                 Some("parallel".to_string()),
                 &ResultMode::OpTimes,
             )?;
 
-            let mut accumulated_times_results_parallel =
+            let mut accumulated_times_results =
                 BenchResult::new(accumulated_times_header.clone());
-            accumulated_times_results_parallel.add_records(accumulated_times_records_parallel)?;
+            accumulated_times_results.add_records(accumulated_times_records)?;
             let mut file_name = self.log_path.clone();
             file_name.push(format!(
-                "{}_accumulated_times_workload_parallel.csv",
+                "{}_accumulated_times_workload.csv",
                 self.fs_names[idx]
             ));
-            accumulated_times_results_parallel.log(&file_name)?;
+            accumulated_times_results.log(&file_name)?;
+
+            let mut accumulated_times_plotter = Plotter::new();
             accumulated_times_plotter.add_coordinates(
                 &file_name,
                 Some("parallel".to_string()),
@@ -155,7 +121,7 @@ impl StraceWorkloadRunner {
             // plot the accumulated results
             let mut file_name = self.log_path.clone();
             file_name.push(format!(
-                "{}_accumulated_times_workload_actual.svg",
+                "{}_accumulated_times_workload.svg",
                 self.fs_names[idx]
             ));
             accumulated_times_plotter.line_chart(
@@ -173,94 +139,7 @@ impl StraceWorkloadRunner {
         Ok(())
     }
 
-    // replay the workload by mimicking the actual workload's order, e.g, if a process p1 clone
-    // another process p2 in the workload to execute some operations, this runner spawns a thread
-    // when it reaches the clone operation to replay p2's operations
-    fn actual_behaviour(
-        &mut self,
-        base_path: &PathBuf,
-        fs_name: &str,
-        style: ProgressStyle,
-    ) -> Result<(Vec<Record>, Vec<Record>, String, String), Error> {
-        self.setup(&base_path)?;
-
-        let bar = ProgressBar::new_spinner();
-        bar.set_style(style);
-        bar.set_message(format!("replaying in the actual order ({})", fs_name));
-        let progress = Progress::start(bar);
-
-        let start = SystemTime::now();
-        let mut op_times = vec![];
-        let mut accumulated_times = vec![];
-
-        // replay the operations of the first process
-        // if there would be other processes, the have been cloned by the first one and their
-        // operations will be replayed when the clone op is seen
-        let first_process = &self.processes[0];
-        for (_op_id, op) in first_process.ops() {
-            let (mut time, mut behaviour) = self.exec(op, &base_path)?;
-            op_times.append(&mut time);
-            accumulated_times.append(&mut behaviour);
-        }
-
-        // replay the postponed processes' ops
-        for process in self.postponed_processes.iter() {
-            for (_op_id, op) in process.ops() {
-                let (mut time, mut behaviour) = self.exec(&op, &base_path)?;
-                op_times.append(&mut time);
-                accumulated_times.append(&mut behaviour);
-            }
-        }
-
-        let end = start.elapsed()?.as_secs_f64();
-        progress.finish()?;
-
-        // let behaviour_records = Fs::ops_in_window(&behaviours, Duration::from_secs_f64(end))?;
-
-        let mut op_times_records = vec![];
-        let op_time_unit = time_unit(op_times[0]);
-        for (idx, time) in op_times.iter().enumerate() {
-            op_times_records.push(Record {
-                fields: [
-                    idx.to_string(),
-                    time_format_by_unit(*time, op_time_unit)?.to_string(),
-                ]
-                .to_vec(),
-            });
-        }
-
-        let mut accumulated_times_records = vec![];
-        let first = accumulated_times[0];
-        let last = accumulated_times[accumulated_times.len() - 1];
-        let accumulated_time_unit = time_unit(last.duration_since(first)?.as_secs_f64());
-        accumulated_times_records.push(Record {
-            fields: ["0".to_string(), "0".to_string()].to_vec(),
-        });
-        for (idx, system_time) in accumulated_times.iter().enumerate() {
-            accumulated_times_records.push(Record {
-                fields: [
-                    time_format_by_unit(
-                        system_time.duration_since(first)?.as_secs_f64(),
-                        accumulated_time_unit,
-                    )?
-                    .to_string(),
-                    idx.to_string(),
-                ]
-                .to_vec(),
-            });
-        }
-
-        println!("{:11} {}", "run time:", time_format(end));
-        println!();
-        Ok((
-            op_times_records,
-            accumulated_times_records,
-            op_time_unit.to_string(),
-            accumulated_time_unit.to_string(),
-        ))
-    }
-
-    // replay the processes' operations (except the postponed operations) all in parallel
+    // replay the processes' operations in parallel
     fn parallel(
         &mut self,
         base_path: &PathBuf,
@@ -271,38 +150,61 @@ impl StraceWorkloadRunner {
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("replaying in parallel ({})", fs_name));
+        bar.set_message(format!("replaying logs ({})", fs_name));
         let progress = Progress::start(bar);
 
         let start = SystemTime::now();
         let mut op_times = vec![];
         let mut accumulated_times = vec![];
+        let mut op_summaries: HashMap<String, (f64, u16)> = HashMap::new();
+        let mut process_summaries = vec![];
 
         // replay the processes' operations in parallel
+        let mut handles = vec![];
+        let start_time = SystemTime::now();
         for process in self.processes.iter() {
-            crossbeam::thread::scope(|s| {
-                s.spawn(|_| -> Result<(), Error> {
-                    for (_op_id, op) in process.ops() {
-                        // ignore the clone operation as we are replaying all the operations in parallel
-                        if op.name() != "Clone".to_string() {
-                            let (mut time, mut behaviour) = self.exec(op, &base_path)?;
-                            op_times.append(&mut time);
-                            accumulated_times.append(&mut behaviour);
-                        }
-                    }
-                    Ok(())
-                });
-            })
-            .unwrap();
+            let base_path = base_path.clone();
+            let process = process.clone();
+            let handle = std::thread::spawn(move || -> Result<ExecutionResult, Error> {
+                process.lock()?.run(&base_path, start_time)
+            });
+
+            handles.push(handle);
         }
 
-        // replay the postponed processes' ops
-        for process in self.postponed_processes.iter() {
-            for (_op_id, op) in process.ops() {
-                let (mut time, mut behaviour) = self.exec(&op, &base_path)?;
-                op_times.append(&mut time);
-                accumulated_times.append(&mut behaviour);
+        let mut total_op_time = 0f64;
+        let mut total_ops = 0;
+        for handle in handles {
+            match handle.join() {
+                Ok(execution_result) => {
+                    let mut execution_result = execution_result?;
+                    op_times.append(&mut execution_result.op_times);
+
+                    accumulated_times.append(&mut execution_result.accumulated_times);
+                    // let last = if accumulated_times.is_empty() {
+                    //     0f64
+                    // } else { accumulated_times[accumulated_times.len() - 1]};
+                    // for accumulated_time in execution_result.accumulated_times {
+                    //     accumulated_times.push(last + accumulated_time);
+                    // }
+
+                    for (ck, (ct, cn)) in execution_result.op_summaries.iter() {
+                        if let Some((t, n)) = op_summaries.get_mut(ck) {
+                            *t += ct;
+                            *n += cn;
+                        } else {
+                            op_summaries.insert(ck.clone(), (*ct, *cn));
+                        }
+
+                        total_op_time += ct;
+                        total_ops += cn;
+                    }
+
+                    process_summaries.push((execution_result.pid, execution_result.op_summaries));
+                },
+                Err(_err) => {}
             }
+
         }
 
         let end = start.elapsed()?.as_secs_f64();
@@ -321,9 +223,9 @@ impl StraceWorkloadRunner {
         }
 
         let mut accumulated_times_records = vec![];
-        let first = accumulated_times[0];
+        // let first = accumulated_times[0];
         let last = accumulated_times[accumulated_times.len() - 1];
-        let accumulated_time_unit = time_unit(last.duration_since(first)?.as_secs_f64());
+        let accumulated_time_unit = time_unit(last);
         accumulated_times_records.push(Record {
             fields: ["0".to_string(), "0".to_string()].to_vec(),
         });
@@ -331,18 +233,33 @@ impl StraceWorkloadRunner {
             accumulated_times_records.push(Record {
                 fields: [
                     time_format_by_unit(
-                        system_time.duration_since(first)?.as_secs_f64(),
+                        *system_time,
                         accumulated_time_unit,
                     )?
                     .to_string(),
-                    idx.to_string(),
+                    (idx + 1).to_string(),
                 ]
                 .to_vec(),
             });
         }
 
-        println!("{:11} {}", "run time:", time_format(end));
-        println!();
+        println!("{:20} {}\n", "total run time:", time_format(end));
+
+        println!("{:20} {}", "total time:", time_format(total_op_time));
+        println!("{:20} {}", "total operations: ", total_ops);
+        println!("{:20} {}\n", "total processes: ", process_summaries.len());
+
+        for (pid, summary) in process_summaries {
+            println!("{}", pid);
+            // sort the summaries by the time spend on each operation
+            let mut summary = summary.into_iter().collect::<Vec<(String, (f64, u16))>>();
+            summary.sort_by(|(_, (t1, _)), (_, (t2, _))| t2.partial_cmp(t1).unwrap());
+            for (op, (time, num)) in summary.iter() {
+                println!("{:7} {:12} {:12} ({:5} of total time)", num, op, time_format(*time), percent_format((time / total_op_time) * 100.0));
+            }
+        }
+
+        println!("\n---------------");
         Ok((
             op_times_records,
             accumulated_times_records,
@@ -391,79 +308,125 @@ impl StraceWorkloadRunner {
         Ok(())
     }
 
-    fn exec(
-        &self,
-        op: &Operation,
-        base_path: &PathBuf,
-    ) -> Result<(Vec<f64>, Vec<SystemTime>), Error> {
+}
+
+struct ExecutionResult {
+    pid: usize,
+    op_times: Vec<f64>,
+    accumulated_times: Vec<f64>,
+    op_summaries: HashMap<String, (f64, u16)>
+}
+
+trait Runner {
+    fn run(&mut self, base_path: &PathBuf, start_time: SystemTime) -> Result<ExecutionResult, Error>;
+}
+
+impl Runner for Process {
+    fn run(&mut self, base_path: &PathBuf, start_time: SystemTime) -> Result<ExecutionResult, Error> {
         let mut op_times = vec![];
         let mut accumulated_times = vec![];
-        match op {
-            &Operation::Mkdir(ref file, ref _mode) => {
+        // summary of operations:
+        //      key: operation name
+        //      value: (time spend for this operation so far, number of this operation)
+        let mut op_summaries: HashMap<String, (f64, u16)> = HashMap::new();
+
+        let mut ops = self.ops().clone();
+        while !ops.is_empty() {
+            // remove and take the first operation from the list
+            let shared_op = ops.remove(0);
+            match shared_op.op().lock() {
+                Ok(mut op) => {
+                    if op.can_be_executed()? {
+                        match op.execute(base_path, start_time) {
+                            Ok((op_time, system_time)) => {
+                                op_times.push(op_time);
+                                accumulated_times.push(system_time);
+                                if let Some((t, n)) = op_summaries.get_mut(&op.name()) {
+                                    *t += op_time;
+                                    *n += 1;
+                                } else {
+                                    op_summaries.insert(op.name(), (op_time, 1));
+                                }
+                            },
+                            Err(_err) => {}
+                        }
+                    } else {
+                        // add the removed operation to the end of the list to be executed later
+                        ops.push(shared_op.clone());
+                    }
+                },
+                Err(_err) => {}
+            }
+        }
+
+        Ok(ExecutionResult {
+            pid: self.pid(),
+            op_times,
+            accumulated_times,
+            op_summaries
+        })
+    }
+}
+
+trait Executer {
+    fn execute(&mut self, base_path: &PathBuf, start_time: SystemTime) -> Result<(f64, f64), Error>;
+}
+
+impl Executer for Operation {
+    fn execute(&mut self, base_path: &PathBuf, start_time: SystemTime) -> Result<(f64, f64), Error> {
+        let (op_time, system_time) = match self.op_type() {
+            &OperationType::Mkdir(ref file, ref _mode) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let begin = SystemTime::now();
-                match Fs::make_dir(path) {
-                    Ok(_) => {
-                        op_times.push(begin.elapsed()?.as_secs_f64());
-                        accumulated_times.push(SystemTime::now());
-                    }
-                    Err(_err) => {}
-                }
+                Fs::make_dir(path)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::Mknod(ref file) => {
+            &OperationType::Mknod(ref file) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 // create a file and sets its size and offset
                 let begin = SystemTime::now();
-                match Fs::make_file(path) {
-                    Ok(file) => {
-                        file.set_len(0)?;
-                        op_times.push(begin.elapsed()?.as_secs_f64());
-                        accumulated_times.push(SystemTime::now());
-                    }
-                    Err(_err) => {}
-                }
+                let file = Fs::make_file(path)?;
+                file.set_len(0)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::Remove(ref file) => {
+            &OperationType::Remove(ref file) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let path = PathBuf::from(path);
+
                 let begin = SystemTime::now();
                 if path.is_dir() {
-                    match Fs::remove_dir(path) {
-                        Ok(_) => {
-                            op_times.push(begin.elapsed()?.as_secs_f64());
-                            accumulated_times.push(SystemTime::now());
-                        }
-                        Err(_err) => {}
-                    }
+                    Fs::remove_dir(&path)?;
+                    let now = SystemTime::now();
+                    let end = now.duration_since(begin)?.as_secs_f64();
+                    let system_time = now.duration_since(start_time)?.as_secs_f64();
+                    (end, system_time)
                 } else {
-                    match Fs::remove_file(path) {
-                        Ok(_) => {
-                            op_times.push(begin.elapsed()?.as_secs_f64());
-                            accumulated_times.push(SystemTime::now());
-                        }
-                        Err(_err) => {}
-                    }
+                    Fs::remove_file(&path)?;
+                    let now = SystemTime::now();
+                    let end = now.duration_since(begin)?.as_secs_f64();
+                    let system_time = now.duration_since(start_time)?.as_secs_f64();
+                    (end, system_time)
                 }
             }
-            Operation::Read(ref file, ref offset, ref len) => {
+            OperationType::Read(ref file, ref offset, ref len) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let mut buffer = vec![0u8; *len];
 
-                match Fs::open_file(path) {
-                    Ok(mut file) => {
-                        let begin = SystemTime::now();
-                        match Fs::read_at(&mut file, &mut buffer, *offset as u64) {
-                            Ok(_) => {
-                                op_times.push(begin.elapsed()?.as_secs_f64());
-                                accumulated_times.push(SystemTime::now());
-                            }
-                            Err(_err) => {}
-                        }
-                    }
-                    Err(_err) => {}
-                }
+                let mut file = Fs::open_file(path)?;
+                let begin = SystemTime::now();
+                Fs::read_at(&mut file, &mut buffer, *offset as u64)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::Write(ref file, ref offset, ref len, ref _content) => {
+            &OperationType::Write(ref file, ref offset, ref len, ref _content) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let mut rand_content = vec![0u8; *len];
                 let mut rng = rand::thread_rng();
@@ -472,142 +435,109 @@ impl StraceWorkloadRunner {
                 let mut file = Fs::open_file(path)?;
 
                 let begin = SystemTime::now();
-                match Fs::write_at(&mut file, &mut rand_content, *offset as u64) {
-                    Ok(_) => {
-                        op_times.push(begin.elapsed()?.as_secs_f64());
-                        accumulated_times.push(SystemTime::now());
-                    }
-                    Err(_err) => {}
-                }
+                Fs::write_at(&mut file, &mut rand_content, *offset as u64)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::OpenAt(ref file, ref _offset) => {
+            &OperationType::OpenAt(ref file, ref _offset) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let begin = SystemTime::now();
                 if path.is_file() {
-                    match Fs::open_file(path) {
-                        Ok(_) => {
-                            op_times.push(begin.elapsed()?.as_secs_f64());
-                            accumulated_times.push(SystemTime::now());
-                        }
-                        Err(_err) => {}
-                    }
-                } else if path.is_dir() {
-                    match Fs::open_dir(path) {
-                        Ok(_) => {
-                            op_times.push(begin.elapsed()?.as_secs_f64());
-                            accumulated_times.push(SystemTime::now());
-                        }
-                        Err(_err) => {}
-                    }
+                    Fs::open_file(path)?;
+                    let now = SystemTime::now();
+                    let end = now.duration_since(begin)?.as_secs_f64();
+                    let system_time = now.duration_since(start_time)?.as_secs_f64();
+                    (end, system_time)
                 } else {
+                    Fs::open_dir(path)?;
+                    let now = SystemTime::now();
+                    let end = now.duration_since(begin)?.as_secs_f64();
+                    let system_time = now.duration_since(start_time)?.as_secs_f64();
+                    (end, system_time)
                 }
             }
-            &Operation::Truncate(ref file) => {
+            &OperationType::Truncate(ref file) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let begin = SystemTime::now();
-                match Fs::truncate(path) {
-                    Ok(_) => {
-                        op_times.push(begin.elapsed()?.as_secs_f64());
-                        accumulated_times.push(SystemTime::now());
-                    }
-                    Err(_err) => {}
-                }
+                Fs::truncate(path)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::Stat(ref file) => {
+            &OperationType::Stat(ref file) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let begin = SystemTime::now();
-                match Fs::metadata(path) {
-                    Ok(_) => {
-                        op_times.push(begin.elapsed()?.as_secs_f64());
-                        accumulated_times.push(SystemTime::now());
-                    }
-                    Err(_err) => {}
-                }
+                Fs::metadata(path)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::Fstat(ref file) => {
+            &OperationType::Fstat(ref file) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let begin = SystemTime::now();
-                match Fs::metadata(path) {
-                    Ok(_) => {
-                        op_times.push(begin.elapsed()?.as_secs_f64());
-                        accumulated_times.push(SystemTime::now());
-                    }
-                    Err(_err) => {}
-                }
+                Fs::metadata(path)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::Statx(ref file) => {
+            &OperationType::Statx(ref file) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let begin = SystemTime::now();
-                match Fs::metadata(path) {
-                    Ok(_) => {
-                        op_times.push(begin.elapsed()?.as_secs_f64());
-                        accumulated_times.push(SystemTime::now());
-                    }
-                    Err(_err) => {}
-                }
+                Fs::metadata(path)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::StatFS(ref file) => {
+            &OperationType::StatFS(ref file) => {
                 let _path = Fs::map_path(base_path, file.path()?)?;
-                let _begin = SystemTime::now();
+                return Err(Error::NoTimeRecord(self.name()));
                 // TODO there is no statfs in std::fs and I may need to implement it in another way?
             }
-            &Operation::Fstatat(ref file) => {
+            &OperationType::Fstatat(ref file) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
                 let begin = SystemTime::now();
-                match Fs::metadata(path) {
-                    Ok(_) => {
-                        op_times.push(begin.elapsed()?.as_secs_f64());
-                        accumulated_times.push(SystemTime::now());
-                    }
-                    Err(_err) => {}
-                }
+                Fs::metadata(path)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::Rename(ref file, ref to) => {
+            &OperationType::Rename(ref file, ref to) => {
                 let from = Fs::map_path(base_path, file.path()?)?;
                 let to = Fs::map_path(base_path, to)?;
 
                 let begin = SystemTime::now();
-                match Fs::rename(from, to) {
-                    Ok(_) => {
-                        op_times.push(begin.elapsed()?.as_secs_f64());
-                        accumulated_times.push(SystemTime::now());
-                    }
-                    Err(_err) => {}
-                }
+                Fs::rename(&from, &to)?;
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::GetRandom(ref len) => {
+            &OperationType::GetRandom(ref len) => {
                 let begin = SystemTime::now();
 
                 let mut rand_content = vec![0u8; *len];
                 let mut rng = rand::thread_rng();
                 rng.fill_bytes(&mut rand_content);
 
-                op_times.push(begin.elapsed()?.as_secs_f64());
-                accumulated_times.push(SystemTime::now());
+                let now = SystemTime::now();
+                let end = now.duration_since(begin)?.as_secs_f64();
+                let system_time = now.duration_since(start_time)?.as_secs_f64();
+                (end, system_time)
             }
-            &Operation::Clone(pid) => {
-                // get the list of operations done by the process which is going to be cloned
-                match self.processes.iter().find(|p| p.pid() == pid) {
-                    Some(process) => {
-                        crossbeam::thread::scope(|s| {
-                            s.spawn(|_| -> Result<(), Error> {
-                                for (_op_id, op) in process.ops() {
-                                    let (mut op_time, mut accumulated_time) =
-                                        self.exec(op, base_path)?;
-                                    op_times.append(&mut op_time);
-                                    accumulated_times.append(&mut accumulated_time);
-                                }
-                                Ok(())
-                            });
-                        })
-                        .unwrap();
-                    }
-                    None => {}
-                }
+            _ => {
+                return Err(Error::NoTimeRecord(self.name()));
             }
-            _ => {}
         };
 
-        Ok((op_times, accumulated_times))
+        // mark the operation as executed
+        self.executed();
+        Ok((op_time, system_time))
     }
 }
