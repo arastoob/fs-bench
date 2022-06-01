@@ -46,6 +46,11 @@ pub enum Error {
 
     /// A synchronization channel experienced an error
     SyncError(String),
+
+    PoisonError(String),
+
+    /// There is no time record for a benchmarked operation
+    NoTimeRecord(String)
 }
 
 impl Error {
@@ -141,6 +146,12 @@ impl<T> From<std::sync::mpsc::SendError<T>> for Error {
     }
 }
 
+impl<T> From<std::sync::PoisonError<T>> for Error {
+    fn from(err: std::sync::PoisonError<T>) -> Error {
+        Error::PoisonError(err.to_string())
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -163,6 +174,8 @@ impl fmt::Display for Error {
             &Error::ParseError(ref detail) => write!(f, "Parse error: {}", detail),
             &Error::WasmerError(ref detail) => write!(f, "Wasmer error: {}", detail),
             Error::SyncError(ref detail) => write!(f, "Sync error: {}", detail),
+            &Error::PoisonError(ref detail) => write!(f, "could not acquire a lock oh shared object: {}", detail),
+            &Error::NoTimeRecord(ref detail) => write!(f, "there is not time recorded for {}", detail),
         }
     }
 }
