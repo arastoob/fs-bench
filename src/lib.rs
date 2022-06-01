@@ -291,6 +291,31 @@ impl Fs {
         file.set_len(0)
     }
 
+    pub fn copy<F: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>, T: AsRef<Path>>(from: F, to: T) -> Result<(), std::io::Error> {
+        let from = Path::new(&from);
+        let from = PathBuf::from(from);
+        if from.is_file() {
+            std::fs::copy(from, to)?;
+        } else {
+            Fs::copy_dir_all(from, to)?;
+        }
+
+        Ok(())
+    }
+
+    fn copy_dir_all<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), std::io::Error> {
+        std::fs::create_dir_all(&from)?;
+        for entry in std::fs::read_dir(&from)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                Fs::copy_dir_all(entry.path(), from.as_ref().join(entry.file_name()))?;
+            } else {
+                std::fs::copy(entry.path(), &to)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn cleanup(path: &PathBuf) -> Result<(), Error> {
         let spinner = ProgressBar::new_spinner();
         spinner.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}"));
