@@ -7,12 +7,13 @@ pub mod sample;
 pub mod strace_workload;
 mod timer;
 pub mod wasm_workload;
+pub mod bench;
 
 use crate::error::Error;
 use crate::progress::Progress;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fmt::{Display, Formatter};
-use std::fs::{create_dir, create_dir_all, remove_dir_all, remove_file, File, OpenOptions};
+use std::fs::{create_dir, create_dir_all, File, OpenOptions, remove_dir_all, remove_file};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
@@ -22,7 +23,8 @@ use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
 pub enum BenchMode {
-    Micro,
+    Static,
+    RealTime,
     Strace,
 }
 
@@ -31,9 +33,10 @@ impl FromStr for BenchMode {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "micro" => Ok(BenchMode::Micro),
+            "static" => Ok(BenchMode::Static),
+            "realtime" => Ok(BenchMode::RealTime),
             "strace" => Ok(BenchMode::Strace),
-            _ => Err("valid benckmark modes are: micro, strace".to_string()),
+            _ => Err("valid benckmark modes are: static, realtime, strace".to_string()),
         }
     }
 }
@@ -41,7 +44,8 @@ impl FromStr for BenchMode {
 impl Display for BenchMode {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            BenchMode::Micro => write!(f, "micro"),
+            BenchMode::Static => write!(f, "static"),
+            BenchMode::RealTime => write!(f, "realtime"),
             BenchMode::Strace => write!(f, "strace"),
         }
     }

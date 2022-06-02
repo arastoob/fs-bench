@@ -1,9 +1,11 @@
 use clap::Parser;
 use fs_bench::error::Error;
-use fs_bench::micro::MicroBench;
+use fs_bench::micro::offline::OfflineBench;
 use fs_bench::strace_workload::StraceWorkloadRunner;
 use fs_bench::BenchMode;
 use std::path::PathBuf;
+use fs_bench::micro::real_time::RealTimeBench;
+use fs_bench::bench::Bench;
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]
@@ -14,12 +16,12 @@ struct Args {
     bench_mode: BenchMode,
 
     /// The I/O size
-    #[clap(short, long, default_value = "4KiB")]
-    size: String,
+    #[clap(short, long)]
+    size: Option<String>,
 
     /// The running time with default value of 60
-    #[clap(short, long, default_value = "60")]
-    time: f64,
+    #[clap(short, long)]
+    time: Option<f64>,
 
     /// The path to the mounted filesystem being benchmarked
     #[clap(short, long)]
@@ -51,23 +53,44 @@ fn main() -> Result<(), Error> {
     }
 
     match args.bench_mode {
-        BenchMode::Micro => {
-            let micro_bench =
-                MicroBench::new(args.size, args.time, mount_paths, fs_names, args.log_path)?;
-            micro_bench.run()?;
+        BenchMode::Static => {
+            OfflineBench::configure(
+                args.size,
+                args.time,
+                args.workload,
+                mount_paths,
+                fs_names,
+                args.log_path)?
+                .run()?;
+        }
+        BenchMode::RealTime => {
+            RealTimeBench::configure(
+                args.size,
+                args.time,
+                args.workload,
+                mount_paths,
+                fs_names,
+                args.log_path)?
+                .run()?;
         }
         BenchMode::Strace => {
-            let strace_path = match args.workload {
-                Some(strace_path) => strace_path,
-                None => {
-                    return Err(Error::InvalidConfig(
-                        "a valid strace_path not provided".to_string(),
-                    ))
-                }
-            };
-            let mut strace_workload =
-                StraceWorkloadRunner::new(mount_paths, fs_names, args.log_path, strace_path)?;
-            strace_workload.replay()?;
+            if args.workload.is_none() {
+                return Err(Error::InvalidConfig(
+                    "a valid strace_path not provided".to_string(),
+                ))
+            }
+
+            StraceWorkloadRunner::configure(args.size,
+                                            args.time,
+                                            args.workload,
+                                            mount_paths,
+                                            fs_names,
+                                            args.log_path)?
+                .run()?;
+
+            // let mut strace_workload =
+            //     StraceWorkloadRunner::new(mount_paths, fs_names, args.log_path, strace_path)?;
+            // strace_workload.replay()?;
         }
     }
 
