@@ -291,6 +291,34 @@ impl Fs {
         file.set_len(0)
     }
 
+    pub fn copy<F: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>, T: AsRef<Path>>(
+        from: F,
+        to: T,
+    ) -> Result<(), std::io::Error> {
+        let from = Path::new(&from);
+        let from = PathBuf::from(from);
+        if from.is_file() {
+            std::fs::copy(from, to)?;
+        } else {
+            Fs::copy_dir_all(from, to)?;
+        }
+
+        Ok(())
+    }
+
+    fn copy_dir_all<F: AsRef<Path>, T: AsRef<Path>>(from: F, to: T) -> Result<(), std::io::Error> {
+        std::fs::create_dir_all(&from)?;
+        for entry in std::fs::read_dir(&from)? {
+            let entry = entry?;
+            if entry.file_type()?.is_dir() {
+                Fs::copy_dir_all(entry.path(), from.as_ref().join(entry.file_name()))?;
+            } else {
+                std::fs::copy(entry.path(), &to)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn cleanup(path: &PathBuf) -> Result<(), Error> {
         let spinner = ProgressBar::new_spinner();
         spinner.set_style(ProgressStyle::default_spinner().template("{spinner} {msg}"));
@@ -337,10 +365,7 @@ impl Fs {
 // the time window length is in milliseconds
 // the input times contains the timestamps in unix_time format. The first 10 digits are
 // date and time in seconds and the last 9 digits show the milliseconds
-pub fn ops_in_window(
-    times: &Vec<SystemTime>,
-    duration: Duration,
-) -> Result<Vec<Record>, Error> {
+pub fn ops_in_window(times: &Vec<SystemTime>, duration: Duration) -> Result<Vec<Record>, Error> {
     let len = times.len();
     let first = times[0]; // first timestamp
     let mut last = times[len - 1]; // last timestamp
@@ -395,7 +420,7 @@ pub fn ops_in_window(
                 // a second is (ops * 1000) / window
                 ((ops * 1000) / window as usize).to_string(),
             ]
-                .to_vec(),
+            .to_vec(),
         };
         records.push(record);
 
@@ -415,7 +440,7 @@ pub fn ops_in_window(
                 // a second is (ops * 1000) / window
                 ((ops * 1000) / window as usize).to_string(),
             ]
-                .to_vec(),
+            .to_vec(),
         };
         records.push(record);
     }

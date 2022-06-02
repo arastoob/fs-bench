@@ -1,7 +1,7 @@
 use crate::plotter::Plotter;
 use crate::sample::Sample;
 use crate::timer::Timer;
-use crate::{BenchResult, Error, Fs, ops_in_window, ResultMode};
+use crate::{ops_in_window, BenchResult, Error, Fs, ResultMode};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};

@@ -3,7 +3,6 @@ use plotters::prelude::*;
 use std::fs::File;
 use std::ops::Range;
 use std::path::Path;
-use crate::format::{float_format_by_notation, range_format};
 
 pub struct Plotter {
     coordinates: Vec<Coordinates>,
@@ -146,9 +145,6 @@ impl Plotter {
         if fixed_ticks {
             let ticks = max_x_axis.iter().map(|x| *x as i64).collect::<Vec<_>>();
 
-            // convert the y ranges to scientific notation
-            let (y_start, y_end, notation) = range_format(y_start, y_end);
-
             let mut ctx = ChartBuilder::on(&root_area)
                 .set_label_area_size(LabelAreaPosition::Left, 100.0)
                 .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
@@ -161,17 +157,24 @@ impl Plotter {
                     y_start..y_end,
                 )?;
 
-            let y_label = if let Some(y_label) = y_label {
-                if notation != "1" {
-                    format!("{} x {}", y_label, notation)
-                } else {
-                    format!("{}", y_label)
-                }
-            } else { "".to_string() };
             ctx.configure_mesh()
                 .axis_desc_style(("sans-serif", 20.0))
                 .x_desc(x_label.unwrap_or(""))
-                .y_desc(y_label)
+                .x_label_formatter(&|x| {
+                    if *x >= 1000 {
+                        format!("{:e}", x)
+                    } else {
+                        x.to_string()
+                    }
+                })
+                .y_desc(y_label.unwrap_or(""))
+                .y_label_formatter(&|y| {
+                    if *y >= 1000.0 {
+                        format!("{:e}", y)
+                    } else {
+                        y.to_string()
+                    }
+                })
                 .draw()?;
 
             // plot the coordinates
@@ -192,7 +195,7 @@ impl Plotter {
                     x_axis
                         .iter()
                         .zip(y_axis.iter())
-                        .map(|(x, y_axis)| (*x, float_format_by_notation(y_axis.y, notation))), // The data iter
+                        .map(|(x, y_axis)| (*x, y_axis.y)), // The data iter
                     &color,
                 ))?;
                 if let Some(label) = coordinate.label.clone() {
@@ -205,7 +208,7 @@ impl Plotter {
                 if points {
                     ctx.draw_series(x_axis.iter().zip(coordinate.y_axis.iter()).map(
                         |(x, y_axis)| {
-                            Circle::new((*x, float_format_by_notation(y_axis.y, notation)), 3, ShapeStyle::from(&BLACK).filled())
+                            Circle::new((*x, y_axis.y), 3, ShapeStyle::from(&BLACK).filled())
                         },
                     ))?;
                 }
@@ -216,8 +219,6 @@ impl Plotter {
                 ctx.configure_series_labels().border_style(&BLACK).draw()?;
             }
         } else {
-            // convert the y ranges to scientific notation
-            let (y_start, y_end, notation) = range_format(y_start, y_end);
             let mut ctx = ChartBuilder::on(&root_area)
                 .set_label_area_size(LabelAreaPosition::Left, 100.0)
                 .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
@@ -225,18 +226,24 @@ impl Plotter {
                 .caption(caption.unwrap_or(""), ("sans-serif", 30.0))
                 .build_cartesian_2d(0.0..x_max, y_start..y_end)?;
 
-            let y_label = if let Some(y_label) = y_label {
-                if notation != "1" {
-                    format!("{} x {}", y_label, notation)
-                } else {
-                    format!("{}", y_label)
-                }
-
-            } else { "".to_string() };
             ctx.configure_mesh()
                 .axis_desc_style(("sans-serif", 20.0))
                 .x_desc(x_label.unwrap_or(""))
-                .y_desc(y_label)
+                .x_label_formatter(&|x| {
+                    if *x >= 1000.0 {
+                        format!("{:e}", x)
+                    } else {
+                        x.to_string()
+                    }
+                })
+                .y_desc(y_label.unwrap_or(""))
+                .y_label_formatter(&|y| {
+                    if *y >= 1000.0 {
+                        format!("{:e}", y)
+                    } else {
+                        y.to_string()
+                    }
+                })
                 .draw()?;
 
             // plot the coordinates
@@ -257,7 +264,7 @@ impl Plotter {
                     x_axis
                         .iter()
                         .zip(y_axis.iter())
-                        .map(|(x, y_axis)| (*x, float_format_by_notation(y_axis.y, notation))),
+                        .map(|(x, y_axis)| (*x, y_axis.y)),
                     &color,
                 ))?;
                 if let Some(label) = coordinate.label.clone() {
@@ -270,7 +277,7 @@ impl Plotter {
                 if points {
                     ctx.draw_series(x_axis.iter().zip(coordinate.y_axis.iter()).map(
                         |(x, y_axis)| {
-                            Circle::new((*x, float_format_by_notation(y_axis.y, notation)), 3, ShapeStyle::from(&BLACK).filled())
+                            Circle::new((*x, y_axis.y), 3, ShapeStyle::from(&BLACK).filled())
                         },
                     ))?;
                 }
@@ -319,9 +326,6 @@ impl Plotter {
         let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
         let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
 
-        // convert the y ranges to scientific notation
-        let (y_start, y_end, notation) = range_format(y_start, y_end);
-
         let mut ctx = ChartBuilder::on(&root_area)
             .set_label_area_size(LabelAreaPosition::Left, 100.0)
             .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
@@ -329,17 +333,17 @@ impl Plotter {
             .margin(5.0)
             .build_cartesian_2d(custom_x_axes.clone(), y_start..y_end)?;
 
-        let y_label = if let Some(y_label) = y_label {
-            if notation != "1" {
-                format!("{} x {}", y_label, notation)
-            } else {
-                format!("{}", y_label)
-            }
-        } else { "".to_string() };
         ctx.configure_mesh()
             .axis_desc_style(("sans-serif", 20.0))
             .x_desc(x_label.unwrap_or(""))
-            .y_desc(y_label)
+            .y_desc(y_label.unwrap_or(""))
+            .y_label_formatter(&|y| {
+                if *y >= 1000.0 {
+                    format!("{:e}", y)
+                } else {
+                    y.to_string()
+                }
+            })
             .draw()?;
 
         // draw the bars
@@ -351,7 +355,7 @@ impl Plotter {
                 .map(|(x, y_axis)| {
                     let x_before = format!("{}_before", x);
                     let x_after = format!("{}_after", x);
-                    Rectangle::new([(x_before, 0.0), (x_after, float_format_by_notation(y_axis.y, notation))], RED.filled())
+                    Rectangle::new([(x_before, 0.0), (x_after, y_axis.y)], RED.filled())
                 }),
         )?;
 
@@ -363,7 +367,7 @@ impl Plotter {
                 .zip(self.coordinates[0].y_axis.iter())
                 .map(|(x, y_axis)| {
                     if let (Some(lb), Some(ub)) = (y_axis.lb, y_axis.ub) {
-                        ErrorBar::new_vertical(x.clone(), float_format_by_notation(lb, notation), float_format_by_notation(y_axis.y, notation), float_format_by_notation(ub, notation), BLACK.filled(), 10)
+                        ErrorBar::new_vertical(x.clone(), lb, y_axis.y, ub, BLACK.filled(), 10)
                     } else {
                         ErrorBar::new_vertical(x.clone(), 0f64, 0f64, 0f64, RED.filled(), 0)
                     }
@@ -377,8 +381,8 @@ impl Plotter {
                 .iter()
                 .zip(self.coordinates[0].y_axis.iter())
                 .map(|(x, y_axis)| {
-                    EmptyElement::at((x.clone(), float_format_by_notation(y_axis.y, notation)))
-                        + Text::new(float_format_by_notation(y_axis.y, notation).to_string(), (20, -5), ("sans-serif", 15))
+                    EmptyElement::at((x.clone(), y_axis.y))
+                        + Text::new(y_axis.y.to_string(), (20, -5), ("sans-serif", 15))
                 }),
         )?;
 
@@ -429,9 +433,6 @@ impl Plotter {
         let y_start = y_min - (y_min / 5.0); // y starts bellow the first y-axis value
         let y_end = y_max + (y_max / 5.0); // and ends after the last y-axis value
 
-        // convert the y ranges to scientific notation
-        let (y_start, y_end, notation) = range_format(y_start, y_end);
-
         let mut ctx = ChartBuilder::on(&root_area)
             .set_label_area_size(LabelAreaPosition::Left, 100.0)
             .set_label_area_size(LabelAreaPosition::Bottom, 50.0)
@@ -439,18 +440,24 @@ impl Plotter {
             .margin(5.0)
             .build_cartesian_2d(x_start..x_end, y_start..y_end)?;
 
-        let y_label = if let Some(y_label) = y_label {
-            if notation != "1" {
-                format!("{} x {}", y_label, notation)
-            } else {
-                format!("{}", y_label)
-            }
-        } else { "".to_string() };
-
         ctx.configure_mesh()
             .axis_desc_style(("sans-serif", 20.0))
             .x_desc(x_label.unwrap_or(""))
-            .y_desc(y_label)
+            .x_label_formatter(&|x| {
+                if *x >= 1000.0 {
+                    format!("{:e}", x)
+                } else {
+                    x.to_string()
+                }
+            })
+            .y_desc(y_label.unwrap_or(""))
+            .y_label_formatter(&|y| {
+                if *y >= 1000.0 {
+                    format!("{:e}", y)
+                } else {
+                    y.to_string()
+                }
+            })
             .draw()?;
 
         // draw the points
@@ -458,7 +465,7 @@ impl Plotter {
             x_axis
                 .iter()
                 .zip(self.coordinates[0].y_axis.iter())
-                .map(|(x, y_axis)| Circle::new((*x, float_format_by_notation(y_axis.y, notation)), 2, RED.filled())),
+                .map(|(x, y_axis)| Circle::new((*x, y_axis.y), 2, RED.filled())),
         )?;
 
         // to avoid the IO failure being ignored silently, we manually call the present function
