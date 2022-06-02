@@ -231,7 +231,7 @@ impl MicroBench {
         let mut file_name = self.log_path.clone();
         file_name.push("mkdir.svg");
         plotter_mkdir_behaviour.line_chart(
-            Some("Time"),
+            Some("Time (s)"),
             Some("Ops/s"),
             Some("Mkdir"),
             false,
@@ -242,7 +242,7 @@ impl MicroBench {
         let mut file_name = self.log_path.clone();
         file_name.push("mknod.svg");
         plotter_mknod_behaviour.line_chart(
-            Some("Time"),
+            Some("Time (s)"),
             Some("Ops/s"),
             Some("Mknod"),
             false,
@@ -253,7 +253,7 @@ impl MicroBench {
         let mut file_name = self.log_path.clone();
         file_name.push("read.svg");
         plotter_read_behaviour.line_chart(
-            Some("Time"),
+            Some("Time (s)"),
             Some("Ops/s"),
             Some("Read"),
             false,
@@ -264,7 +264,7 @@ impl MicroBench {
         let mut file_name = self.log_path.clone();
         file_name.push("write.svg");
         plotter_write_behaviour.line_chart(
-            Some("Time"),
+            Some("Time (s)"),
             Some("Ops/s"),
             Some("Write"),
             false,
@@ -324,8 +324,8 @@ impl MicroBench {
         let mut file_name = self.log_path.clone();
         file_name.push("read_throughput.svg");
         read_plotter.line_chart(
-            Some("File size [B]"),
-            Some("Throughput [B/s]"),
+            Some("File size (B)"),
+            Some("Throughput (B/s)"),
             Some("Read Throughput"),
             true,
             true,
@@ -335,8 +335,8 @@ impl MicroBench {
         let mut file_name = self.log_path.clone();
         file_name.push("write_throughput.svg");
         write_plotter.line_chart(
-            Some("File size [B]"),
-            Some("Throughput [B/s]"),
+            Some("File size (B)"),
+            Some("Throughput (B/s)"),
             Some("Write Throughput"),
             true,
             true,
