@@ -160,9 +160,21 @@ impl Plotter {
             ctx.configure_mesh()
                 .axis_desc_style(("sans-serif", 20.0))
                 .x_desc(x_label.unwrap_or(""))
-                .x_label_formatter(&|x| if *x >= 1000 { format!("{:e}", x) } else { x.to_string() } )
+                .x_label_formatter(&|x| {
+                    if *x >= 1000 {
+                        format!("{:e}", x)
+                    } else {
+                        x.to_string()
+                    }
+                })
                 .y_desc(y_label.unwrap_or(""))
-                .y_label_formatter(&|y| if *y >= 1000.0 { format!("{:e}", y) } else { y.to_string() } )
+                .y_label_formatter(&|y| {
+                    if *y >= 1000.0 {
+                        format!("{:e}", y)
+                    } else {
+                        y.to_string()
+                    }
+                })
                 .draw()?;
 
             // plot the coordinates
@@ -217,9 +229,21 @@ impl Plotter {
             ctx.configure_mesh()
                 .axis_desc_style(("sans-serif", 20.0))
                 .x_desc(x_label.unwrap_or(""))
-                .x_label_formatter(&|x| if *x >= 1000.0 { format!("{:e}", x) } else { x.to_string() } )
+                .x_label_formatter(&|x| {
+                    if *x >= 1000.0 {
+                        format!("{:e}", x)
+                    } else {
+                        x.to_string()
+                    }
+                })
                 .y_desc(y_label.unwrap_or(""))
-                .y_label_formatter(&|y| if *y >= 1000.0 { format!("{:e}", y) } else { y.to_string() } )
+                .y_label_formatter(&|y| {
+                    if *y >= 1000.0 {
+                        format!("{:e}", y)
+                    } else {
+                        y.to_string()
+                    }
+                })
                 .draw()?;
 
             // plot the coordinates
@@ -313,7 +337,13 @@ impl Plotter {
             .axis_desc_style(("sans-serif", 20.0))
             .x_desc(x_label.unwrap_or(""))
             .y_desc(y_label.unwrap_or(""))
-            .y_label_formatter(&|y| if *y >= 1000.0 { format!("{:e}", y) } else { y.to_string() } )
+            .y_label_formatter(&|y| {
+                if *y >= 1000.0 {
+                    format!("{:e}", y)
+                } else {
+                    y.to_string()
+                }
+            })
             .draw()?;
 
         // draw the bars
@@ -413,9 +443,21 @@ impl Plotter {
         ctx.configure_mesh()
             .axis_desc_style(("sans-serif", 20.0))
             .x_desc(x_label.unwrap_or(""))
-            .x_label_formatter(&|x| if *x >= 1000.0 { format!("{:e}", x) } else { x.to_string() } )
+            .x_label_formatter(&|x| {
+                if *x >= 1000.0 {
+                    format!("{:e}", x)
+                } else {
+                    x.to_string()
+                }
+            })
             .y_desc(y_label.unwrap_or(""))
-            .y_label_formatter(&|y| if *y >= 1000.0 { format!("{:e}", y) } else { y.to_string() } )
+            .y_label_formatter(&|y| {
+                if *y >= 1000.0 {
+                    format!("{:e}", y)
+                } else {
+                    y.to_string()
+                }
+            })
             .draw()?;
 
         // draw the points

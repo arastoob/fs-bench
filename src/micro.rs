@@ -2,7 +2,7 @@ use crate::format::{percent_format, time_format, time_format_by_unit, time_unit}
 use crate::plotter::Plotter;
 use crate::sample::{AnalysedData, Sample};
 use crate::timer::Timer;
-use crate::{BenchResult, Error, Fs, ops_in_window, Progress, Record, ResultMode};
+use crate::{ops_in_window, BenchResult, Error, Fs, Progress, Record, ResultMode};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -110,7 +110,12 @@ impl MicroBench {
             let mut plotter = Plotter::new();
             plotter.add_coordinates(&file_name, None, &ResultMode::OpsPerSecond)?;
             file_name.set_extension("svg");
-            plotter.bar_chart(Some("Operation"), Some("Ops/s"), Some(&format!("Ops/s ({})", self.fs_names[idx])), &file_name)?;
+            plotter.bar_chart(
+                Some("Operation"),
+                Some("Ops/s"),
+                Some(&format!("Ops/s ({})", self.fs_names[idx])),
+                &file_name,
+            )?;
 
             // log behaviour results
             let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());

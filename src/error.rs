@@ -50,7 +50,7 @@ pub enum Error {
     PoisonError(String),
 
     /// There is no time record for a benchmarked operation
-    NoTimeRecord(String)
+    NoTimeRecord(String),
 }
 
 impl Error {
@@ -174,8 +174,12 @@ impl fmt::Display for Error {
             &Error::ParseError(ref detail) => write!(f, "Parse error: {}", detail),
             &Error::WasmerError(ref detail) => write!(f, "Wasmer error: {}", detail),
             Error::SyncError(ref detail) => write!(f, "Sync error: {}", detail),
-            &Error::PoisonError(ref detail) => write!(f, "could not acquire a lock oh shared object: {}", detail),
-            &Error::NoTimeRecord(ref detail) => write!(f, "there is not time recorded for {}", detail),
+            &Error::PoisonError(ref detail) => {
+                write!(f, "could not acquire a lock oh shared object: {}", detail)
+            }
+            &Error::NoTimeRecord(ref detail) => {
+                write!(f, "there is not time recorded for {}", detail)
+            }
         }
     }
 }

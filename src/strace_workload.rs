@@ -1,9 +1,9 @@
-use std::collections::HashMap;
 use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
 use crate::plotter::Plotter;
 use crate::{BenchResult, Error, Fs, Progress, Record, ResultMode};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::RngCore;
+use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -15,7 +15,7 @@ pub struct StraceWorkloadRunner {
     fs_names: Vec<String>,
     log_path: PathBuf,
     processes: Vec<Arc<Mutex<Process>>>, // list of processes with their operations list
-    files: Vec<FileDir>,     // the files and directories accessed and logged by strace
+    files: Vec<FileDir>,                 // the files and directories accessed and logged by strace
 }
 
 impl StraceWorkloadRunner {
@@ -28,7 +28,8 @@ impl StraceWorkloadRunner {
         // parse the strace log file and extract the operations
         let mut parser = Parser::new(strace_path);
         let processes = parser.parse()?;
-        let processes = processes.into_iter()
+        let processes = processes
+            .into_iter()
             .map(|process| Arc::new(Mutex::new(process)))
             .collect::<Vec<_>>();
         let files = parser.existing_files()?;
@@ -55,19 +56,15 @@ impl StraceWorkloadRunner {
             let mut base_path = mount_path.clone();
             base_path.push("strace_workload");
 
-            let (
-                op_times_records,
-                accumulated_times_records,
-                op_time_unit,
-                accumulated_time_unit,
-            ) = self.parallel(&base_path, &fs_names[idx], progress_style.clone())?;
+            let (op_times_records, accumulated_times_records, op_time_unit, accumulated_time_unit) =
+                self.parallel(&base_path, &fs_names[idx], progress_style.clone())?;
 
             let op_times_header = ["op".to_string(), format!("time ({})", op_time_unit)].to_vec();
             let accumulated_times_header = [
                 format!("time ({})", accumulated_time_unit),
                 "ops".to_string(),
             ]
-                .to_vec();
+            .to_vec();
 
             // log the results
             let mut results = BenchResult::new(op_times_header.clone());
@@ -86,8 +83,7 @@ impl StraceWorkloadRunner {
                 &ResultMode::OpTimes,
             )?;
 
-            let mut accumulated_times_results =
-                BenchResult::new(accumulated_times_header.clone());
+            let mut accumulated_times_results = BenchResult::new(accumulated_times_header.clone());
             accumulated_times_results.add_records(accumulated_times_records)?;
             let mut file_name = self.log_path.clone();
             file_name.push(format!(
@@ -112,7 +108,10 @@ impl StraceWorkloadRunner {
             op_times_plotter.line_chart(
                 Some("Operations"),
                 Some(&format!("Time ({})", op_time_unit)),
-                Some(&format!("Operation times from replayed logs ({})", self.fs_names[idx])),
+                Some(&format!(
+                    "Operation times from replayed logs ({})",
+                    self.fs_names[idx]
+                )),
                 false,
                 false,
                 &file_name,
@@ -127,7 +126,10 @@ impl StraceWorkloadRunner {
             accumulated_times_plotter.line_chart(
                 Some(&format!("Time ({})", accumulated_time_unit)),
                 Some("Operations"),
-                Some(&format!("Accumulated times from replayed logs ({})", self.fs_names[idx])),
+                Some(&format!(
+                    "Accumulated times from replayed logs ({})",
+                    self.fs_names[idx]
+                )),
                 false,
                 false,
                 &file_name,
@@ -201,10 +203,9 @@ impl StraceWorkloadRunner {
                     }
 
                     process_summaries.push((execution_result.pid, execution_result.op_summaries));
-                },
+                }
                 Err(_err) => {}
             }
-
         }
 
         let end = start.elapsed()?.as_secs_f64();
@@ -232,11 +233,7 @@ impl StraceWorkloadRunner {
         for (idx, system_time) in accumulated_times.iter().enumerate() {
             accumulated_times_records.push(Record {
                 fields: [
-                    time_format_by_unit(
-                        *system_time,
-                        accumulated_time_unit,
-                    )?
-                    .to_string(),
+                    time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
                     (idx + 1).to_string(),
                 ]
                 .to_vec(),
@@ -255,7 +252,13 @@ impl StraceWorkloadRunner {
             let mut summary = summary.into_iter().collect::<Vec<(String, (f64, u16))>>();
             summary.sort_by(|(_, (t1, _)), (_, (t2, _))| t2.partial_cmp(t1).unwrap());
             for (op, (time, num)) in summary.iter() {
-                println!("{:7} {:12} {:12} ({:5} of total time)", num, op, time_format(*time), percent_format((time / total_op_time) * 100.0));
+                println!(
+                    "{:7} {:12} {:12} ({:5} of total time)",
+                    num,
+                    op,
+                    time_format(*time),
+                    percent_format((time / total_op_time) * 100.0)
+                );
             }
         }
 
@@ -307,22 +310,29 @@ impl StraceWorkloadRunner {
 
         Ok(())
     }
-
 }
 
 struct ExecutionResult {
     pid: usize,
     op_times: Vec<f64>,
     accumulated_times: Vec<f64>,
-    op_summaries: HashMap<String, (f64, u16)>
+    op_summaries: HashMap<String, (f64, u16)>,
 }
 
 trait Runner {
-    fn run(&mut self, base_path: &PathBuf, start_time: SystemTime) -> Result<ExecutionResult, Error>;
+    fn run(
+        &mut self,
+        base_path: &PathBuf,
+        start_time: SystemTime,
+    ) -> Result<ExecutionResult, Error>;
 }
 
 impl Runner for Process {
-    fn run(&mut self, base_path: &PathBuf, start_time: SystemTime) -> Result<ExecutionResult, Error> {
+    fn run(
+        &mut self,
+        base_path: &PathBuf,
+        start_time: SystemTime,
+    ) -> Result<ExecutionResult, Error> {
         let mut op_times = vec![];
         let mut accumulated_times = vec![];
         // summary of operations:
@@ -347,14 +357,14 @@ impl Runner for Process {
                                 } else {
                                     op_summaries.insert(op.name(), (op_time, 1));
                                 }
-                            },
+                            }
                             Err(_err) => {}
                         }
                     } else {
                         // add the removed operation to the end of the list to be executed later
                         ops.push(shared_op.clone());
                     }
-                },
+                }
                 Err(_err) => {}
             }
         }
@@ -363,17 +373,22 @@ impl Runner for Process {
             pid: self.pid(),
             op_times,
             accumulated_times,
-            op_summaries
+            op_summaries,
         })
     }
 }
 
 trait Executer {
-    fn execute(&mut self, base_path: &PathBuf, start_time: SystemTime) -> Result<(f64, f64), Error>;
+    fn execute(&mut self, base_path: &PathBuf, start_time: SystemTime)
+        -> Result<(f64, f64), Error>;
 }
 
 impl Executer for Operation {
-    fn execute(&mut self, base_path: &PathBuf, start_time: SystemTime) -> Result<(f64, f64), Error> {
+    fn execute(
+        &mut self,
+        base_path: &PathBuf,
+        start_time: SystemTime,
+    ) -> Result<(f64, f64), Error> {
         let (op_time, system_time) = match self.op_type() {
             &OperationType::Mkdir(ref file, ref _mode) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
