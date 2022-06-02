@@ -2,7 +2,7 @@ use crate::format::{percent_format, time_format, time_format_by_unit, time_unit}
 use crate::plotter::Plotter;
 use crate::sample::{AnalysedData, Sample};
 use crate::timer::Timer;
-use crate::{ops_in_window, BenchResult, Error, Fs, Progress, Record, ResultMode};
+use crate::{Error, Fs, Progress};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -11,7 +11,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
-use crate::bench::{Bench, Config};
+use crate::bench::{Bench, BenchResult, Config, ResultMode, Record};
 
 pub struct OfflineBench {
     config: Config
@@ -412,18 +412,17 @@ impl OfflineBench {
             .to_vec(),
         };
 
-        let behaviour_records = ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
         for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(Record {
-                fields: [
+            time_records.push(
+                [
                     idx.to_string(),
                     time_format_by_unit(*time, time_unit)?.to_string(),
-                ]
-                .to_vec(),
-            })
+                ].to_vec().into()
+            );
         }
 
         Ok((
@@ -499,29 +498,25 @@ impl OfflineBench {
         progress.finish_with_message(&format!("mknod ({}) finished", fs_name))?;
         self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
-        let ops_per_second_record = Record {
-            fields: [
+        let ops_per_second_record =
+            vec![
                 "mknod".to_string(),
                 run_time.as_secs_f64().to_string(),
                 analysed_data.ops_per_second.to_string(),
                 analysed_data.ops_per_second_lb.to_string(),
                 analysed_data.ops_per_second_ub.to_string(),
-            ]
-            .to_vec(),
-        };
+            ].into();
 
-        let behaviour_records = ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
         for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(Record {
-                fields: [
+            time_records.push(vec![
                     idx.to_string(),
                     time_format_by_unit(*time, time_unit)?.to_string(),
-                ]
-                .to_vec(),
-            })
+                ].into()
+            )
         }
 
         Ok((
@@ -613,29 +608,23 @@ impl OfflineBench {
         progress.finish_with_message(&format!("read ({}) finished", fs_name))?;
         self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
-        let ops_per_second_record = Record {
-            fields: [
+        let ops_per_second_record = vec![
                 "read".to_string(),
                 run_time.as_secs_f64().to_string(),
                 analysed_data.ops_per_second.to_string(),
                 analysed_data.ops_per_second_lb.to_string(),
                 analysed_data.ops_per_second_ub.to_string(),
-            ]
-            .to_vec(),
-        };
+            ].into();
 
-        let behaviour_records = ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
         for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(Record {
-                fields: [
+            time_records.push(vec![
                     idx.to_string(),
                     time_format_by_unit(*time, time_unit)?.to_string(),
-                ]
-                .to_vec(),
-            })
+                ].into());
         }
 
         Ok((
@@ -730,29 +719,23 @@ impl OfflineBench {
         progress.finish_with_message(&format!("write ({}) finished", fs_name))?;
         self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
 
-        let ops_per_second_record = Record {
-            fields: [
+        let ops_per_second_record = vec![
                 "write".to_string(),
                 run_time.as_secs_f64().to_string(),
                 analysed_data.ops_per_second.to_string(),
                 analysed_data.ops_per_second_lb.to_string(),
                 analysed_data.ops_per_second_ub.to_string(),
-            ]
-            .to_vec(),
-        };
+            ].into();
 
-        let behaviour_records = ops_in_window(&behaviour, run_time)?;
+        let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
         for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(Record {
-                fields: [
+            time_records.push(vec![
                     idx.to_string(),
                     time_format_by_unit(*time, time_unit)?.to_string(),
-                ]
-                .to_vec(),
-            })
+                ].into());
         }
 
         Ok((
@@ -859,9 +842,7 @@ impl OfflineBench {
                 adjusted_throughput.format(3)
             );
 
-            throughput_records.push(Record {
-                fields: [size.to_string(), throughput.to_string()].to_vec(),
-            });
+            throughput_records.push(vec![size.to_string(), throughput.to_string()].into());
         }
 
         println!();
@@ -965,9 +946,7 @@ impl OfflineBench {
                 adjusted_throughput.format(3)
             );
 
-            throughput_records.push(Record {
-                fields: [size.to_string(), throughput.to_string()].to_vec(),
-            });
+            throughput_records.push(vec![size.to_string(), throughput.to_string()].into());
         }
 
         println!();

@@ -1,8 +1,9 @@
-use crate::{Error, ResultMode};
+use crate::{Error};
 use plotters::prelude::*;
 use std::fs::File;
 use std::ops::Range;
 use std::path::Path;
+use crate::bench::ResultMode;
 
 pub struct Plotter {
     coordinates: Vec<Coordinates>,
