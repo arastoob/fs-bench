@@ -1,6 +1,5 @@
 use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
 use crate::plotter::Plotter;
-use crate::{Error, Fs, Progress};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::RngCore;
 use std::collections::HashMap;
@@ -9,7 +8,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use strace_parser::{FileDir, Operation, OperationType, Parser, Process};
-use crate::bench::{Bench, Config, Record, ResultMode, BenchResult};
+use crate::{Bench, Config, Record, ResultMode, BenchResult};
+use crate::error::Error;
+use crate::fs::Fs;
+use crate::progress::Progress;
 
 pub struct StraceWorkloadRunner {
     config: Config,

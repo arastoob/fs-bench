@@ -4,7 +4,7 @@ use fs_bench::micro::offline::OfflineBench;
 use fs_bench::strace_workload::StraceWorkloadRunner;
 use std::path::PathBuf;
 use fs_bench::micro::real_time::RealTimeBench;
-use fs_bench::bench::{Bench, BenchMode};
+use fs_bench::{Bench, BenchMode};
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]

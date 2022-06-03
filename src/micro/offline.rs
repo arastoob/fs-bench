@@ -2,7 +2,6 @@ use crate::format::{percent_format, time_format, time_format_by_unit, time_unit}
 use crate::plotter::Plotter;
 use crate::sample::{AnalysedData, Sample};
 use crate::timer::Timer;
-use crate::{Error, Fs, Progress};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -11,7 +10,10 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
-use crate::bench::{Bench, BenchResult, Config, ResultMode, Record};
+use crate::{Bench, BenchResult, Config, ResultMode, Record};
+use crate::error::Error;
+use crate::fs::Fs;
+use crate::progress::Progress;
 
 pub struct OfflineBench {
     config: Config
