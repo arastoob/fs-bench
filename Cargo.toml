@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 strace-parser = { git="ssh://git@gitlab.com/arastoob/strace-parser.git" }
 
+async-channel = "1.6"
 byte-unit = "4.0.9"
 clap = { version = "3.1.3", features = ["derive"] }
 chrono = "0.4.9"
@@ -16,6 +17,9 @@ csv = "1.1"
 indicatif = "0.16.2"
 log = "0.4.0"
 plotters = "0.3"
+plotters-piston = { git = "https://github.com/plotters-rs/plotters-piston" }
+plotters-backend = "0.3.2"
+piston_window = "0.120.0"
 rand = "0.8.0"
 rayon = "1.5.1"
 serde = { version = "1", features = ["derive"] }
