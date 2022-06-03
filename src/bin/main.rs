@@ -3,7 +3,7 @@ use fs_bench::error::Error;
 use fs_bench::micro::offline::OfflineBench;
 use fs_bench::strace_workload::StraceWorkloadRunner;
 use std::path::PathBuf;
-use fs_bench::micro::real_time::RealTimeBench;
+use fs_bench::micro::real_time::{BenchFn, RealTimeBench};
 use fs_bench::{Bench, BenchMode};
 
 /// A library for benchmarking filesystem operations
@@ -27,7 +27,7 @@ struct Args {
     mount: Vec<PathBuf>,
 
     /// Filesystem name that is being benchmarked
-    #[clap(short, long)]
+    #[clap(short = 'n', long)]
     fs_name: Vec<String>,
 
     /// The path to store benchmark results
@@ -35,8 +35,12 @@ struct Args {
     log_path: PathBuf,
 
     /// The path to the strace log file
-    #[clap(short, long, required_if_eq("bench_mode", "strace"))]
+    #[clap(short, long, required_if_eq("bench-mode", "strace"))]
     workload: Option<PathBuf>,
+
+    /// The benchmark function to be run in real-time
+    #[clap(short = 'f', long, required_if_eq("bench-mode", "realtime"))]
+    bench_fn: Option<BenchFn>
 }
 
 fn main() -> Result<(), Error> {
@@ -60,7 +64,7 @@ fn main() -> Result<(), Error> {
                 mount_paths,
                 fs_names,
                 args.log_path)?
-                .run()?;
+                .run(None)?;
         }
         BenchMode::RealTime => {
             RealTimeBench::configure(
@@ -70,7 +74,7 @@ fn main() -> Result<(), Error> {
                 mount_paths,
                 fs_names,
                 args.log_path)?
-                .run()?;
+                .run(args.bench_fn)?;
         }
         BenchMode::Strace => {
             if args.workload.is_none() {
@@ -85,11 +89,7 @@ fn main() -> Result<(), Error> {
                                             mount_paths,
                                             fs_names,
                                             args.log_path)?
-                .run()?;
-
-            // let mut strace_workload =
-            //     StraceWorkloadRunner::new(mount_paths, fs_names, args.log_path, strace_path)?;
-            // strace_workload.replay()?;
+                .run(None)?;
         }
     }
 

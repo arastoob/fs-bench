@@ -17,6 +17,7 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 use byte_unit::Byte;
 use crate::error::Error;
+use crate::micro::real_time::BenchFn;
 
 
 ///
@@ -37,7 +38,7 @@ pub trait Bench {
 
     fn new(config: Config) -> Result<Self, Error> where Self: Sized;
 
-    fn run(&self) -> Result<(), Error>;
+    fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error>;
 }
 
 ///

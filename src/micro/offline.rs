@@ -10,7 +10,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
-use crate::{Bench, BenchResult, Config, ResultMode, Record};
+use crate::{Bench, BenchResult, Config, ResultMode, Record, BenchFn};
 use crate::error::Error;
 use crate::fs::Fs;
 use crate::progress::Progress;
@@ -26,7 +26,7 @@ impl Bench for OfflineBench {
         })
     }
 
-    fn run(&self) -> Result<(), Error> {
+    fn run(&self, _bench_fn: Option<BenchFn>) -> Result<(), Error> {
         let rt = Duration::from_secs(self.config.run_time as u64); // running time
         self.behaviour_bench(rt)?;
         let max_rt = Duration::from_secs(60 * 5);

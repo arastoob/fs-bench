@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use strace_parser::{FileDir, Operation, OperationType, Parser, Process};
-use crate::{Bench, Config, Record, ResultMode, BenchResult};
+use crate::{Bench, Config, Record, ResultMode, BenchResult, BenchFn};
 use crate::error::Error;
 use crate::fs::Fs;
 use crate::progress::Progress;
@@ -40,7 +40,7 @@ impl Bench for StraceWorkloadRunner {
         })
     }
 
-    fn run(&self) -> Result<(), Error> {
+    fn run(&self, _bench_fn: Option<BenchFn>) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
         let mount_paths = self.config.mount_paths.clone();
