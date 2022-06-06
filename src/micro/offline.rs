@@ -1,6 +1,6 @@
-use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
+use crate::format::{time_format, time_format_by_unit, time_unit};
 use crate::plotter::Plotter;
-use crate::sample::{AnalysedData, Sample};
+use crate::sample::Sample;
 use crate::timer::Timer;
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
@@ -13,6 +13,7 @@ use std::time::{Duration, SystemTime};
 use crate::{Bench, BenchResult, Config, ResultMode, Record, BenchFn};
 use crate::error::Error;
 use crate::fs::Fs;
+use crate::micro::print_output;
 use crate::progress::Progress;
 
 pub struct OfflineBench {
@@ -401,7 +402,7 @@ impl OfflineBench {
         let analysed_data = Sample::new(&times)?.analyse()?;
 
         progress.finish_with_message(&format!("mkdir ({}) finished", fs_name))?;
-        self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
+        print_output(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = Record {
             fields: [
@@ -498,7 +499,7 @@ impl OfflineBench {
         let analysed_data = Sample::new(&times)?.analyse()?;
 
         progress.finish_with_message(&format!("mknod ({}) finished", fs_name))?;
-        self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
+        print_output(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record =
             vec![
@@ -608,7 +609,7 @@ impl OfflineBench {
         let analysed_data = Sample::new(&times)?.analyse()?;
 
         progress.finish_with_message(&format!("read ({}) finished", fs_name))?;
-        self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
+        print_output(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = vec![
                 "read".to_string(),
@@ -719,7 +720,7 @@ impl OfflineBench {
         let analysed_data = Sample::new(&times)?.analyse()?;
 
         progress.finish_with_message(&format!("write ({}) finished", fs_name))?;
-        self.print_micro(idx, run_time.as_secs_f64(), &analysed_data);
+        print_output(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = vec![
                 "write".to_string(),
@@ -953,26 +954,5 @@ impl OfflineBench {
 
         println!();
         Ok(throughput_records)
-    }
-
-    fn print_micro(&self, iterations: u64, run_time: f64, analysed_data: &AnalysedData) {
-        println!("{:18} {}", "iterations:", iterations);
-        println!("{:18} {}", "run time:", time_format(run_time));
-        println!(
-            "{:18} [{}, {}]",
-            "op time (95% CI):",
-            time_format(analysed_data.mean_lb),
-            time_format(analysed_data.mean_ub),
-        );
-        println!(
-            "{:18} [{}, {}]",
-            "ops/s (95% CI):", analysed_data.ops_per_second_lb, analysed_data.ops_per_second_ub
-        );
-        println!(
-            "{:18} {}",
-            "outliers:",
-            percent_format(analysed_data.outliers_percentage)
-        );
-        println!();
     }
 }
