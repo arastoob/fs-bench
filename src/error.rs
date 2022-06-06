@@ -4,6 +4,7 @@ use std::fmt;
 use std::io::ErrorKind;
 use std::num::{ParseFloatError, ParseIntError};
 use std::time::SystemTimeError;
+use async_channel::TrySendError;
 
 ///
 /// Problems that can arise in fs-bench.
@@ -142,6 +143,12 @@ impl From<ParseIntError> for Error {
 
 impl<T> From<std::sync::mpsc::SendError<T>> for Error {
     fn from(err: std::sync::mpsc::SendError<T>) -> Error {
+        Error::SyncError(err.to_string())
+    }
+}
+
+impl<T> From<async_channel::TrySendError<T>> for Error {
+    fn from(err: TrySendError<T>) -> Self {
         Error::SyncError(err.to_string())
     }
 }
