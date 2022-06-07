@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::error::Error;
 
 pub fn time_format(s: f64) -> String {
     if s * 1e9 < 1000f64 {
