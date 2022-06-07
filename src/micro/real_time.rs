@@ -1,3 +1,18 @@
+use crate::error::Error;
+use crate::fs::Fs;
+use crate::micro::print_output;
+use crate::plotter::Plotter;
+use crate::progress::Progress;
+use crate::sample::Sample;
+use crate::{Bench, BenchResult, Config, Record, ResultMode};
+use async_channel::{unbounded, Receiver, Sender};
+use indicatif::{ProgressBar, ProgressStyle};
+use log::error;
+use piston_window::event_id::CLOSE;
+use piston_window::{EventLoop, GenericEvent, PistonWindow, WindowSettings};
+use plotters::prelude::{ChartBuilder, IntoDrawingArea, LineSeries, Palette, Palette99, WHITE};
+use plotters_piston::draw_piston_window;
+use rand::{thread_rng, Rng, RngCore};
 use std::collections::VecDeque;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
@@ -5,22 +20,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
-use async_channel::{Receiver, Sender, unbounded};
 use std::time::{Duration, SystemTime};
-use indicatif::{ProgressBar, ProgressStyle};
-use log::error;
-use piston_window::{EventLoop, GenericEvent, PistonWindow, WindowSettings};
-use piston_window::event_id::CLOSE;
-use plotters::prelude::{ChartBuilder, IntoDrawingArea, LineSeries, Palette, Palette99, WHITE};
-use plotters_piston::draw_piston_window;
-use rand::{Rng, RngCore, thread_rng};
-use crate::{Bench, BenchResult, Config, Record, ResultMode};
-use crate::error::Error;
-use crate::fs::Fs;
-use crate::micro::print_output;
-use crate::plotter::Plotter;
-use crate::progress::Progress;
-use crate::sample::Sample;
 
 ///
 /// Benchmark function that is being run in real-time
@@ -30,7 +30,7 @@ pub enum BenchFn {
     Mkdir,
     Mknod,
     Read,
-    Write
+    Write,
 }
 
 impl FromStr for BenchFn {
@@ -58,11 +58,10 @@ impl Display for BenchFn {
     }
 }
 
-
 pub struct RealTimeBench {
     config: Config,
     sender: Sender<Signal>,
-    receiver: Receiver<Signal>
+    receiver: Receiver<Signal>,
 }
 
 impl Bench for RealTimeBench {
@@ -71,13 +70,14 @@ impl Bench for RealTimeBench {
         Ok(Self {
             config,
             sender,
-            receiver
+            receiver,
         })
     }
 
-
     fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error> {
-        let bench_fn = bench_fn.ok_or(Error::InvalidConfig("A valid bench function not provided".to_string()))?;
+        let bench_fn = bench_fn.ok_or(Error::InvalidConfig(
+            "A valid bench function not provided".to_string(),
+        ))?;
 
         let mut root_path = self.config.mount_paths[0].clone();
         root_path.push(bench_fn.to_string());
@@ -91,22 +91,17 @@ impl Bench for RealTimeBench {
         let shared_ops = ops.clone();
         let shared_bench_fn = bench_fn.clone();
         let io_size = self.config.io_size;
-        let handle = std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, i32), Error> {
-            match shared_bench_fn {
-                BenchFn::Mkdir => {
-                    RealTimeBench::mkdir(receiver, mp, shared_ops)
-                },
-                BenchFn::Mknod => {
-                    RealTimeBench::mknod(receiver, mp, shared_ops)
-                },
-                BenchFn::Read => {
-                    RealTimeBench::read(io_size, receiver, mp, shared_ops)
-                },
-                _ => {
-                    return Err(Error::Unknown("Not implemented".to_string()));
+        let handle =
+            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, i32), Error> {
+                match shared_bench_fn {
+                    BenchFn::Mkdir => RealTimeBench::mkdir(receiver, mp, shared_ops),
+                    BenchFn::Mknod => RealTimeBench::mknod(receiver, mp, shared_ops),
+                    BenchFn::Read => RealTimeBench::read(io_size, receiver, mp, shared_ops),
+                    _ => {
+                        return Err(Error::Unknown("Not implemented".to_string()));
+                    }
                 }
-            }
-        });
+            });
 
         self.plot(ops, handle, progress_style, bench_fn.to_string())?;
 
@@ -119,16 +114,20 @@ enum Signal {
 }
 
 impl RealTimeBench {
-
-    fn plot(&self, ops: Arc<RwLock<f32>>, handle: JoinHandle<Result<(Vec<f64>, Vec<SystemTime>, i32), Error>>, style: ProgressStyle, bench_fn: String) -> Result<(), Error> {
-
+    fn plot(
+        &self,
+        ops: Arc<RwLock<f32>>,
+        handle: JoinHandle<Result<(Vec<f64>, Vec<SystemTime>, i32), Error>>,
+        style: ProgressStyle,
+        bench_fn: String,
+    ) -> Result<(), Error> {
         let fps: u32 = 20; // frame per second
         let length: u32 = 20; // plot length in second
         let n_data_points: usize = (fps * length) as usize;
         let tick_length = 1000 / fps; // length of each tick in millisecond
         let max_ticks = self.config.run_time as u32 * fps; // how many times the plot data is updated
 
-        let mut window: PistonWindow  = WindowSettings::new("Real Time CPU Usage", [800, 500])
+        let mut window: PistonWindow = WindowSettings::new("Real Time CPU Usage", [800, 500])
             .samples(4)
             .build()?;
         window.set_max_fps(fps as u64);
@@ -142,17 +141,22 @@ impl RealTimeBench {
         let progress = Progress::start(bar.clone());
 
         // capitalize the function name
-        let capitalized_bench_fn = bench_fn.chars().nth(0).unwrap().to_uppercase().collect::<String>() + &bench_fn[1..];
+        let capitalized_bench_fn = bench_fn
+            .chars()
+            .nth(0)
+            .unwrap()
+            .to_uppercase()
+            .collect::<String>()
+            + &bench_fn[1..];
 
         let mut max = 0.0;
         while let Some(event) = draw_piston_window(&mut window, |b| {
-
             if data.len() == n_data_points + 1 {
                 data.pop_front();
             }
-            let current_ops = *ops.read().map_err(|err| {
-                Error::SyncError(err.to_string())
-            })?;
+            let current_ops = *ops
+                .read()
+                .map_err(|err| Error::SyncError(err.to_string()))?;
 
             let current_ops = (current_ops * 1000.0) / tick_length as f32;
             data.push_back(current_ops);
@@ -160,9 +164,8 @@ impl RealTimeBench {
                 max = current_ops;
             }
             // reset the ops so far
-            *ops.write().map_err(|err| {
-                Error::SyncError(err.to_string())
-            })? = 0.0;
+            *ops.write()
+                .map_err(|err| Error::SyncError(err.to_string()))? = 0.0;
 
             let root = b.into_drawing_area();
             root.fill(&WHITE)?;
@@ -192,10 +195,10 @@ impl RealTimeBench {
                 (0..).zip(data.iter()).map(|(a, b)| (a, *b)),
                 &Palette99::pick(0),
             ))?;
-                // .label(bench_fn.clone())
-                // .legend(move |(x, y)| {
-                //     Rectangle::new([(x - 5, y - 5), (x + 5, y + 5)], &Palette99::pick(0))
-                // });
+            // .label(bench_fn.clone())
+            // .legend(move |(x, y)| {
+            //     Rectangle::new([(x - 5, y - 5), (x + 5, y + 5)], &Palette99::pick(0))
+            // });
 
             // cc.configure_series_labels()
             //     .background_style(&WHITE.mix(0.8))
@@ -203,7 +206,6 @@ impl RealTimeBench {
             //     .draw()?;
 
             ticks += 1;
-
 
             Ok(())
         }) {
@@ -213,7 +215,7 @@ impl RealTimeBench {
                     Ok(_) => {
                         bar.set_message("waiting for collected data...");
                         handle.join().unwrap()?
-                    },
+                    }
                     Err(e) => return Err(Error::SyncError(e.to_string())),
                 };
 
@@ -278,7 +280,7 @@ impl RealTimeBench {
             match receiver.try_recv() {
                 Ok(Signal::Stop) => {
                     return Ok((times, behaviour, idx));
-                },
+                }
                 _ => {
                     let mut dir_name = root_path.clone();
                     dir_name.push(idx.to_string());
@@ -318,7 +320,7 @@ impl RealTimeBench {
             match receiver.try_recv() {
                 Ok(Signal::Stop) => {
                     return Ok((times, behaviour, idx));
-                },
+                }
                 _ => {
                     let mut file_name = root_path.clone();
                     file_name.push(idx.to_string());
@@ -373,7 +375,7 @@ impl RealTimeBench {
             match receiver.try_recv() {
                 Ok(Signal::Stop) => {
                     return Ok((times, behaviour, idx));
-                },
+                }
                 _ => {
                     let file = thread_rng().gen_range(1..1001);
                     let mut file_name = root_path.clone();

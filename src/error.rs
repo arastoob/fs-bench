@@ -1,10 +1,10 @@
+use async_channel::TrySendError;
 use byte_unit::ByteError;
 use plotters::drawing::DrawingAreaErrorKind;
 use std::fmt;
 use std::io::ErrorKind;
 use std::num::{ParseFloatError, ParseIntError};
 use std::time::SystemTimeError;
-use async_channel::TrySendError;
 
 ///
 /// Problems that can arise in fs-bench.

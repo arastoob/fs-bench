@@ -4,7 +4,6 @@ use crate::sample::AnalysedData;
 pub mod offline;
 pub mod real_time;
 
-
 pub fn print_output(iterations: u64, run_time: f64, analysed_data: &AnalysedData) {
     println!("{:18} {}", "iterations:", iterations);
     println!("{:18} {}", "run time:", time_format(run_time));

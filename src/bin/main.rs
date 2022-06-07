@@ -1,10 +1,10 @@
 use clap::Parser;
 use fs_bench::error::Error;
 use fs_bench::micro::offline::OfflineBench;
-use fs_bench::strace_workload::StraceWorkloadRunner;
-use std::path::PathBuf;
 use fs_bench::micro::real_time::{BenchFn, RealTimeBench};
+use fs_bench::strace_workload::StraceWorkloadRunner;
 use fs_bench::{Bench, BenchMode};
+use std::path::PathBuf;
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]
@@ -40,7 +40,7 @@ struct Args {
 
     /// The benchmark function to be run in real-time
     #[clap(short = 'f', long, required_if_eq("bench-mode", "realtime"))]
-    bench_fn: Option<BenchFn>
+    bench_fn: Option<BenchFn>,
 }
 
 fn main() -> Result<(), Error> {
@@ -63,8 +63,9 @@ fn main() -> Result<(), Error> {
                 args.workload,
                 mount_paths,
                 fs_names,
-                args.log_path)?
-                .run(None)?;
+                args.log_path,
+            )?
+            .run(None)?;
         }
         BenchMode::RealTime => {
             RealTimeBench::configure(
@@ -73,23 +74,26 @@ fn main() -> Result<(), Error> {
                 args.workload,
                 mount_paths,
                 fs_names,
-                args.log_path)?
-                .run(args.bench_fn)?;
+                args.log_path,
+            )?
+            .run(args.bench_fn)?;
         }
         BenchMode::Strace => {
             if args.workload.is_none() {
                 return Err(Error::InvalidConfig(
                     "a valid strace_path not provided".to_string(),
-                ))
+                ));
             }
 
-            StraceWorkloadRunner::configure(args.size,
-                                            args.time,
-                                            args.workload,
-                                            mount_paths,
-                                            fs_names,
-                                            args.log_path)?
-                .run(None)?;
+            StraceWorkloadRunner::configure(
+                args.size,
+                args.time,
+                args.workload,
+                mount_paths,
+                fs_names,
+                args.log_path,
+            )?
+            .run(None)?;
         }
     }
 

@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::progress::Progress;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::fs::{create_dir, create_dir_all, File, OpenOptions, remove_dir_all, remove_file};
+use std::fs::{create_dir, create_dir_all, remove_dir_all, remove_file, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::thread;

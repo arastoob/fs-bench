@@ -1,7 +1,12 @@
+use crate::error::Error;
 use crate::format::{time_format, time_format_by_unit, time_unit};
+use crate::fs::Fs;
+use crate::micro::print_output;
 use crate::plotter::Plotter;
+use crate::progress::Progress;
 use crate::sample::Sample;
 use crate::timer::Timer;
+use crate::{Bench, BenchFn, BenchResult, Config, Record, ResultMode};
 use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -10,21 +15,14 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
-use crate::{Bench, BenchResult, Config, ResultMode, Record, BenchFn};
-use crate::error::Error;
-use crate::fs::Fs;
-use crate::micro::print_output;
-use crate::progress::Progress;
 
 pub struct OfflineBench {
-    config: Config
+    config: Config,
 }
 
 impl Bench for OfflineBench {
     fn new(config: Config) -> Result<Self, Error> {
-        Ok(Self {
-            config
-        })
+        Ok(Self { config })
     }
 
     fn run(&self, _bench_fn: Option<BenchFn>) -> Result<(), Error> {
@@ -33,7 +31,10 @@ impl Bench for OfflineBench {
         let max_rt = Duration::from_secs(60 * 5);
         self.throughput_bench(max_rt)?;
 
-        println!("results logged to: {}", Fs::path_to_str(&self.config.log_path)?);
+        println!(
+            "results logged to: {}",
+            Fs::path_to_str(&self.config.log_path)?
+        );
 
         Ok(())
     }
@@ -155,7 +156,10 @@ impl OfflineBench {
             let mut mkdir_times_results = BenchResult::new(times_header);
             mkdir_times_results.add_records(mkdir_times)?;
             let mut file_name = self.config.log_path.clone();
-            file_name.push(format!("{}_mkdir_iteration_times.csv", self.config.fs_names[idx]));
+            file_name.push(format!(
+                "{}_mkdir_iteration_times.csv",
+                self.config.fs_names[idx]
+            ));
             mkdir_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
@@ -172,7 +176,10 @@ impl OfflineBench {
             let mut mknod_times_results = BenchResult::new(times_header);
             mknod_times_results.add_records(mknod_times)?;
             let mut file_name = self.config.log_path.clone();
-            file_name.push(format!("{}_mknod_iteration_times.csv", self.config.fs_names[idx]));
+            file_name.push(format!(
+                "{}_mknod_iteration_times.csv",
+                self.config.fs_names[idx]
+            ));
             mknod_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
@@ -189,7 +196,10 @@ impl OfflineBench {
             let mut read_times_results = BenchResult::new(times_header);
             read_times_results.add_records(read_times)?;
             let mut file_name = self.config.log_path.clone();
-            file_name.push(format!("{}_read_iteration_times.csv", self.config.fs_names[idx]));
+            file_name.push(format!(
+                "{}_read_iteration_times.csv",
+                self.config.fs_names[idx]
+            ));
             read_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
@@ -206,7 +216,10 @@ impl OfflineBench {
             let mut write_times_results = BenchResult::new(times_header);
             write_times_results.add_records(write_times)?;
             let mut file_name = self.config.log_path.clone();
-            file_name.push(format!("{}_write_iteration_times.csv", self.config.fs_names[idx]));
+            file_name.push(format!(
+                "{}_write_iteration_times.csv",
+                self.config.fs_names[idx]
+            ));
             write_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
@@ -304,7 +317,10 @@ impl OfflineBench {
             let mut write_throughput_results = BenchResult::new(throughput_header.clone());
             write_throughput_results.add_records(write_throughput)?;
             let mut file_name = self.config.log_path.clone();
-            file_name.push(format!("{}_write_throughput.csv", self.config.fs_names[idx]));
+            file_name.push(format!(
+                "{}_write_throughput.csv",
+                self.config.fs_names[idx]
+            ));
             write_throughput_results.log(&file_name)?;
 
             write_plotter.add_coordinates(
@@ -424,7 +440,9 @@ impl OfflineBench {
                 [
                     idx.to_string(),
                     time_format_by_unit(*time, time_unit)?.to_string(),
-                ].to_vec().into()
+                ]
+                .to_vec()
+                .into(),
             );
         }
 
@@ -501,24 +519,26 @@ impl OfflineBench {
         progress.finish_with_message(&format!("mknod ({}) finished", fs_name))?;
         print_output(idx, run_time.as_secs_f64(), &analysed_data);
 
-        let ops_per_second_record =
-            vec![
-                "mknod".to_string(),
-                run_time.as_secs_f64().to_string(),
-                analysed_data.ops_per_second.to_string(),
-                analysed_data.ops_per_second_lb.to_string(),
-                analysed_data.ops_per_second_ub.to_string(),
-            ].into();
+        let ops_per_second_record = vec![
+            "mknod".to_string(),
+            run_time.as_secs_f64().to_string(),
+            analysed_data.ops_per_second.to_string(),
+            analysed_data.ops_per_second_lb.to_string(),
+            analysed_data.ops_per_second_ub.to_string(),
+        ]
+        .into();
 
         let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
         for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(vec![
+            time_records.push(
+                vec![
                     idx.to_string(),
                     time_format_by_unit(*time, time_unit)?.to_string(),
-                ].into()
+                ]
+                .into(),
             )
         }
 
@@ -612,22 +632,26 @@ impl OfflineBench {
         print_output(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = vec![
-                "read".to_string(),
-                run_time.as_secs_f64().to_string(),
-                analysed_data.ops_per_second.to_string(),
-                analysed_data.ops_per_second_lb.to_string(),
-                analysed_data.ops_per_second_ub.to_string(),
-            ].into();
+            "read".to_string(),
+            run_time.as_secs_f64().to_string(),
+            analysed_data.ops_per_second.to_string(),
+            analysed_data.ops_per_second_lb.to_string(),
+            analysed_data.ops_per_second_ub.to_string(),
+        ]
+        .into();
 
         let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
         for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(vec![
+            time_records.push(
+                vec![
                     idx.to_string(),
                     time_format_by_unit(*time, time_unit)?.to_string(),
-                ].into());
+                ]
+                .into(),
+            );
         }
 
         Ok((
@@ -723,22 +747,26 @@ impl OfflineBench {
         print_output(idx, run_time.as_secs_f64(), &analysed_data);
 
         let ops_per_second_record = vec![
-                "write".to_string(),
-                run_time.as_secs_f64().to_string(),
-                analysed_data.ops_per_second.to_string(),
-                analysed_data.ops_per_second_lb.to_string(),
-                analysed_data.ops_per_second_ub.to_string(),
-            ].into();
+            "write".to_string(),
+            run_time.as_secs_f64().to_string(),
+            analysed_data.ops_per_second.to_string(),
+            analysed_data.ops_per_second_lb.to_string(),
+            analysed_data.ops_per_second_ub.to_string(),
+        ]
+        .into();
 
         let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
 
         let time_unit = time_unit(analysed_data.mean_lb);
         let mut time_records = vec![];
         for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(vec![
+            time_records.push(
+                vec![
                     idx.to_string(),
                     time_format_by_unit(*time, time_unit)?.to_string(),
-                ].into());
+                ]
+                .into(),
+            );
         }
 
         Ok((

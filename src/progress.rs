@@ -1,9 +1,9 @@
+use crate::error::Error;
 use indicatif::ProgressBar;
 use std::sync::mpsc::{channel, Sender};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use crate::error::Error;
 
 pub struct Progress {
     sender: Sender<FinishType>,

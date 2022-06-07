@@ -1,24 +1,22 @@
 pub mod error;
 mod format;
+pub mod fs;
 pub mod micro;
 pub mod plotter;
 mod progress;
 pub mod sample;
 pub mod strace_workload;
 mod timer;
-pub mod fs;
 
-
+use crate::error::Error;
+use crate::micro::real_time::BenchFn;
+use byte_unit::Byte;
 use std::fmt::{Display, Formatter};
-use std::fs::{OpenOptions, remove_file};
+use std::fs::{remove_file, OpenOptions};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
-use byte_unit::Byte;
-use crate::error::Error;
-use crate::micro::real_time::BenchFn;
-
 
 ///
 /// The Benchmark trait including configurations and common behaviours
@@ -31,12 +29,17 @@ pub trait Bench {
         mount_paths: Vec<P>,
         fs_names: Vec<String>,
         log_path: P,
-    ) -> Result<Self, Error> where Self: Sized {
+    ) -> Result<Self, Error>
+    where
+        Self: Sized,
+    {
         let config = Config::new(io_size, run_time, workload, mount_paths, fs_names, log_path)?;
         Bench::new(config)
     }
 
-    fn new(config: Config) -> Result<Self, Error> where Self: Sized;
+    fn new(config: Config) -> Result<Self, Error>
+    where
+        Self: Sized;
 
     fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error>;
 }
@@ -50,12 +53,18 @@ pub struct Config {
     pub workload: PathBuf,
     pub mount_paths: Vec<PathBuf>,
     pub fs_names: Vec<String>,
-    pub log_path: PathBuf
+    pub log_path: PathBuf,
 }
 
 impl Config {
     fn new<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
-        io_size: Option<String>, run_time: Option<f64>, workload: Option<P>, mount_paths: Vec<P>, fs_names: Vec<String>, log_path: P) -> Result<Self, Error> {
+        io_size: Option<String>,
+        run_time: Option<f64>,
+        workload: Option<P>,
+        mount_paths: Vec<P>,
+        fs_names: Vec<String>,
+        log_path: P,
+    ) -> Result<Self, Error> {
         let io_size = if let Some(io_size) = io_size {
             let io_size = Byte::from_str(io_size)?;
             io_size.get_bytes() as usize
@@ -76,15 +85,16 @@ impl Config {
             PathBuf::new()
         };
 
-
         let log_path = Path::new(&log_path);
         let log_path = PathBuf::from(log_path);
 
-        let mount_paths = mount_paths.iter()
+        let mount_paths = mount_paths
+            .iter()
             .map(|mp| {
                 let mount_path = Path::new(mp);
                 PathBuf::from(mount_path)
-            }).collect::<Vec<PathBuf>>();
+            })
+            .collect::<Vec<PathBuf>>();
 
         Ok(Self {
             io_size,
@@ -248,9 +258,7 @@ pub struct Record {
 
 impl From<Vec<String>> for Record {
     fn from(fields: Vec<String>) -> Self {
-        Self {
-            fields
-        }
+        Self { fields }
     }
 }
 
@@ -261,7 +269,10 @@ impl Record {
     /// the input times contains the timestamps in unix_time format. The first 10 digits are
     /// date and time in seconds and the last 9 digits show the milliseconds
     ///
-    pub fn ops_in_window(times: &Vec<SystemTime>, duration: Duration) -> Result<Vec<Record>, Error> {
+    pub fn ops_in_window(
+        times: &Vec<SystemTime>,
+        duration: Duration,
+    ) -> Result<Vec<Record>, Error> {
         let len = times.len();
         let first = times[0]; // first timestamp
         let mut last = times[len - 1]; // last timestamp
@@ -316,7 +327,7 @@ impl Record {
                     // a second is (ops * 1000) / window
                     ((ops * 1000) / window as usize).to_string(),
                 ]
-                    .to_vec(),
+                .to_vec(),
             };
             records.push(record);
 
@@ -336,7 +347,7 @@ impl Record {
                     // a second is (ops * 1000) / window
                     ((ops * 1000) / window as usize).to_string(),
                 ]
-                    .to_vec(),
+                .to_vec(),
             };
             records.push(record);
         }
@@ -344,5 +355,3 @@ impl Record {
         Ok(records)
     }
 }
-
-

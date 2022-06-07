@@ -1,5 +1,9 @@
+use crate::error::Error;
 use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
+use crate::fs::Fs;
 use crate::plotter::Plotter;
+use crate::progress::Progress;
+use crate::{Bench, BenchFn, BenchResult, Config, Record, ResultMode};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::RngCore;
 use std::collections::HashMap;
@@ -8,10 +12,6 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use strace_parser::{FileDir, Operation, OperationType, Parser, Process};
-use crate::{Bench, Config, Record, ResultMode, BenchResult, BenchFn};
-use crate::error::Error;
-use crate::fs::Fs;
-use crate::progress::Progress;
 
 pub struct StraceWorkloadRunner {
     config: Config,
@@ -58,7 +58,7 @@ impl Bench for StraceWorkloadRunner {
                 format!("time ({})", accumulated_time_unit),
                 "ops".to_string(),
             ]
-                .to_vec();
+            .to_vec();
 
             // log the results
             let mut results = BenchResult::new(op_times_header.clone());
@@ -130,7 +130,10 @@ impl Bench for StraceWorkloadRunner {
             )?;
         }
 
-        println!("results logged to: {}", Fs::path_to_str(&self.config.log_path)?);
+        println!(
+            "results logged to: {}",
+            Fs::path_to_str(&self.config.log_path)?
+        );
 
         Ok(())
     }
@@ -210,10 +213,13 @@ impl StraceWorkloadRunner {
         let mut op_times_records = vec![];
         let op_time_unit = time_unit(op_times[0]);
         for (idx, time) in op_times.iter().enumerate() {
-            op_times_records.push(vec![
+            op_times_records.push(
+                vec![
                     idx.to_string(),
                     time_format_by_unit(*time, op_time_unit)?.to_string(),
-                ].into());
+                ]
+                .into(),
+            );
         }
 
         let mut accumulated_times_records = vec![];
@@ -222,10 +228,13 @@ impl StraceWorkloadRunner {
         let accumulated_time_unit = time_unit(last);
         accumulated_times_records.push(vec!["0".to_string(), "0".to_string()].into());
         for (idx, system_time) in accumulated_times.iter().enumerate() {
-            accumulated_times_records.push(vec![
+            accumulated_times_records.push(
+                vec![
                     time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
                     (idx + 1).to_string(),
-                ].into());
+                ]
+                .into(),
+            );
         }
 
         println!("{:20} {}\n", "total run time:", time_format(end));
