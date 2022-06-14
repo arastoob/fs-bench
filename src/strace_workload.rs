@@ -63,35 +63,38 @@ impl Bench for StraceWorkloadRunner {
             // log the results
             let mut results = BenchResult::new(op_times_header.clone());
             results.add_records(op_times_records)?;
-            let mut file_name_p = self.config.log_path.clone();
-            file_name_p.push(format!(
+            let mut file_name = self.config.log_path.clone();
+            file_name.push(format!(
                 "{}_op_times_strace_workload.csv",
                 self.config.fs_names[idx]
             ));
-            results.log(&file_name_p)?;
+            results.log(&file_name)?;
 
             let mut op_times_plotter = Plotter::new();
             op_times_plotter.add_coordinates(
-                &file_name_p,
+                &file_name,
                 None,
                 &ResultMode::OpTimes,
             )?;
 
-            let mut accumulated_times_results = BenchResult::new(accumulated_times_header.clone());
-            accumulated_times_results.add_records(accumulated_times_records)?;
-            let mut file_name = self.config.log_path.clone();
-            file_name.push(format!(
-                "{}_accumulated_times_workload.csv",
-                self.config.fs_names[idx]
-            ));
-            accumulated_times_results.log(&file_name)?;
-
             let mut accumulated_times_plotter = Plotter::new();
-            accumulated_times_plotter.add_coordinates(
-                &file_name,
-                None,
-                &ResultMode::Behaviour,
-            )?;
+            for (pid, accumulated_times_records) in accumulated_times_records {
+                let mut accumulated_times_results = BenchResult::new(accumulated_times_header.clone());
+                accumulated_times_results.add_records(accumulated_times_records)?;
+                let mut file_name = self.config.log_path.clone();
+                file_name.push(format!(
+                    "{}_{}_accumulated_times.csv",
+                    self.config.fs_names[idx],
+                    pid
+                ));
+                accumulated_times_results.log(&file_name)?;
+
+                accumulated_times_plotter.add_coordinates(
+                    &file_name,
+                    Some(pid.to_string()),
+                    &ResultMode::Behaviour,
+                )?;
+            }
 
             // plot the results
             let mut file_name = self.config.log_path.clone();
@@ -114,7 +117,7 @@ impl Bench for StraceWorkloadRunner {
             // plot the accumulated results
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_accumulated_times_workload.svg",
+                "{}_accumulated_times.svg",
                 self.config.fs_names[idx]
             ));
             accumulated_times_plotter.line_chart(
@@ -146,7 +149,7 @@ impl StraceWorkloadRunner {
         base_path: &PathBuf,
         fs_name: &str,
         style: ProgressStyle,
-    ) -> Result<(Vec<Record>, Vec<Record>, String, String), Error> {
+    ) -> Result<(Vec<Record>, Vec<(usize, Vec<Record>)>, String, String), Error> {
         self.setup(&base_path)?;
 
         let bar = ProgressBar::new_spinner();
@@ -181,13 +184,8 @@ impl StraceWorkloadRunner {
                     let mut execution_result = execution_result?;
                     op_times.append(&mut execution_result.op_times);
 
-                    accumulated_times.append(&mut execution_result.accumulated_times);
-                    // let last = if accumulated_times.is_empty() {
-                    //     0f64
-                    // } else { accumulated_times[accumulated_times.len() - 1]};
-                    // for accumulated_time in execution_result.accumulated_times {
-                    //     accumulated_times.push(last + accumulated_time);
-                    // }
+                    // accumulated_times.append(&mut execution_result.accumulated_times);
+                    accumulated_times.push((execution_result.pid, execution_result.accumulated_times));
 
                     for (ck, (ct, cn)) in execution_result.op_summaries.iter() {
                         if let Some((t, n)) = op_summaries.get_mut(ck) {
@@ -223,19 +221,33 @@ impl StraceWorkloadRunner {
         }
 
         let mut accumulated_times_records = vec![];
-        // let first = accumulated_times[0];
-        let last = accumulated_times[accumulated_times.len() - 1];
-        let accumulated_time_unit = time_unit(last);
-        accumulated_times_records.push(vec!["0".to_string(), "0".to_string()].into());
-        for (idx, system_time) in accumulated_times.iter().enumerate() {
-            accumulated_times_records.push(
-                vec![
-                    time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
-                    (idx + 1).to_string(),
-                ]
-                .into(),
-            );
+        let (_pid, last) = accumulated_times[accumulated_times.len() - 1].clone();
+        let accumulated_time_unit = time_unit(last[last.len() - 1]);
+        let mut idx = 0;
+        for (pid, accumulated_time) in accumulated_times.iter() {
+            let mut accumulated_times_record = vec![];
+            for system_time in accumulated_time.iter() {
+                accumulated_times_record.push(
+                    vec![
+                        time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
+                        (idx + 1).to_string(),
+                    ]
+                        .into(),
+                );
+
+                idx += 1;
+            }
+            accumulated_times_records.push((*pid, accumulated_times_record));
         }
+        // for (idx, (pid, system_time)) in accumulated_times.iter().enumerate() {
+        //     accumulated_times_records.push(
+        //         vec![
+        //             time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
+        //             (idx + 1).to_string(),
+        //         ]
+        //         .into(),
+        //     );
+        // }
 
         println!("{:20} {}\n", "total run time:", time_format(end));
 
