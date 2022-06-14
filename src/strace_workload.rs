@@ -73,7 +73,7 @@ impl Bench for StraceWorkloadRunner {
             let mut op_times_plotter = Plotter::new();
             op_times_plotter.add_coordinates(
                 &file_name_p,
-                Some("parallel".to_string()),
+                None,
                 &ResultMode::OpTimes,
             )?;
 
@@ -89,7 +89,7 @@ impl Bench for StraceWorkloadRunner {
             let mut accumulated_times_plotter = Plotter::new();
             accumulated_times_plotter.add_coordinates(
                 &file_name,
-                Some("parallel".to_string()),
+                None,
                 &ResultMode::Behaviour,
             )?;
 
