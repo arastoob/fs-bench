@@ -599,8 +599,9 @@ impl OfflineBench {
                             let file = thread_rng().gen_range(1..1001);
                             let mut file_name = root_path.clone();
                             file_name.push(file.to_string());
+                            let mut file = Fs::open_file(&file_name)?;
                             let begin = SystemTime::now();
-                            match Fs::open_read(&file_name, &mut read_buffer) {
+                            match Fs::read(&mut file, &mut read_buffer) {
                                 Ok(_) => {
                                     let end = begin.elapsed()?.as_secs_f64();
                                     times.push(end);
@@ -714,8 +715,9 @@ impl OfflineBench {
                             let file = thread_rng().gen_range(1..1001);
                             let mut file_name = root_path.clone();
                             file_name.push(file.to_string());
+                            let mut file = Fs::open_file(&file_name)?;
                             let begin = SystemTime::now();
-                            match Fs::open_write(&file_name, &mut content) {
+                            match Fs::write(&mut file, &mut content) {
                                 Ok(_) => {
                                     let end = begin.elapsed()?.as_secs_f64();
                                     times.push(end);
