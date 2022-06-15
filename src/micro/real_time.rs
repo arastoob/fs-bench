@@ -431,9 +431,8 @@ impl RealTimeBench {
                 _ => {
                     let rand_content_index =
                         thread_rng().gen_range(0..(8192 * io_size) - io_size - 1);
-                    let mut content = rand_content
-                        [rand_content_index..(rand_content_index + io_size)]
-                        .to_vec();
+                    let mut content =
+                        rand_content[rand_content_index..(rand_content_index + io_size)].to_vec();
 
                     let file = thread_rng().gen_range(1..1001);
                     let mut file_name = root_path.clone();

@@ -71,21 +71,17 @@ impl Bench for StraceWorkloadRunner {
             results.log(&file_name)?;
 
             let mut op_times_plotter = Plotter::new();
-            op_times_plotter.add_coordinates(
-                &file_name,
-                None,
-                &ResultMode::OpTimes,
-            )?;
+            op_times_plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
 
             let mut accumulated_times_plotter = Plotter::new();
             for (pid, accumulated_times_records) in accumulated_times_records {
-                let mut accumulated_times_results = BenchResult::new(accumulated_times_header.clone());
+                let mut accumulated_times_results =
+                    BenchResult::new(accumulated_times_header.clone());
                 accumulated_times_results.add_records(accumulated_times_records)?;
                 let mut file_name = self.config.log_path.clone();
                 file_name.push(format!(
                     "{}_{}_accumulated_times.csv",
-                    self.config.fs_names[idx],
-                    pid
+                    self.config.fs_names[idx], pid
                 ));
                 accumulated_times_results.log(&file_name)?;
 
@@ -185,7 +181,8 @@ impl StraceWorkloadRunner {
                     op_times.append(&mut execution_result.op_times);
 
                     // accumulated_times.append(&mut execution_result.accumulated_times);
-                    accumulated_times.push((execution_result.pid, execution_result.accumulated_times));
+                    accumulated_times
+                        .push((execution_result.pid, execution_result.accumulated_times));
 
                     for (ck, (ct, cn)) in execution_result.op_summaries.iter() {
                         if let Some((t, n)) = op_summaries.get_mut(ck) {
@@ -232,7 +229,7 @@ impl StraceWorkloadRunner {
                         time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
                         (idx + 1).to_string(),
                     ]
-                        .into(),
+                    .into(),
                 );
 
                 idx += 1;
