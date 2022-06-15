@@ -97,9 +97,7 @@ impl Bench for RealTimeBench {
                     BenchFn::Mkdir => RealTimeBench::mkdir(receiver, mp, shared_ops),
                     BenchFn::Mknod => RealTimeBench::mknod(receiver, mp, shared_ops),
                     BenchFn::Read => RealTimeBench::read(io_size, receiver, mp, shared_ops),
-                    _ => {
-                        return Err(Error::Unknown("Not implemented".to_string()));
-                    }
+                    BenchFn::Write => RealTimeBench::write(io_size, receiver, mp, shared_ops),
                 }
             });
 
@@ -383,6 +381,66 @@ impl RealTimeBench {
                     let mut file = Fs::open_file(&file_name)?;
                     let begin = SystemTime::now();
                     match Fs::read(&mut file, &mut read_buffer) {
+                        Ok(_) => {
+                            let end = begin.elapsed()?.as_secs_f64();
+                            times.push(end);
+                            behaviour.push(SystemTime::now());
+                            idx += 1;
+                            *ops.write()? += 1.0;
+                        }
+                        Err(e) => {
+                            println!("error: {:?}", e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn write(
+        io_size: usize,
+        receiver: Receiver<Signal>,
+        mount_path: PathBuf,
+        ops: Arc<RwLock<f32>>,
+    ) -> Result<(Vec<f64>, Vec<SystemTime>, i32), Error> {
+        let mut root_path = mount_path.clone();
+        root_path.push("write");
+
+        // creating the root directory to generate the benchmark directories inside it
+        Fs::make_dir(&root_path)?;
+
+        for file in 1..1001 {
+            let mut file_name = root_path.clone();
+            file_name.push(file.to_string());
+            Fs::make_file(&file_name)?;
+        }
+
+        // create a big vector filled with random content
+        let mut rand_content = vec![0u8; 8192 * io_size];
+        let mut rng = rand::thread_rng();
+        rng.fill_bytes(&mut rand_content);
+
+        let mut times = vec![];
+        let mut behaviour = vec![];
+        let mut idx = 0;
+        loop {
+            match receiver.try_recv() {
+                Ok(Signal::Stop) => {
+                    return Ok((times, behaviour, idx));
+                }
+                _ => {
+                    let rand_content_index =
+                        thread_rng().gen_range(0..(8192 * io_size) - io_size - 1);
+                    let mut content = rand_content
+                        [rand_content_index..(rand_content_index + io_size)]
+                        .to_vec();
+
+                    let file = thread_rng().gen_range(1..1001);
+                    let mut file_name = root_path.clone();
+                    file_name.push(file.to_string());
+                    let mut file = Fs::open_file(&file_name)?;
+                    let begin = SystemTime::now();
+                    match Fs::write(&mut file, &mut content) {
                         Ok(_) => {
                             let end = begin.elapsed()?.as_secs_f64();
                             times.push(end);
