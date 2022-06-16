@@ -24,6 +24,7 @@ use std::time::{Duration, SystemTime};
 pub trait Bench {
     fn configure<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
         io_size: Option<String>,
+        fileset_size: Option<usize>,
         run_time: Option<f64>,
         workload: Option<P>,
         mount_paths: Vec<P>,
@@ -33,13 +34,15 @@ pub trait Bench {
     where
         Self: Sized,
     {
-        let config = Config::new(io_size, run_time, workload, mount_paths, fs_names, log_path)?;
+        let config = Config::new(io_size, fileset_size, run_time, workload, mount_paths, fs_names, log_path)?;
         Bench::new(config)
     }
 
     fn new(config: Config) -> Result<Self, Error>
     where
         Self: Sized;
+
+    fn setup<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(&self, path: P) -> Result<(), Error>;
 
     fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error>;
 }
@@ -49,6 +52,7 @@ pub trait Bench {
 ///
 pub struct Config {
     pub io_size: usize,
+    pub fileset_size: usize,
     pub run_time: f64,
     pub workload: PathBuf,
     pub mount_paths: Vec<PathBuf>,
@@ -59,6 +63,7 @@ pub struct Config {
 impl Config {
     fn new<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
         io_size: Option<String>,
+        fileset_size: Option<usize>,
         run_time: Option<f64>,
         workload: Option<P>,
         mount_paths: Vec<P>,
@@ -70,6 +75,12 @@ impl Config {
             io_size.get_bytes() as usize
         } else {
             4096 // the default io_size: 4 KiB
+        };
+
+        let fileset_size = if let Some(fileset_size) = fileset_size {
+            fileset_size
+        } else {
+            10000 // the default fileset_size: 10000
         };
 
         let run_time = if let Some(run_time) = run_time {
@@ -98,6 +109,7 @@ impl Config {
 
         Ok(Self {
             io_size,
+            fileset_size,
             run_time,
             workload,
             mount_paths,

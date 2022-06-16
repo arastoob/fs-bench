@@ -14,9 +14,10 @@ use plotters::prelude::{ChartBuilder, IntoDrawingArea, LineSeries, Palette, Pale
 use plotters_piston::draw_piston_window;
 use rand::{thread_rng, Rng, RngCore};
 use std::collections::VecDeque;
+use std::ffi::OsStr;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
@@ -72,6 +73,40 @@ impl Bench for RealTimeBench {
             sender,
             receiver,
         })
+    }
+
+    fn setup<P: AsRef<Path> + AsRef<OsStr>>(&self, path: P) -> Result<(), Error> {
+        let path = Path::new(&path);
+        let path = PathBuf::from(path);
+        // cleanup the path if already exist
+        Fs::cleanup(&path)?;
+
+        let size = self.config.io_size;
+        let max_files = self.config.fileset_size;
+
+        let style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
+        let bar = ProgressBar::new_spinner();
+        bar.set_style(style);
+        bar.set_message(format!("setting up {}", Fs::path_to_str(&path)?));
+        let progress = Progress::start(bar.clone());
+
+        // creating the root directory to generate the benchmark files inside it
+        Fs::make_dir(&path)?;
+
+        for file in 0..max_files {
+            let mut file_name = path.clone();
+            file_name.push(file.to_string());
+
+            // each file is filled with random content
+            let mut rand_buffer = vec![0u8; size];
+            let mut rng = rand::thread_rng();
+            rng.fill_bytes(&mut rand_buffer);
+            Fs::make_file(&file_name)?.write_all(&mut rand_buffer)?;
+        }
+
+        progress.finish_and_clear()?;
+
+        Ok(())
     }
 
     fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error> {
