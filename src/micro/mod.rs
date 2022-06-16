@@ -1,5 +1,5 @@
 use crate::format::{percent_format, time_format};
-use crate::sample::AnalysedData;
+use crate::stats::AnalysedData;
 
 pub mod offline;
 pub mod real_time;

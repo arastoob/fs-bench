@@ -197,11 +197,12 @@ impl Sample {
     }
 
     pub fn analyse(&self) -> Result<AnalysedData, Error> {
-        let mean = self.mean();
         let (mean_lb, mean_ub, sample_means) = self.mean_confidence_interval(0.95, 1000)?;
 
         let outliers = self.outliers()?;
         let outliers_percentage = (outliers.len() as f64 / self.sample.len() as f64) * 100f64;
+
+        let mean = Sample::new(&sample_means)?.mean();
 
         let ops_per_second = (1f64 / mean).floor();
         let ops_per_second_lb = (1f64 / (mean_ub)).floor();
@@ -211,6 +212,30 @@ impl Sample {
             mean,
             mean_lb,
             mean_ub,
+            outliers_percentage,
+            ops_per_second,
+            ops_per_second_lb,
+            ops_per_second_ub,
+            sample_means,
+        })
+    }
+
+    pub fn analyse1(&self) -> Result<AnalysedData, Error> {
+        let (mean_lb, mean_ub, sample_means) = self.mean_confidence_interval(0.95, 1000)?;
+
+        let outliers = self.outliers()?;
+        let outliers_percentage = (outliers.len() as f64 / self.sample.len() as f64) * 100f64;
+
+        let mean = Sample::new(&sample_means)?.mean();
+
+        let ops_per_second = mean;
+        let ops_per_second_lb = mean_lb.floor();
+        let ops_per_second_ub = mean_ub.floor();
+
+        Ok(AnalysedData {
+            mean: 1f64 / mean,
+            mean_lb: 1f64 / mean_ub,
+            mean_ub: 1f64 / mean_lb,
             outliers_percentage,
             ops_per_second,
             ops_per_second_lb,

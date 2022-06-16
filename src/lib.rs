@@ -4,7 +4,7 @@ pub mod fs;
 pub mod micro;
 pub mod plotter;
 mod progress;
-pub mod sample;
+pub mod stats;
 pub mod strace_workload;
 mod timer;
 

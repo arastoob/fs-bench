@@ -3,7 +3,7 @@ use crate::fs::Fs;
 use crate::micro::print_output;
 use crate::plotter::Plotter;
 use crate::progress::Progress;
-use crate::sample::Sample;
+use crate::stats::Statistics;
 use crate::{Bench, BenchResult, Config, Record, ResultMode};
 use async_channel::{unbounded, Receiver, Sender};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -255,7 +255,7 @@ impl RealTimeBench {
                 let run_time = Duration::from_millis((ticks * tick_length) as u64);
 
                 bar.set_message("analysing data...");
-                let analysed_data = Sample::new(&times)?.analyse()?;
+                let analysed_data = Statistics::new(&times)?.analyse()?;
 
                 let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
 
