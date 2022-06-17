@@ -1,10 +1,12 @@
+use std::ops::Add;
 use crate::error::Error;
 use rand::Rng;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, SystemTime};
 
 /// A collection of data points with some statistical functions on the data
-pub struct Sample {
+pub struct Statistics {
     sample: Vec<f64>,
 }
 
@@ -13,7 +15,7 @@ pub struct Quartiles {
     pub q3: f64, // third quartile, 75% of the data lies below this point
 }
 
-impl Sample {
+impl Statistics {
     pub fn new<T>(sample: &[T]) -> Result<Self, Error>
     where
         T: Clone + std::convert::Into<f64>,
@@ -188,7 +190,7 @@ impl Sample {
                 resample.push(self.sample[idx]);
             }
 
-            let resample = Sample::new(&resample).unwrap();
+            let resample = Statistics::new(&resample).unwrap();
             resample_means.lock().unwrap().push(resample.mean());
         });
 
@@ -199,49 +201,97 @@ impl Sample {
     pub fn analyse(&self) -> Result<AnalysedData, Error> {
         let (mean_lb, mean_ub, sample_means) = self.mean_confidence_interval(0.95, 1000)?;
 
-        let outliers = self.outliers()?;
-        let outliers_percentage = (outliers.len() as f64 / self.sample.len() as f64) * 100f64;
+        // let outliers = self.outliers()?;
+        // let outliers_percentage = (outliers.len() as f64 / self.sample.len() as f64) * 100f64;
 
-        let mean = Sample::new(&sample_means)?.mean();
-
-        let ops_per_second = (1f64 / mean).floor();
-        let ops_per_second_lb = (1f64 / (mean_ub)).floor();
-        let ops_per_second_ub = (1f64 / (mean_lb)).floor();
+        let mean = Statistics::new(&sample_means)?.mean();
 
         Ok(AnalysedData {
-            mean,
-            mean_lb,
-            mean_ub,
-            outliers_percentage,
-            ops_per_second,
-            ops_per_second_lb,
-            ops_per_second_ub,
+            mean: mean.floor(),
+            mean_lb: mean_lb.floor(),
+            mean_ub: mean_ub.floor(),
             sample_means,
         })
     }
 
-    pub fn analyse1(&self) -> Result<AnalysedData, Error> {
-        let (mean_lb, mean_ub, sample_means) = self.mean_confidence_interval(0.95, 1000)?;
+    ///
+    /// count the number of operations in a time window
+    /// the time window length is in milliseconds
+    /// the input times contains the timestamps in unix_time format. The first 10 digits are
+    /// date and time in seconds and the last 9 digits show the milliseconds
+    ///
+    /// The output is a list of tuples including operation per seconds in a specific time: (time, ops_per_second)
+    ///
+    pub fn ops_in_window(
+        times: &Vec<SystemTime>,
+        duration: Duration,
+    ) -> Result<Vec<(f64, usize)>, Error> {
+        let len = times.len();
+        let first = times[0]; // first timestamp
+        let mut last = times[len - 1]; // last timestamp
+        if last.duration_since(first)? > duration {
+            last = first.add(duration);
+        }
 
-        let outliers = self.outliers()?;
-        let outliers_percentage = (outliers.len() as f64 / self.sample.len() as f64) * 100f64;
+        // decide about the window length in millis
+        let duration = last.duration_since(first)?.as_secs_f64();
+        let window = if duration < 0.5 {
+            2
+        } else if duration < 1f64 {
+            5
+        } else if duration < 3f64 {
+            10
+        } else if duration < 5f64 {
+            20
+        } else if duration < 10f64 {
+            50
+        } else if duration < 20f64 {
+            70
+        } else if duration < 50f64 {
+            100
+        } else if duration < 100f64 {
+            150
+        } else if duration < 150f64 {
+            200
+        } else if duration < 200f64 {
+            500
+        } else if duration < 300f64 {
+            1000
+        } else {
+            5000
+        };
 
-        let mean = Sample::new(&sample_means)?.mean();
+        let mut ops_in_window = vec![];
 
-        let ops_per_second = mean;
-        let ops_per_second_lb = mean_lb.floor();
-        let ops_per_second_ub = mean_ub.floor();
+        let mut next = first.add(Duration::from_millis(window));
+        let mut idx = 0;
+        let mut ops = 0;
+        while next < last {
+            while times[idx] < next {
+                // count ops in this time window
+                ops += 1;
+                idx += 1;
+            }
+            let time = next.duration_since(first)?.as_secs_f64();
+            // we have counted ops in a window length milliseconds, so the ops in
+            // a second is (ops * 1000) / window
+            let ops_per_second = (ops * 1000) / window as usize;
+            ops_in_window.push((time, ops_per_second));
 
-        Ok(AnalysedData {
-            mean: 1f64 / mean,
-            mean_lb: 1f64 / mean_ub,
-            mean_ub: 1f64 / mean_lb,
-            outliers_percentage,
-            ops_per_second,
-            ops_per_second_lb,
-            ops_per_second_ub,
-            sample_means,
-        })
+            // go the next time window
+            next = next.add(Duration::from_millis(window));
+            ops = 0;
+        }
+
+        // count the remaining
+        if idx < len {
+            ops = len - idx;
+            let time = last.duration_since(first)?.as_secs_f64();
+            let ops_per_second = (ops * 1000) / window as usize;
+            ops_in_window.push((time, ops_per_second));
+        }
+
+        Ok(ops_in_window)
     }
 }
 
@@ -249,9 +299,5 @@ pub struct AnalysedData {
     pub mean: f64,
     pub mean_lb: f64,
     pub mean_ub: f64,
-    pub outliers_percentage: f64,
-    pub ops_per_second: f64,
-    pub ops_per_second_lb: f64,
-    pub ops_per_second_ub: f64,
     pub sample_means: Vec<f64>,
 }
