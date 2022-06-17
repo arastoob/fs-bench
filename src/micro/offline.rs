@@ -1,10 +1,10 @@
 use crate::error::Error;
-use crate::format::{time_format, time_format_by_unit, time_unit};
+use crate::format::time_format;
 use crate::fs::Fs;
-use crate::micro::print_output;
+use crate::micro::{micro_setup, print_output};
 use crate::plotter::Plotter;
 use crate::progress::Progress;
-use crate::sample::Sample;
+use crate::stats::Statistics;
 use crate::timer::Timer;
 use crate::{Bench, BenchFn, BenchResult, Config, Record, ResultMode};
 use byte_unit::Byte;
@@ -25,11 +25,15 @@ impl Bench for OfflineBench {
         Ok(Self { config })
     }
 
+    fn setup(&self, path: &PathBuf) -> Result<(), Error> {
+        micro_setup(self.config.io_size, self.config.fileset_size, path)
+    }
+
     fn run(&self, _bench_fn: Option<BenchFn>) -> Result<(), Error> {
         let rt = Duration::from_secs(self.config.run_time as u64); // running time
         self.behaviour_bench(rt)?;
-        let max_rt = Duration::from_secs(60 * 5);
-        self.throughput_bench(max_rt)?;
+        // let max_rt = Duration::from_secs(60 * 5);
+        // self.throughput_bench(max_rt)?;
 
         println!(
             "results logged to: {}",
@@ -51,25 +55,29 @@ impl OfflineBench {
         let behaviour_header = ["time".to_string(), "ops".to_string()].to_vec();
 
         for (idx, mount_path) in self.config.mount_paths.iter().enumerate() {
-            let (mkdir_ops_s, mkdir_behaviour, mkdir_times, mkdir_time_uint) = self.mkdir(
+            let (mkdir_ops_s, mkdir_behaviour, mkdir_times) = self.micro_op(
+                BenchFn::Mkdir,
                 run_time,
                 mount_path,
                 &self.config.fs_names[idx],
                 progress_style.clone(),
             )?;
-            let (mknod_ops_s, mknod_behaviour, mknod_times, mknod_time_uint) = self.mknod(
+            let (mknod_ops_s, mknod_behaviour, mknod_times) = self.micro_op(
+                BenchFn::Mknod,
                 run_time,
                 mount_path,
                 &self.config.fs_names[idx],
                 progress_style.clone(),
             )?;
-            let (read_ops_s, read_behaviour, read_times, read_time_uint) = self.read(
+            let (read_ops_s, read_behaviour, read_times) = self.micro_op(
+                BenchFn::Read,
                 run_time,
                 mount_path,
                 &self.config.fs_names[idx],
                 progress_style.clone(),
             )?;
-            let (write_ops_s, write_behaviour, write_times, write_time_uint) = self.write(
+            let (write_ops_s, write_behaviour, write_times) = self.micro_op(
+                BenchFn::Write,
                 run_time,
                 mount_path,
                 &self.config.fs_names[idx],
@@ -151,83 +159,80 @@ impl OfflineBench {
                 &ResultMode::Behaviour,
             )?;
 
-            // log and plot sample iteration average times
-            let times_header = ["op".to_string(), format!("time ({})", mkdir_time_uint)].to_vec();
-            let mut mkdir_times_results = BenchResult::new(times_header);
+            // log and plot sample iteration average ops/s
+            let ops_s_samples_header = ["iterations".to_string(), "ops/s".to_string()].to_vec();
+            let mut mkdir_times_results = BenchResult::new(ops_s_samples_header.clone());
             mkdir_times_results.add_records(mkdir_times)?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_mkdir_iteration_times.csv",
+                "{}_mkdir_ops_s_period.csv",
                 self.config.fs_names[idx]
             ));
             mkdir_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
             file_name.set_extension("svg");
             plotter.point_series(
-                Some("Sample iteration"),
-                Some(format!("Average time ({})", mkdir_time_uint).as_str()),
+                Some("Sampling iterations"),
+                Some("Average Ops/s"),
                 Some(&format!("Mkdir ({})", self.config.fs_names[idx])),
                 &file_name,
             )?;
 
-            let times_header = ["op".to_string(), format!("time ({})", mknod_time_uint)].to_vec();
-            let mut mknod_times_results = BenchResult::new(times_header);
+            let mut mknod_times_results = BenchResult::new(ops_s_samples_header.clone());
             mknod_times_results.add_records(mknod_times)?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_mknod_iteration_times.csv",
+                "{}_mknod_ops_s_period.csv",
                 self.config.fs_names[idx]
             ));
             mknod_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
             file_name.set_extension("svg");
             plotter.point_series(
-                Some("Sample iteration"),
-                Some(format!("Average time ({})", mknod_time_uint).as_str()),
+                Some("Sampling iterations"),
+                Some("Average Ops/s"),
                 Some(&format!("Mknod ({})", self.config.fs_names[idx])),
                 &file_name,
             )?;
 
-            let times_header = ["op".to_string(), format!("time ({})", read_time_uint)].to_vec();
-            let mut read_times_results = BenchResult::new(times_header);
+            let mut read_times_results = BenchResult::new(ops_s_samples_header.clone());
             read_times_results.add_records(read_times)?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_read_iteration_times.csv",
+                "{}_read_ops_s_period.csv",
                 self.config.fs_names[idx]
             ));
             read_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
             file_name.set_extension("svg");
             plotter.point_series(
-                Some("Sample iteration"),
-                Some(format!("Average time ({})", read_time_uint).as_str()),
+                Some("Sampling iterations"),
+                Some("Average Ops/s"),
                 Some(&format!("Read ({})", self.config.fs_names[idx])),
                 &file_name,
             )?;
 
-            let times_header = ["op".to_string(), format!("time ({})", write_time_uint)].to_vec();
-            let mut write_times_results = BenchResult::new(times_header);
+            let mut write_times_results = BenchResult::new(ops_s_samples_header.clone());
             write_times_results.add_records(write_times)?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_write_iteration_times.csv",
+                "{}_write_ops_s_period.csv",
                 self.config.fs_names[idx]
             ));
             write_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
             file_name.set_extension("svg");
             plotter.point_series(
-                Some("Sample iteration"),
-                Some(format!("Average time ({})", write_time_uint).as_str()),
+                Some("Sampling iterations"),
+                Some("Average Ops/s"),
                 Some(&format!("Write ({})", self.config.fs_names[idx])),
                 &file_name,
             )?;
@@ -355,49 +360,106 @@ impl OfflineBench {
         Ok(())
     }
 
-    fn mkdir(
+    fn micro_op(
         &self,
+        op: BenchFn,
         run_time: Duration,
         mount_path: &PathBuf,
         fs_name: &str,
         style: ProgressStyle,
-    ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
+    ) -> Result<(Record, Vec<Record>, Vec<Record>), Error> {
         let mut root_path = mount_path.clone();
-        root_path.push("mkdir");
-        Fs::cleanup(&root_path)?;
+        root_path.push(op.to_string());
+        self.setup(&root_path)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("mkdir ({})", fs_name));
+        bar.set_message(format!("{} ({})", op.to_string(), fs_name));
         let progress = Progress::start(bar.clone());
 
-        // creating the root directory to generate the benchmark directories inside it
-        Fs::make_dir(&root_path)?;
-
+        let size = self.config.io_size;
+        let fileset_size = self.config.fileset_size;
+        let operation = op.clone();
         let (sender, receiver) = channel();
         let handle =
-            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
-                let mut times = vec![];
+            std::thread::spawn(move || -> Result<(Vec<SystemTime>, u64), Error> {
                 let mut behaviour = vec![];
                 let mut idx = 0;
+
+                // create a big vector filled with random content
+                let mut rand_content = vec![0u8; 8192 * size];
+                let mut rng = rand::thread_rng();
+                rng.fill_bytes(&mut rand_content);
+
                 loop {
                     match receiver.try_recv() {
                         Ok(true) => {
-                            return Ok((times, behaviour, idx));
+                            return Ok((behaviour, idx));
                         }
                         _ => {
-                            let mut dir_name = root_path.clone();
-                            dir_name.push(idx.to_string());
-                            let begin = SystemTime::now();
-                            match Fs::make_dir(&dir_name) {
-                                Ok(()) => {
-                                    let end = begin.elapsed()?.as_secs_f64();
-                                    times.push(end);
-                                    behaviour.push(SystemTime::now());
-                                    idx = idx + 1;
-                                }
-                                Err(e) => {
-                                    error!("error: {:?}", e);
+                            match operation {
+                                BenchFn::Mkdir => {
+                                    let mut dir_name = root_path.clone();
+                                    dir_name.push(idx.to_string());
+                                    match Fs::make_dir(&dir_name) {
+                                        Ok(()) => {
+                                            behaviour.push(SystemTime::now());
+                                            idx = idx + 1;
+                                        }
+                                        Err(e) => {
+                                            error!("error: {:?}", e);
+                                        }
+                                    }
+                                },
+                                BenchFn::Mknod => {
+                                    let mut file_name = root_path.clone();
+                                    file_name.push(idx.to_string());
+                                    match Fs::make_file(&file_name) {
+                                        Ok(_) => {
+                                            behaviour.push(SystemTime::now());
+                                            idx = idx + 1;
+                                        }
+                                        Err(e) => {
+                                            error!("error: {:?}", e);
+                                        }
+                                    }
+                                },
+                                BenchFn::Read => {
+                                    let file = thread_rng().gen_range(0..fileset_size);
+                                    let mut file_name = root_path.clone();
+                                    file_name.push(file.to_string());
+
+                                    let mut file = Fs::open_file(&file_name)?;
+                                    let mut read_buffer = vec![0u8; size];
+                                    match Fs::read(&mut file, &mut read_buffer) {
+                                        Ok(_) => {
+                                            behaviour.push(SystemTime::now());
+                                            idx += 1;
+                                        }
+                                        Err(e) => {
+                                            println!("error: {:?}", e);
+                                        }
+                                    }
+                                },
+                                BenchFn::Write => {
+                                    let rand_content_index =
+                                        thread_rng().gen_range(0..(8192 * size) - size - 1);
+                                    let mut content =
+                                        rand_content[rand_content_index..(rand_content_index + size)].to_vec();
+
+                                    let file = thread_rng().gen_range(0..fileset_size);
+                                    let mut file_name = root_path.clone();
+                                    file_name.push(file.to_string());
+                                    let mut file = Fs::open_file(&file_name)?;
+                                    match Fs::write(&mut file, &mut content) {
+                                        Ok(_) => {
+                                            behaviour.push(SystemTime::now());
+                                            idx += 1;
+                                        }
+                                        Err(e) => {
+                                            println!("error: {:?}", e);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -406,376 +468,61 @@ impl OfflineBench {
             });
 
         std::thread::sleep(run_time);
-        let (times, behaviour, idx) = match sender.send(true) {
+        let (behaviour, idx) = match sender.send(true) {
             Ok(_) => {
-                bar.set_message("waiting for collected data...");
+                bar.set_message(format!("{} ({}): waiting for collected data...", op.to_string(), fs_name));
                 handle.join().unwrap()?
             }
             Err(e) => return Err(Error::SyncError(e.to_string())),
         };
 
-        bar.set_message("analysing data...");
-        let analysed_data = Sample::new(&times)?.analyse()?;
+        bar.set_message(format!("{} ({}): analysing data...", op.to_string(), fs_name));
+        let ops_in_window = Statistics::ops_in_window(&behaviour, run_time)?;
+        let ops_per_seconds = ops_in_window.iter()
+            .map(|(_t, ops_s)| *ops_s as f64)
+            .collect::<Vec<_>>();
+        let analysed_data = Statistics::new(&ops_per_seconds)?.analyse()?;
 
-        progress.finish_with_message(&format!("mkdir ({}) finished", fs_name))?;
+        progress.finish_with_message(&format!("{} ({}) finished", op.to_string(), fs_name))?;
         print_output(idx, run_time.as_secs_f64(), &analysed_data);
+
+        let mut behaviour_records = vec![];
+        for (time, ops_s) in ops_in_window.iter() {
+            behaviour_records.push(
+                [
+                    time.to_string(),
+                    ops_s.to_string(),
+                ].to_vec().into());
+        }
+
 
         let ops_per_second_record = Record {
             fields: [
-                "mkdir".to_string(),
+                op.to_string(),
                 run_time.as_secs_f64().to_string(),
-                analysed_data.ops_per_second.to_string(),
-                analysed_data.ops_per_second_lb.to_string(),
-                analysed_data.ops_per_second_ub.to_string(),
+                analysed_data.mean.to_string(),
+                analysed_data.mean_lb.to_string(),
+                analysed_data.mean_ub.to_string(),
             ]
-            .to_vec(),
+                .to_vec(),
         };
 
-        let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
-
-        let time_unit = time_unit(analysed_data.mean_lb);
-        let mut time_records = vec![];
-        for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(
+        let mut ops_s_samples_records = vec![];
+        for (idx, ops_s) in analysed_data.sample_means.iter().enumerate() {
+            ops_s_samples_records.push(
                 [
                     idx.to_string(),
-                    time_format_by_unit(*time, time_unit)?.to_string(),
+                    ops_s.to_string(),
                 ]
-                .to_vec()
-                .into(),
+                    .to_vec()
+                    .into(),
             );
         }
 
         Ok((
             ops_per_second_record,
             behaviour_records,
-            time_records,
-            time_unit,
-        ))
-    }
-
-    fn mknod(
-        &self,
-        run_time: Duration,
-        mount_path: &PathBuf,
-        fs_name: &str,
-        style: ProgressStyle,
-    ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
-        let mut root_path = mount_path.clone();
-        root_path.push("mknod");
-        Fs::cleanup(&root_path)?;
-
-        let bar = ProgressBar::new_spinner();
-        bar.set_style(style);
-        bar.set_message(format!("mknod ({})", fs_name));
-        let progress = Progress::start(bar.clone());
-
-        // creating the root directory to generate the benchmark files inside it
-        Fs::make_dir(&root_path)?;
-
-        let (sender, receiver) = channel();
-        let handle =
-            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
-                let mut times = vec![];
-                let mut behaviour = vec![];
-                let mut idx = 0;
-                loop {
-                    match receiver.try_recv() {
-                        Ok(true) => {
-                            return Ok((times, behaviour, idx));
-                        }
-                        _ => {
-                            let mut file_name = root_path.clone();
-                            file_name.push(idx.to_string());
-                            let begin = SystemTime::now();
-                            match Fs::make_file(&file_name) {
-                                Ok(_) => {
-                                    let end = begin.elapsed()?.as_secs_f64();
-                                    times.push(end);
-                                    behaviour.push(SystemTime::now());
-                                    idx = idx + 1;
-                                }
-                                Err(e) => {
-                                    error!("error: {:?}", e);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-        std::thread::sleep(run_time);
-        let (times, behaviour, idx) = match sender.send(true) {
-            Ok(_) => {
-                bar.set_message("waiting for collected data...");
-                handle.join().unwrap()?
-            }
-            Err(e) => return Err(Error::SyncError(e.to_string())),
-        };
-
-        bar.set_message("analysing data...");
-        let analysed_data = Sample::new(&times)?.analyse()?;
-
-        progress.finish_with_message(&format!("mknod ({}) finished", fs_name))?;
-        print_output(idx, run_time.as_secs_f64(), &analysed_data);
-
-        let ops_per_second_record = vec![
-            "mknod".to_string(),
-            run_time.as_secs_f64().to_string(),
-            analysed_data.ops_per_second.to_string(),
-            analysed_data.ops_per_second_lb.to_string(),
-            analysed_data.ops_per_second_ub.to_string(),
-        ]
-        .into();
-
-        let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
-
-        let time_unit = time_unit(analysed_data.mean_lb);
-        let mut time_records = vec![];
-        for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(
-                vec![
-                    idx.to_string(),
-                    time_format_by_unit(*time, time_unit)?.to_string(),
-                ]
-                .into(),
-            )
-        }
-
-        Ok((
-            ops_per_second_record,
-            behaviour_records,
-            time_records,
-            time_unit,
-        ))
-    }
-
-    fn read(
-        &self,
-        run_time: Duration,
-        mount_path: &PathBuf,
-        fs_name: &str,
-        style: ProgressStyle,
-    ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
-        let mut root_path = mount_path.clone();
-        root_path.push("read");
-        Fs::cleanup(&root_path)?;
-
-        let bar = ProgressBar::new_spinner();
-        bar.set_style(style);
-        bar.set_message(format!("read ({})", fs_name));
-        let progress = Progress::start(bar.clone());
-
-        // creating the root directory to generate the benchmark files inside it
-        Fs::make_dir(&root_path)?;
-
-        let size = self.config.io_size;
-        for file in 1..1001 {
-            let mut file_name = root_path.clone();
-            file_name.push(file.to_string());
-            let mut file = Fs::make_file(&file_name)?;
-
-            // generate a buffer of size io size filled with random data
-            let mut rand_buffer = vec![0u8; size];
-            let mut rng = rand::thread_rng();
-            rng.fill_bytes(&mut rand_buffer);
-
-            file.write(&rand_buffer)?;
-        }
-
-        let (sender, receiver) = channel();
-        let handle =
-            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
-                let mut times = vec![];
-                let mut behaviour = vec![];
-                let mut idx = 0;
-                let mut read_buffer = vec![0u8; size];
-                loop {
-                    match receiver.try_recv() {
-                        Ok(true) => {
-                            return Ok((times, behaviour, idx));
-                        }
-                        _ => {
-                            let file = thread_rng().gen_range(1..1001);
-                            let mut file_name = root_path.clone();
-                            file_name.push(file.to_string());
-                            let mut file = Fs::open_file(&file_name)?;
-                            let begin = SystemTime::now();
-                            match Fs::read(&mut file, &mut read_buffer) {
-                                Ok(_) => {
-                                    let end = begin.elapsed()?.as_secs_f64();
-                                    times.push(end);
-                                    behaviour.push(SystemTime::now());
-                                    idx += 1;
-                                }
-                                Err(e) => {
-                                    println!("error: {:?}", e);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-        std::thread::sleep(run_time);
-        let (times, behaviour, idx) = match sender.send(true) {
-            Ok(_) => {
-                bar.set_message("waiting for collected data...");
-                handle.join().unwrap()?
-            }
-            Err(e) => return Err(Error::SyncError(e.to_string())),
-        };
-
-        bar.set_message("analysing data...");
-        let analysed_data = Sample::new(&times)?.analyse()?;
-
-        progress.finish_with_message(&format!("read ({}) finished", fs_name))?;
-        print_output(idx, run_time.as_secs_f64(), &analysed_data);
-
-        let ops_per_second_record = vec![
-            "read".to_string(),
-            run_time.as_secs_f64().to_string(),
-            analysed_data.ops_per_second.to_string(),
-            analysed_data.ops_per_second_lb.to_string(),
-            analysed_data.ops_per_second_ub.to_string(),
-        ]
-        .into();
-
-        let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
-
-        let time_unit = time_unit(analysed_data.mean_lb);
-        let mut time_records = vec![];
-        for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(
-                vec![
-                    idx.to_string(),
-                    time_format_by_unit(*time, time_unit)?.to_string(),
-                ]
-                .into(),
-            );
-        }
-
-        Ok((
-            ops_per_second_record,
-            behaviour_records,
-            time_records,
-            time_unit,
-        ))
-    }
-
-    fn write(
-        &self,
-        run_time: Duration,
-        mount_path: &PathBuf,
-        fs_name: &str,
-        style: ProgressStyle,
-    ) -> Result<(Record, Vec<Record>, Vec<Record>, &str), Error> {
-        let mut root_path = mount_path.clone();
-        root_path.push("write");
-        Fs::cleanup(&root_path)?;
-
-        let bar = ProgressBar::new_spinner();
-        bar.set_style(style);
-        bar.set_message(format!("write ({})", fs_name));
-        let progress = Progress::start(bar.clone());
-
-        // creating the root directory to generate the benchmark files inside it
-        Fs::make_dir(&root_path)?;
-
-        for file in 1..1001 {
-            let mut file_name = root_path.clone();
-            file_name.push(file.to_string());
-            Fs::make_file(&file_name)?;
-        }
-
-        // create a big vector filled with random content
-        let size = self.config.io_size;
-        let mut rand_content = vec![0u8; 8192 * size];
-        let mut rng = rand::thread_rng();
-        rng.fill_bytes(&mut rand_content);
-
-        let (sender, receiver) = channel();
-        let handle =
-            std::thread::spawn(move || -> Result<(Vec<f64>, Vec<SystemTime>, u64), Error> {
-                let mut times = vec![];
-                let mut behaviour = vec![];
-                let mut idx = 0;
-                loop {
-                    match receiver.try_recv() {
-                        Ok(true) => {
-                            return Ok((times, behaviour, idx));
-                        }
-                        _ => {
-                            let rand_content_index =
-                                thread_rng().gen_range(0..(8192 * size) - size - 1);
-                            let mut content = rand_content
-                                [rand_content_index..(rand_content_index + size)]
-                                .to_vec();
-
-                            let file = thread_rng().gen_range(1..1001);
-                            let mut file_name = root_path.clone();
-                            file_name.push(file.to_string());
-                            let mut file = Fs::open_file(&file_name)?;
-                            let begin = SystemTime::now();
-                            match Fs::write(&mut file, &mut content) {
-                                Ok(_) => {
-                                    let end = begin.elapsed()?.as_secs_f64();
-                                    times.push(end);
-                                    behaviour.push(SystemTime::now());
-                                    idx += 1;
-                                }
-                                Err(e) => {
-                                    println!("error: {:?}", e);
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-        std::thread::sleep(run_time);
-        let (times, behaviour, idx) = match sender.send(true) {
-            Ok(_) => {
-                bar.set_message("waiting for collected data...");
-                handle.join().unwrap()?
-            }
-            Err(e) => return Err(Error::SyncError(e.to_string())),
-        };
-
-        bar.set_message("analysing data...");
-        let analysed_data = Sample::new(&times)?.analyse()?;
-
-        progress.finish_with_message(&format!("write ({}) finished", fs_name))?;
-        print_output(idx, run_time.as_secs_f64(), &analysed_data);
-
-        let ops_per_second_record = vec![
-            "write".to_string(),
-            run_time.as_secs_f64().to_string(),
-            analysed_data.ops_per_second.to_string(),
-            analysed_data.ops_per_second_lb.to_string(),
-            analysed_data.ops_per_second_ub.to_string(),
-        ]
-        .into();
-
-        let behaviour_records = Record::ops_in_window(&behaviour, run_time)?;
-
-        let time_unit = time_unit(analysed_data.mean_lb);
-        let mut time_records = vec![];
-        for (idx, time) in analysed_data.sample_means.iter().enumerate() {
-            time_records.push(
-                vec![
-                    idx.to_string(),
-                    time_format_by_unit(*time, time_unit)?.to_string(),
-                ]
-                .into(),
-            );
-        }
-
-        Ok((
-            ops_per_second_record,
-            behaviour_records,
-            time_records,
-            time_unit,
+            ops_s_samples_records,
         ))
     }
 
@@ -837,7 +584,7 @@ impl OfflineBench {
                 }
             }
 
-            let sample = Sample::new(&times)?;
+            let sample = Statistics::new(&times)?;
             let mean = sample.mean();
             let throughput = read_size as f64 / mean; // B/s
             throughputs.push((read_size, throughput));
@@ -941,7 +688,7 @@ impl OfflineBench {
                 }
             }
 
-            let sample = Sample::new(&times)?;
+            let sample = Statistics::new(&times)?;
             let mean = sample.mean();
             let throughput = write_size as f64 / mean; // B/s
             throughputs.push((write_size, throughput));
