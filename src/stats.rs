@@ -1,7 +1,7 @@
-use std::ops::Add;
 use crate::error::Error;
 use rand::Rng;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
+use std::ops::Add;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
@@ -200,9 +200,6 @@ impl Statistics {
 
     pub fn analyse(&self) -> Result<AnalysedData, Error> {
         let (mean_lb, mean_ub, sample_means) = self.mean_confidence_interval(0.95, 1000)?;
-
-        // let outliers = self.outliers()?;
-        // let outliers_percentage = (outliers.len() as f64 / self.sample.len() as f64) * 100f64;
 
         let mean = Statistics::new(&sample_means)?.mean();
 

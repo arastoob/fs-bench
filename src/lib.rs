@@ -34,7 +34,15 @@ pub trait Bench {
     where
         Self: Sized,
     {
-        let config = Config::new(io_size, fileset_size, run_time, workload, mount_paths, fs_names, log_path)?;
+        let config = Config::new(
+            io_size,
+            fileset_size,
+            run_time,
+            workload,
+            mount_paths,
+            fs_names,
+            log_path,
+        )?;
         Bench::new(config)
     }
 
@@ -161,7 +169,7 @@ pub enum ResultMode {
     Throughput,
     Behaviour,
     OpTimes,
-    SampleOpsPerSecond
+    SampleOpsPerSecond,
 }
 
 impl FromStr for ResultMode {

@@ -1,21 +1,17 @@
-use std::io::Write;
-use std::path::PathBuf;
-use indicatif::{ProgressBar, ProgressStyle};
-use rand::RngCore;
-use crate::Error;
 use crate::format::time_format;
 use crate::fs::Fs;
 use crate::progress::Progress;
 use crate::stats::AnalysedData;
+use crate::Error;
+use indicatif::{ProgressBar, ProgressStyle};
+use rand::RngCore;
+use std::io::Write;
+use std::path::PathBuf;
 
 pub mod offline;
 pub mod real_time;
 
-pub fn micro_setup(
-    io_size: usize,
-    fileset_size: usize,
-    path: &PathBuf
-) -> Result<(), Error> {
+pub fn micro_setup(io_size: usize, fileset_size: usize, path: &PathBuf) -> Result<(), Error> {
     // cleanup the path if already exist
     Fs::cleanup(path)?;
 

@@ -77,7 +77,7 @@ impl Plotter {
             ResultMode::Behaviour => Plotter::parse_timestamps(&file)?,
             ResultMode::Throughput => Plotter::parse_throughputs(&file)?,
             ResultMode::OpTimes => Plotter::parse_ops_timestamps(&file)?,
-            ResultMode::SampleOpsPerSecond => Plotter::parse_sample_ops(&file)?
+            ResultMode::SampleOpsPerSecond => Plotter::parse_sample_ops(&file)?,
         };
 
         if !self.coordinates.is_empty() && *mode != ResultMode::Behaviour {

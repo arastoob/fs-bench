@@ -32,8 +32,8 @@ impl Bench for OfflineBench {
     fn run(&self, _bench_fn: Option<BenchFn>) -> Result<(), Error> {
         let rt = Duration::from_secs(self.config.run_time as u64); // running time
         self.behaviour_bench(rt)?;
-        // let max_rt = Duration::from_secs(60 * 5);
-        // self.throughput_bench(max_rt)?;
+        let max_rt = Duration::from_secs(60 * 5);
+        self.throughput_bench(max_rt)?;
 
         println!(
             "results logged to: {}",
@@ -381,104 +381,111 @@ impl OfflineBench {
         let fileset_size = self.config.fileset_size;
         let operation = op.clone();
         let (sender, receiver) = channel();
-        let handle =
-            std::thread::spawn(move || -> Result<(Vec<SystemTime>, u64), Error> {
-                let mut behaviour = vec![];
-                let mut idx = 0;
+        let handle = std::thread::spawn(move || -> Result<(Vec<SystemTime>, u64), Error> {
+            let mut behaviour = vec![];
+            let mut idx = 0;
 
-                // create a big vector filled with random content
-                let mut rand_content = vec![0u8; 8192 * size];
-                let mut rng = rand::thread_rng();
-                rng.fill_bytes(&mut rand_content);
+            // create a big vector filled with random content
+            let mut rand_content = vec![0u8; 8192 * size];
+            let mut rng = rand::thread_rng();
+            rng.fill_bytes(&mut rand_content);
 
-                loop {
-                    match receiver.try_recv() {
-                        Ok(true) => {
-                            return Ok((behaviour, idx));
-                        }
-                        _ => {
-                            match operation {
-                                BenchFn::Mkdir => {
-                                    let mut dir_name = root_path.clone();
-                                    dir_name.push(idx.to_string());
-                                    match Fs::make_dir(&dir_name) {
-                                        Ok(()) => {
-                                            behaviour.push(SystemTime::now());
-                                            idx = idx + 1;
-                                        }
-                                        Err(e) => {
-                                            error!("error: {:?}", e);
-                                        }
-                                    }
-                                },
-                                BenchFn::Mknod => {
-                                    let mut file_name = root_path.clone();
-                                    file_name.push(idx.to_string());
-                                    match Fs::make_file(&file_name) {
-                                        Ok(_) => {
-                                            behaviour.push(SystemTime::now());
-                                            idx = idx + 1;
-                                        }
-                                        Err(e) => {
-                                            error!("error: {:?}", e);
-                                        }
-                                    }
-                                },
-                                BenchFn::Read => {
-                                    let file = thread_rng().gen_range(0..fileset_size);
-                                    let mut file_name = root_path.clone();
-                                    file_name.push(file.to_string());
-
-                                    let mut file = Fs::open_file(&file_name)?;
-                                    let mut read_buffer = vec![0u8; size];
-                                    match Fs::read(&mut file, &mut read_buffer) {
-                                        Ok(_) => {
-                                            behaviour.push(SystemTime::now());
-                                            idx += 1;
-                                        }
-                                        Err(e) => {
-                                            println!("error: {:?}", e);
-                                        }
-                                    }
-                                },
-                                BenchFn::Write => {
-                                    let rand_content_index =
-                                        thread_rng().gen_range(0..(8192 * size) - size - 1);
-                                    let mut content =
-                                        rand_content[rand_content_index..(rand_content_index + size)].to_vec();
-
-                                    let file = thread_rng().gen_range(0..fileset_size);
-                                    let mut file_name = root_path.clone();
-                                    file_name.push(file.to_string());
-                                    let mut file = Fs::open_file(&file_name)?;
-                                    match Fs::write(&mut file, &mut content) {
-                                        Ok(_) => {
-                                            behaviour.push(SystemTime::now());
-                                            idx += 1;
-                                        }
-                                        Err(e) => {
-                                            println!("error: {:?}", e);
-                                        }
-                                    }
+            loop {
+                match receiver.try_recv() {
+                    Ok(true) => {
+                        return Ok((behaviour, idx));
+                    }
+                    _ => match operation {
+                        BenchFn::Mkdir => {
+                            let mut dir_name = root_path.clone();
+                            dir_name.push(idx.to_string());
+                            match Fs::make_dir(&dir_name) {
+                                Ok(()) => {
+                                    behaviour.push(SystemTime::now());
+                                    idx = idx + 1;
+                                }
+                                Err(e) => {
+                                    error!("error: {:?}", e);
                                 }
                             }
                         }
-                    }
+                        BenchFn::Mknod => {
+                            let mut file_name = root_path.clone();
+                            file_name.push(idx.to_string());
+                            match Fs::make_file(&file_name) {
+                                Ok(_) => {
+                                    behaviour.push(SystemTime::now());
+                                    idx = idx + 1;
+                                }
+                                Err(e) => {
+                                    error!("error: {:?}", e);
+                                }
+                            }
+                        }
+                        BenchFn::Read => {
+                            let file = thread_rng().gen_range(0..fileset_size);
+                            let mut file_name = root_path.clone();
+                            file_name.push(file.to_string());
+
+                            let mut file = Fs::open_file(&file_name)?;
+                            let mut read_buffer = vec![0u8; size];
+                            match Fs::read(&mut file, &mut read_buffer) {
+                                Ok(_) => {
+                                    behaviour.push(SystemTime::now());
+                                    idx += 1;
+                                }
+                                Err(e) => {
+                                    println!("error: {:?}", e);
+                                }
+                            }
+                        }
+                        BenchFn::Write => {
+                            let rand_content_index =
+                                thread_rng().gen_range(0..(8192 * size) - size - 1);
+                            let mut content = rand_content
+                                [rand_content_index..(rand_content_index + size)]
+                                .to_vec();
+
+                            let file = thread_rng().gen_range(0..fileset_size);
+                            let mut file_name = root_path.clone();
+                            file_name.push(file.to_string());
+                            let mut file = Fs::open_file(&file_name)?;
+                            match Fs::write(&mut file, &mut content) {
+                                Ok(_) => {
+                                    behaviour.push(SystemTime::now());
+                                    idx += 1;
+                                }
+                                Err(e) => {
+                                    println!("error: {:?}", e);
+                                }
+                            }
+                        }
+                    },
                 }
-            });
+            }
+        });
 
         std::thread::sleep(run_time);
         let (behaviour, idx) = match sender.send(true) {
             Ok(_) => {
-                bar.set_message(format!("{} ({}): waiting for collected data...", op.to_string(), fs_name));
+                bar.set_message(format!(
+                    "{} ({}): waiting for collected data...",
+                    op.to_string(),
+                    fs_name
+                ));
                 handle.join().unwrap()?
             }
             Err(e) => return Err(Error::SyncError(e.to_string())),
         };
 
-        bar.set_message(format!("{} ({}): analysing data...", op.to_string(), fs_name));
+        bar.set_message(format!(
+            "{} ({}): analysing data...",
+            op.to_string(),
+            fs_name
+        ));
         let ops_in_window = Statistics::ops_in_window(&behaviour, run_time)?;
-        let ops_per_seconds = ops_in_window.iter()
+        let ops_per_seconds = ops_in_window
+            .iter()
             .map(|(_t, ops_s)| *ops_s as f64)
             .collect::<Vec<_>>();
         let analysed_data = Statistics::new(&ops_per_seconds)?.analyse()?;
@@ -488,13 +495,8 @@ impl OfflineBench {
 
         let mut behaviour_records = vec![];
         for (time, ops_s) in ops_in_window.iter() {
-            behaviour_records.push(
-                [
-                    time.to_string(),
-                    ops_s.to_string(),
-                ].to_vec().into());
+            behaviour_records.push([time.to_string(), ops_s.to_string()].to_vec().into());
         }
-
 
         let ops_per_second_record = Record {
             fields: [
@@ -504,19 +506,12 @@ impl OfflineBench {
                 analysed_data.mean_lb.to_string(),
                 analysed_data.mean_ub.to_string(),
             ]
-                .to_vec(),
+            .to_vec(),
         };
 
         let mut ops_s_samples_records = vec![];
         for (idx, ops_s) in analysed_data.sample_means.iter().enumerate() {
-            ops_s_samples_records.push(
-                [
-                    idx.to_string(),
-                    ops_s.to_string(),
-                ]
-                    .to_vec()
-                    .into(),
-            );
+            ops_s_samples_records.push([idx.to_string(), ops_s.to_string()].to_vec().into());
         }
 
         Ok((
