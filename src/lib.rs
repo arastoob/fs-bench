@@ -4,7 +4,7 @@ pub mod fs;
 pub mod micro;
 pub mod plotter;
 mod progress;
-pub mod sample;
+pub mod stats;
 pub mod strace_workload;
 mod timer;
 
@@ -24,6 +24,7 @@ use std::time::{Duration, SystemTime};
 pub trait Bench {
     fn configure<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
         io_size: Option<String>,
+        fileset_size: Option<usize>,
         run_time: Option<f64>,
         workload: Option<P>,
         mount_paths: Vec<P>,
@@ -33,13 +34,23 @@ pub trait Bench {
     where
         Self: Sized,
     {
-        let config = Config::new(io_size, run_time, workload, mount_paths, fs_names, log_path)?;
+        let config = Config::new(
+            io_size,
+            fileset_size,
+            run_time,
+            workload,
+            mount_paths,
+            fs_names,
+            log_path,
+        )?;
         Bench::new(config)
     }
 
     fn new(config: Config) -> Result<Self, Error>
     where
         Self: Sized;
+
+    fn setup(&self, path: &PathBuf) -> Result<(), Error>;
 
     fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error>;
 }
@@ -49,6 +60,7 @@ pub trait Bench {
 ///
 pub struct Config {
     pub io_size: usize,
+    pub fileset_size: usize,
     pub run_time: f64,
     pub workload: PathBuf,
     pub mount_paths: Vec<PathBuf>,
@@ -59,6 +71,7 @@ pub struct Config {
 impl Config {
     fn new<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
         io_size: Option<String>,
+        fileset_size: Option<usize>,
         run_time: Option<f64>,
         workload: Option<P>,
         mount_paths: Vec<P>,
@@ -70,6 +83,12 @@ impl Config {
             io_size.get_bytes() as usize
         } else {
             4096 // the default io_size: 4 KiB
+        };
+
+        let fileset_size = if let Some(fileset_size) = fileset_size {
+            fileset_size
+        } else {
+            10000 // the default fileset_size: 10000
         };
 
         let run_time = if let Some(run_time) = run_time {
@@ -98,6 +117,7 @@ impl Config {
 
         Ok(Self {
             io_size,
+            fileset_size,
             run_time,
             workload,
             mount_paths,
@@ -149,6 +169,7 @@ pub enum ResultMode {
     Throughput,
     Behaviour,
     OpTimes,
+    SampleOpsPerSecond,
 }
 
 impl FromStr for ResultMode {
@@ -160,6 +181,7 @@ impl FromStr for ResultMode {
             "throughput" => Ok(ResultMode::Throughput),
             "behaviour" => Ok(ResultMode::Behaviour),
             "op_times" => Ok(ResultMode::OpTimes),
+            "sample_ops_per_second" => Ok(ResultMode::SampleOpsPerSecond),
             _ => Err("valid result modes are: ops_per_second, throughput, behaviour".to_string()),
         }
     }
@@ -172,6 +194,7 @@ impl Display for ResultMode {
             ResultMode::Behaviour => write!(f, "behaviour"),
             ResultMode::Throughput => write!(f, "throughput"),
             ResultMode::OpTimes => write!(f, "op_times"),
+            ResultMode::SampleOpsPerSecond => write!(f, "sample_ops_per_second"),
         }
     }
 }

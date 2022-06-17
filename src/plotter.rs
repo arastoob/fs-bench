@@ -77,6 +77,7 @@ impl Plotter {
             ResultMode::Behaviour => Plotter::parse_timestamps(&file)?,
             ResultMode::Throughput => Plotter::parse_throughputs(&file)?,
             ResultMode::OpTimes => Plotter::parse_ops_timestamps(&file)?,
+            ResultMode::SampleOpsPerSecond => Plotter::parse_sample_ops(&file)?,
         };
 
         if !self.coordinates.is_empty() && *mode != ResultMode::Behaviour {
@@ -657,6 +658,51 @@ impl Plotter {
             ));
             let y = record
                 .get(time_idx)
+                .ok_or(Error::CsvError(
+                    "failed to read from the csv file".to_string(),
+                ))?
+                .parse::<f64>()?;
+            y_axis.push(YAxis {
+                y,
+                lb: None,
+                ub: None,
+            });
+        }
+
+        assert_eq!(x_axis.len(), y_axis.len());
+
+        Ok((x_axis, y_axis))
+    }
+
+    fn parse_sample_ops(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
+        let mut reader = csv::Reader::from_reader(file);
+        let mut x_axis = vec![];
+        let mut y_axis = vec![];
+
+        // find the seconds and ops columns
+        let iter_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header == "iterations")
+            .ok_or(Error::CsvError("header 'iterations' not found".to_string()))?;
+        let ops_s_idx = reader
+            .headers()?
+            .iter()
+            .position(|header| header.contains("ops/s"))
+            .ok_or(Error::CsvError("header 'ops/s' not found".to_string()))?;
+
+        for record in reader.records() {
+            let record = record?;
+            x_axis.push(XAxis::from(
+                record
+                    .get(iter_idx)
+                    .ok_or(Error::CsvError(
+                        "failed to read from the csv file".to_string(),
+                    ))?
+                    .parse::<f64>()?,
+            ));
+            let y = record
+                .get(ops_s_idx)
                 .ok_or(Error::CsvError(
                     "failed to read from the csv file".to_string(),
                 ))?

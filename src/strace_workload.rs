@@ -40,6 +40,46 @@ impl Bench for StraceWorkloadRunner {
         })
     }
 
+    // create the directory hierarchy of the workload
+    fn setup(&self, path: &PathBuf) -> Result<(), Error> {
+        Fs::cleanup(path)?;
+
+        for file_dir in self.files.iter() {
+            match file_dir {
+                FileDir::File(file_path, size) => {
+                    let new_path = Fs::map_path(path, file_path)?;
+
+                    // remove the file name from the path
+                    let mut parents = new_path.clone();
+                    parents.pop();
+
+                    // create the parent directory hierarchy
+                    if !parents.exists() {
+                        Fs::make_dir_all(&parents)?;
+                    }
+
+                    // create the file and fill it with random content
+                    let mut rand_content = vec![0u8; *size];
+                    let mut rng = rand::thread_rng();
+                    rng.fill_bytes(&mut rand_content);
+
+                    let mut file = Fs::make_file(&new_path)?;
+                    file.write(&mut rand_content)?;
+                }
+                FileDir::Dir(dir_path, _) => {
+                    let new_path = Fs::map_path(path, dir_path)?;
+
+                    // create the directory
+                    if !new_path.exists() {
+                        Fs::make_dir_all(&new_path)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn run(&self, _bench_fn: Option<BenchFn>) -> Result<(), Error> {
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
@@ -275,46 +315,6 @@ impl StraceWorkloadRunner {
             op_time_unit.to_string(),
             accumulated_time_unit.to_string(),
         ))
-    }
-
-    // create the directory hierarchy of the workload
-    pub fn setup(&self, base_path: &PathBuf) -> Result<(), Error> {
-        Fs::cleanup(&base_path)?;
-
-        for file_dir in self.files.iter() {
-            match file_dir {
-                FileDir::File(path, size) => {
-                    let new_path = Fs::map_path(base_path, path)?;
-
-                    // remove the file name from the path
-                    let mut parents = new_path.clone();
-                    parents.pop();
-
-                    // create the parent directory hierarchy
-                    if !parents.exists() {
-                        Fs::make_dir_all(&parents)?;
-                    }
-
-                    // create the file and fill it with random content
-                    let mut rand_content = vec![0u8; *size];
-                    let mut rng = rand::thread_rng();
-                    rng.fill_bytes(&mut rand_content);
-
-                    let mut file = Fs::make_file(&new_path)?;
-                    file.write(&mut rand_content)?;
-                }
-                FileDir::Dir(path, _) => {
-                    let new_path = Fs::map_path(base_path, path)?;
-
-                    // create the directory
-                    if !new_path.exists() {
-                        Fs::make_dir_all(&new_path)?;
-                    }
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 

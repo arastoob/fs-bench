@@ -14,11 +14,15 @@ struct Args {
     #[clap(short, long)]
     bench_mode: BenchMode,
 
-    /// The I/O size
+    /// The I/O size, default: 4 KiB
     #[clap(short, long)]
-    size: Option<String>,
+    io_size: Option<String>,
 
-    /// The running time with default value of 60
+    /// Maximum number of files in a fileset, default: 10,000
+    #[clap(short = 's', long)]
+    fileset_size: Option<usize>,
+
+    /// The running time, default: 60 s
     #[clap(short, long)]
     time: Option<f64>,
 
@@ -58,7 +62,8 @@ fn main() -> Result<(), Error> {
     match args.bench_mode {
         BenchMode::Static => {
             OfflineBench::configure(
-                args.size,
+                args.io_size,
+                args.fileset_size,
                 args.time,
                 args.workload,
                 mount_paths,
@@ -69,7 +74,8 @@ fn main() -> Result<(), Error> {
         }
         BenchMode::RealTime => {
             RealTimeBench::configure(
-                args.size,
+                args.io_size,
+                args.fileset_size,
                 args.time,
                 args.workload,
                 mount_paths,
@@ -86,7 +92,8 @@ fn main() -> Result<(), Error> {
             }
 
             StraceWorkloadRunner::configure(
-                args.size,
+                args.io_size,
+                args.fileset_size,
                 args.time,
                 args.workload,
                 mount_paths,
