@@ -42,7 +42,7 @@ pub trait Bench {
     where
         Self: Sized;
 
-    fn setup<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(&self, path: P) -> Result<(), Error>;
+    fn setup(&self, path: &PathBuf) -> Result<(), Error>;
 
     fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error>;
 }
@@ -161,6 +161,7 @@ pub enum ResultMode {
     Throughput,
     Behaviour,
     OpTimes,
+    SampleOpsPerSecond
 }
 
 impl FromStr for ResultMode {
@@ -172,6 +173,7 @@ impl FromStr for ResultMode {
             "throughput" => Ok(ResultMode::Throughput),
             "behaviour" => Ok(ResultMode::Behaviour),
             "op_times" => Ok(ResultMode::OpTimes),
+            "sample_ops_per_second" => Ok(ResultMode::SampleOpsPerSecond),
             _ => Err("valid result modes are: ops_per_second, throughput, behaviour".to_string()),
         }
     }
@@ -184,6 +186,7 @@ impl Display for ResultMode {
             ResultMode::Behaviour => write!(f, "behaviour"),
             ResultMode::Throughput => write!(f, "throughput"),
             ResultMode::OpTimes => write!(f, "op_times"),
+            ResultMode::SampleOpsPerSecond => write!(f, "sample_ops_per_second"),
         }
     }
 }

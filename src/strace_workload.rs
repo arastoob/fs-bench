@@ -7,9 +7,8 @@ use crate::{Bench, BenchFn, BenchResult, Config, Record, ResultMode};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::RngCore;
 use std::collections::HashMap;
-use std::ffi::OsStr;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use strace_parser::{FileDir, Operation, OperationType, Parser, Process};
@@ -42,15 +41,13 @@ impl Bench for StraceWorkloadRunner {
     }
 
     // create the directory hierarchy of the workload
-    fn setup<P: AsRef<Path> + AsRef<OsStr>>(&self, path: P) -> Result<(), Error> {
-        let path = Path::new(&path);
-        let path = PathBuf::from(path);
-        Fs::cleanup(&path)?;
+    fn setup(&self, path: &PathBuf) -> Result<(), Error> {
+        Fs::cleanup(path)?;
 
         for file_dir in self.files.iter() {
             match file_dir {
                 FileDir::File(file_path, size) => {
-                    let new_path = Fs::map_path(&path, file_path)?;
+                    let new_path = Fs::map_path(path, file_path)?;
 
                     // remove the file name from the path
                     let mut parents = new_path.clone();
@@ -70,7 +67,7 @@ impl Bench for StraceWorkloadRunner {
                     file.write(&mut rand_content)?;
                 }
                 FileDir::Dir(dir_path, _) => {
-                    let new_path = Fs::map_path(&path, dir_path)?;
+                    let new_path = Fs::map_path(path, dir_path)?;
 
                     // create the directory
                     if !new_path.exists() {
