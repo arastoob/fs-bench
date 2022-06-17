@@ -78,7 +78,7 @@ fn second(s: f64) -> f64 {
 
 #[cfg(test)]
 mod test {
-    use crate::format::{range_format, time_format};
+    use crate::format::time_format;
 
     #[test]
     fn time_format_test() {
@@ -95,19 +95,5 @@ mod test {
 
         assert_eq!(time_format(65.126543), "1:5.1265".to_string());
         assert_eq!(time_format(3601.15236), "1:0:1.1523".to_string());
-    }
-
-    #[test]
-    fn range_format_test() {
-        assert_eq!(range_format(60000f64, 460000f64), (6f64, 46f64, "1e4"));
-        assert_eq!(
-            range_format(61234f64, 461234f64),
-            (6.1234f64, 46.1234f64, "1e4")
-        );
-        assert_eq!(
-            range_format(2354f64, 15147f64),
-            (2.354f64, 15.147f64, "1e3")
-        );
-        assert_eq!(range_format(1f64, 127f64), (0.01f64, 1.27f64, "1e2"));
     }
 }
