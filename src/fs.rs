@@ -4,8 +4,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{create_dir, create_dir_all, remove_dir_all, remove_file, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::thread;
-use std::time::Duration;
 
 ///
 /// The fs operations
@@ -81,9 +79,9 @@ impl Fs {
     }
 
     pub fn write(file: &mut File, content: &mut Vec<u8>) -> Result<usize, std::io::Error> {
-        let size = file.write(&content)?;
+        file.write_all(&content)?;
         file.flush()?;
-        Ok(size)
+        Ok(content.len())
     }
 
     pub fn write_at(
@@ -117,7 +115,8 @@ impl Fs {
     }
 
     pub fn read(file: &mut File, read_buffer: &mut Vec<u8>) -> Result<usize, std::io::Error> {
-        file.read(read_buffer)
+        file.read_exact(read_buffer)?;
+        Ok(read_buffer.len())
     }
 
     pub fn read_at(
@@ -192,8 +191,6 @@ impl Fs {
         if path.exists() {
             remove_dir_all(path).unwrap();
         }
-        // wait another 2 seconds
-        thread::sleep(Duration::from_secs(2));
         // finish the progress
         progress.finish_and_clear()?;
 
