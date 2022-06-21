@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::fs::Fs;
-use crate::micro::{micro_setup, print_output};
+use crate::micro::{micro_setup, print_output, random_leaf};
 use crate::plotter::Plotter;
 use crate::progress::Progress;
 use crate::stats::Statistics;
@@ -130,9 +130,10 @@ impl RealTimeBench {
         let tick_length = 1000 / fps; // length of each tick in millisecond
         let max_ticks = self.config.run_time as u64 * fps; // how many times the plot data is updated
 
-        let mut window: PistonWindow = WindowSettings::new("Real Time CPU Usage", [800, 500])
-            .samples(4)
-            .build()?;
+        let mut window: PistonWindow =
+            WindowSettings::new("Real Time Micro Benchmarks", [800, 500])
+                .samples(4)
+                .build()?;
         window.set_max_fps(fps);
 
         let mut data = VecDeque::from(vec![0f64; n_data_points + 1]);
@@ -287,16 +288,27 @@ impl RealTimeBench {
                 }
                 _ => match op {
                     BenchFn::Mkdir => {
-                        let mut dir_name = path.clone();
-                        dir_name.push(idx.to_string());
-                        match Fs::make_dir(&dir_name) {
-                            Ok(()) => {
-                                behaviour.push(SystemTime::now());
-                                idx = idx + 1;
-                                *ops.write()? += 1.0;
-                            }
-                            Err(e) => {
-                                error!("error: {:?}", e);
+                        // find a random leaf from the existing directory hierarchy and
+                        // generate some (random number between 0 to 100) directories inside it
+                        let start = SystemTime::now();
+                        let random_dir = random_leaf(&path)?;
+                        let dirs = thread_rng().gen_range(0..100);
+                        let end = start.elapsed()?;
+
+                        for dir in 0..dirs {
+                            let mut dir_name = random_dir.clone();
+                            dir_name.push(dir.to_string());
+                            match Fs::make_dir(&dir_name) {
+                                Ok(()) => {
+                                    let now = SystemTime::now();
+                                    // subtract the time for choosing a leaf randomly from the op time
+                                    behaviour.push(now.checked_sub(end).unwrap_or(now));
+                                    idx = idx + 1;
+                                    *ops.write()? += 1.0;
+                                }
+                                Err(e) => {
+                                    error!("error: {:?}", e);
+                                }
                             }
                         }
                     }

@@ -4,7 +4,7 @@ use crate::progress::Progress;
 use crate::stats::AnalysedData;
 use crate::Error;
 use indicatif::{ProgressBar, ProgressStyle};
-use rand::RngCore;
+use rand::{thread_rng, Rng, RngCore};
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -43,6 +43,19 @@ pub fn micro_setup(io_size: usize, fileset_size: usize, path: &PathBuf) -> Resul
     progress.finish_and_clear()?;
 
     Ok(())
+}
+
+// get a random leaf from the input path
+pub fn random_leaf(path: &PathBuf) -> Result<PathBuf, Error> {
+    let entries = path.read_dir()?.collect::<Vec<_>>();
+    if entries.len() == 0 {
+        return Ok(path.clone());
+    }
+
+    // select one of the directories
+    let random = thread_rng().gen_range(0..entries.len());
+    //TODO fix the unwrap
+    random_leaf(&entries[random].as_ref().unwrap().path())
 }
 
 pub fn print_output(iterations: u64, run_time: f64, analysed_data: &AnalysedData) {
