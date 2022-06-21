@@ -1,7 +1,7 @@
 use crate::error::Error;
 use crate::format::time_format;
 use crate::fs::Fs;
-use crate::micro::{micro_setup, print_output};
+use crate::micro::{micro_setup, print_output, random_leaf};
 use crate::plotter::Plotter;
 use crate::progress::Progress;
 use crate::stats::Statistics;
@@ -397,15 +397,26 @@ impl OfflineBench {
                     }
                     _ => match operation {
                         BenchFn::Mkdir => {
-                            let mut dir_name = root_path.clone();
-                            dir_name.push(idx.to_string());
-                            match Fs::make_dir(&dir_name) {
-                                Ok(()) => {
-                                    behaviour.push(SystemTime::now());
-                                    idx = idx + 1;
-                                }
-                                Err(e) => {
-                                    error!("error: {:?}", e);
+                            // find a random leaf from the existing directory hierarchy and
+                            // generate some (random number between 0 to 100) directories inside it
+                            let start = SystemTime::now();
+                            let random_dir = random_leaf(&root_path)?;
+                            let dirs = thread_rng().gen_range(0..100);
+                            let end = start.elapsed()?;
+
+                            for dir in 0..dirs {
+                                let mut dir_name = random_dir.clone();
+                                dir_name.push(dir.to_string());
+                                match Fs::make_dir(&dir_name) {
+                                    Ok(()) => {
+                                        let now = SystemTime::now();
+                                        // subtract the time for choosing a leaf randomly from the op time
+                                        behaviour.push(now.checked_sub(end).unwrap_or(now));
+                                        idx = idx + 1;
+                                    }
+                                    Err(e) => {
+                                        error!("error: {:?}", e);
+                                    }
                                 }
                             }
                         }
