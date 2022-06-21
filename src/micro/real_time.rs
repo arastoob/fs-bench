@@ -130,9 +130,10 @@ impl RealTimeBench {
         let tick_length = 1000 / fps; // length of each tick in millisecond
         let max_ticks = self.config.run_time as u64 * fps; // how many times the plot data is updated
 
-        let mut window: PistonWindow = WindowSettings::new("Real Time Micro Benchmarks", [800, 500])
-            .samples(4)
-            .build()?;
+        let mut window: PistonWindow =
+            WindowSettings::new("Real Time Micro Benchmarks", [800, 500])
+                .samples(4)
+                .build()?;
         window.set_max_fps(fps);
 
         let mut data = VecDeque::from(vec![0f64; n_data_points + 1]);
