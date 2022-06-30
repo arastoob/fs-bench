@@ -41,7 +41,7 @@ impl Bench for StraceWorkloadRunner {
     }
 
     // create the directory hierarchy of the workload
-    fn setup(&self, path: &PathBuf) -> Result<(), Error> {
+    fn setup(&self, path: &PathBuf, _invalidate_cache: bool) -> Result<(), Error> {
         Fs::cleanup(path)?;
 
         for file_dir in self.files.iter() {
@@ -186,7 +186,7 @@ impl StraceWorkloadRunner {
         fs_name: &str,
         style: ProgressStyle,
     ) -> Result<(Vec<Record>, Vec<(usize, Vec<Record>)>, String, String), Error> {
-        self.setup(&base_path)?;
+        self.setup(&base_path, false)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
