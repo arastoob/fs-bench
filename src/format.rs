@@ -14,16 +14,32 @@ pub fn time_format(s: f64) -> String {
         format!("{} s", second(s))
     } else if s < 3600f64 {
         let min = (s / 60f64) as i64;
-        let min = if min < 10 { format!("0{}", min) } else { min.to_string() };
+        let min = if min < 10 {
+            format!("0{}", min)
+        } else {
+            min.to_string()
+        };
         let second = second(s % 60f64);
-        let second = if second < 10.0 { format!("0{}", second) } else { second.to_string() };
+        let second = if second < 10.0 {
+            format!("0{}", second)
+        } else {
+            second.to_string()
+        };
         format!("{}:{}", min, second)
     } else {
         let hour = (s / 3600f64) as i64;
         let min = ((s % 3600f64) / 60f64) as i64;
-        let min = if min < 10 { format!("0{}", min) } else { min.to_string() };
+        let min = if min < 10 {
+            format!("0{}", min)
+        } else {
+            min.to_string()
+        };
         let second = second(s % 60f64);
-        let second = if second < 10.0 { format!("0{}", second) } else { second.to_string() };
+        let second = if second < 10.0 {
+            format!("0{}", second)
+        } else {
+            second.to_string()
+        };
         format!("{}:{}:{}", hour, min, second)
     }
 }

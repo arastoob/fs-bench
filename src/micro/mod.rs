@@ -1,15 +1,15 @@
-use std::fmt::{Display, Formatter};
 use crate::format::time_format;
 use crate::fs::Fs;
 use crate::progress::Progress;
 use crate::stats::AnalysedData;
 use crate::Error;
+use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::{thread_rng, Rng, RngCore};
+use std::fmt::{Display, Formatter};
 use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
-use byte_unit::Byte;
 
 pub mod offline;
 pub mod real_time;
@@ -24,7 +24,7 @@ pub enum BenchFn {
     Read,
     ColdRead,
     Write,
-    WriteSync
+    WriteSync,
 }
 
 impl FromStr for BenchFn {
@@ -38,7 +38,10 @@ impl FromStr for BenchFn {
             "cold_read" => Ok(BenchFn::ColdRead),
             "write" => Ok(BenchFn::Write),
             "write_sync" => Ok(BenchFn::WriteSync),
-            _ => Err("valid benckmark functions are: mkdir, mknod, read, cold_read, write, write_sync".to_string()),
+            _ => Err(
+                "valid benckmark functions are: mkdir, mknod, read, cold_read, write, write_sync"
+                    .to_string(),
+            ),
         }
     }
 }
@@ -51,12 +54,17 @@ impl Display for BenchFn {
             BenchFn::Read => write!(f, "read"),
             BenchFn::ColdRead => write!(f, "cold_read"),
             BenchFn::Write => write!(f, "write"),
-            BenchFn::WriteSync => write!(f, "write_sync")
+            BenchFn::WriteSync => write!(f, "write_sync"),
         }
     }
 }
 
-pub fn micro_setup(file_size: usize, fileset_size: usize, path: &PathBuf, invalidate_cache: bool) -> Result<(), Error> {
+pub fn micro_setup(
+    file_size: usize,
+    fileset_size: usize,
+    path: &PathBuf,
+    invalidate_cache: bool,
+) -> Result<(), Error> {
     Fs::cleanup(path)?;
     // creating the root directory to generate the benchmark files inside it
     Fs::make_dir(&path)?;
@@ -70,7 +78,6 @@ pub fn micro_setup(file_size: usize, fileset_size: usize, path: &PathBuf, invali
     if path.ends_with("mkdir") || path.ends_with("mknod") {
         // we don't need to setup anything for mkdir and mknod
     } else {
-
         // create files of size io_size filled with random content
         for file in 0..fileset_size {
             let mut file_name = path.clone();
@@ -98,7 +105,9 @@ pub fn micro_setup(file_size: usize, fileset_size: usize, path: &PathBuf, invali
             .output()?;
 
         if !sync_status.status.success() || !invalidate_cache_status.status.success() {
-            return Err(Error::Unknown("Could not invalidate the OS cache".to_string()));
+            return Err(Error::Unknown(
+                "Could not invalidate the OS cache".to_string(),
+            ));
         }
     }
 

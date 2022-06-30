@@ -23,7 +23,12 @@ impl Bench for OfflineBench {
     }
 
     fn setup(&self, path: &PathBuf, invalidate_cache: bool) -> Result<(), Error> {
-        micro_setup(self.config.file_size, self.config.fileset_size, path, invalidate_cache)
+        micro_setup(
+            self.config.file_size,
+            self.config.fileset_size,
+            path,
+            invalidate_cache,
+        )
     }
 
     fn run(&self, _bench_fn: Option<BenchFn>) -> Result<(), Error> {
@@ -52,7 +57,6 @@ impl OfflineBench {
         let mut plotter_write_behaviour = Plotter::new();
         let mut plotter_write_sync_behaviour = Plotter::new();
         let behaviour_header = ["time".to_string(), "ops".to_string()].to_vec();
-
 
         for (idx, mount_path) in self.config.mount_paths.iter().enumerate() {
             let (mkdir_ops_s, mkdir_behaviour, mkdir_times) = self.micro_op(
@@ -395,9 +399,7 @@ impl OfflineBench {
         let mut root_path = mount_path.clone();
         root_path.push(op.to_string());
 
-        let invalidate_cache = if op == BenchFn::ColdRead {
-            true
-        } else { false };
+        let invalidate_cache = if op == BenchFn::ColdRead { true } else { false };
         self.setup(&root_path, invalidate_cache)?;
 
         let io_size = self.config.io_size;
@@ -479,8 +481,7 @@ impl OfflineBench {
                             }
                         }
                         BenchFn::Write => {
-                            let rand_content_index =
-                                thread_rng().gen_range(0..8192 - io_size - 1);
+                            let rand_content_index = thread_rng().gen_range(0..8192 - io_size - 1);
                             let mut content = rand_content
                                 [rand_content_index..(rand_content_index + io_size)]
                                 .to_vec();
@@ -500,8 +501,7 @@ impl OfflineBench {
                             }
                         }
                         BenchFn::WriteSync => {
-                            let rand_content_index =
-                                thread_rng().gen_range(0..8192 - io_size - 1);
+                            let rand_content_index = thread_rng().gen_range(0..8192 - io_size - 1);
                             let mut content = rand_content
                                 [rand_content_index..(rand_content_index + io_size)]
                                 .to_vec();

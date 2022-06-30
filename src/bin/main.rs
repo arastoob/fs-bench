@@ -2,10 +2,10 @@ use clap::Parser;
 use fs_bench::error::Error;
 use fs_bench::micro::offline::OfflineBench;
 use fs_bench::micro::real_time::RealTimeBench;
+use fs_bench::micro::BenchFn;
 use fs_bench::trace_workload::TraceWorkloadRunner;
 use fs_bench::{Bench, BenchMode};
 use std::path::PathBuf;
-use fs_bench::micro::BenchFn;
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]

@@ -61,7 +61,7 @@ pub trait Bench {
 ///
 pub struct Config {
     pub io_size: usize,
-    pub file_size: usize, // the file's size in the fileset
+    pub file_size: usize,    // the file's size in the fileset
     pub fileset_size: usize, // number of files in the fileset
     pub run_time: f64,
     pub warmup_time: u64,
@@ -98,7 +98,10 @@ impl Config {
         };
 
         if io_size > file_size {
-            return Err(Error::InvalidConfig(format!("The file size ({}) cannot be smaller than the io size ({})", file_size, io_size)));
+            return Err(Error::InvalidConfig(format!(
+                "The file size ({}) cannot be smaller than the io size ({})",
+                file_size, io_size
+            )));
         }
 
         let fileset_size = if let Some(fileset_size) = fileset_size {

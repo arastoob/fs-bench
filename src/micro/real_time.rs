@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::fs::Fs;
-use crate::micro::{BenchFn, micro_setup, print_output, random_leaf};
+use crate::micro::{micro_setup, print_output, random_leaf, BenchFn};
 use crate::plotter::Plotter;
 use crate::progress::Progress;
 use crate::stats::Statistics;
@@ -37,7 +37,12 @@ impl Bench for RealTimeBench {
     }
 
     fn setup(&self, path: &PathBuf, invalidate_cache: bool) -> Result<(), Error> {
-        micro_setup(self.config.file_size, self.config.fileset_size, path, invalidate_cache)
+        micro_setup(
+            self.config.file_size,
+            self.config.fileset_size,
+            path,
+            invalidate_cache,
+        )
     }
 
     fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error> {
@@ -52,7 +57,9 @@ impl Bench for RealTimeBench {
         root_path.push(bench_fn.to_string());
         let invalidate_cache = if bench_fn == BenchFn::ColdRead {
             true
-        } else { false };
+        } else {
+            false
+        };
         self.setup(&root_path, invalidate_cache)?;
 
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
@@ -175,7 +182,8 @@ impl RealTimeBench {
         }) {
             // if the plot window is rendered successfully, send the start signal to start benchmarking
             if event.event_id() == AFTER_RENDER && ticks == 1 {
-                self.sender.try_send(Signal::Start)
+                self.sender
+                    .try_send(Signal::Start)
                     .map_err(|err| Error::SyncError(err.to_string()))?;
             }
             // if we have reached the max runtime or the plot window is closed, stop benchmarking
@@ -205,7 +213,12 @@ impl RealTimeBench {
                 }
 
                 progress.finish_with_message(&format!("{} finished", bench_fn))?;
-                print_output(ops, run_time.as_secs_f64(), self.config.io_size, &analysed_data);
+                print_output(
+                    ops,
+                    run_time.as_secs_f64(),
+                    self.config.io_size,
+                    &analysed_data,
+                );
 
                 // log behaviour result
                 let behaviour_header = ["time".to_string(), "ops".to_string()].to_vec();
@@ -264,7 +277,7 @@ impl RealTimeBench {
                 Ok(Signal::Start) => {
                     start = true;
                 }
-                _ => {},
+                _ => {}
             }
 
             if start {
