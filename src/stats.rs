@@ -177,7 +177,7 @@ impl Statistics {
         // for calculating confidence interval, otherwise we have to use t-values.
         if len < 30 {
             return Err(Error::InvalidConfig(
-                "The sample size is less than 20".to_string(),
+                "The sample size is less than 30".to_string(),
             ));
         }
 

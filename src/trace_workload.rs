@@ -13,15 +13,15 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use strace_parser::{FileDir, Operation, OperationType, Parser, Process};
 
-pub struct StraceWorkloadRunner {
+pub struct TraceWorkloadRunner {
     config: Config,
     processes: Vec<Arc<Mutex<Process>>>, // list of processes with their operations list
-    files: Vec<FileDir>,                 // the files and directories accessed and logged by strace
+    files: Vec<FileDir>,                 // the files and directories accessed and logged by trace
 }
 
-impl Bench for StraceWorkloadRunner {
+impl Bench for TraceWorkloadRunner {
     fn new(config: Config) -> Result<Self, Error> {
-        // parse the strace log file and extract the operations
+        // parse the trace log file and extract the operations
         let mut parser = Parser::new(config.workload.clone());
         let processes = parser.parse()?;
         let processes = processes
@@ -41,7 +41,7 @@ impl Bench for StraceWorkloadRunner {
     }
 
     // create the directory hierarchy of the workload
-    fn setup(&self, path: &PathBuf) -> Result<(), Error> {
+    fn setup(&self, path: &PathBuf, _invalidate_cache: bool) -> Result<(), Error> {
         Fs::cleanup(path)?;
 
         for file_dir in self.files.iter() {
@@ -88,7 +88,7 @@ impl Bench for StraceWorkloadRunner {
 
         for (idx, mount_path) in mount_paths.iter().enumerate() {
             let mut base_path = mount_path.clone();
-            base_path.push("strace_workload");
+            base_path.push("trace_workload");
 
             let (op_times_records, accumulated_times_records, op_time_unit, accumulated_time_unit) =
                 self.replay(&base_path, &fs_names[idx], progress_style.clone())?;
@@ -105,7 +105,7 @@ impl Bench for StraceWorkloadRunner {
             results.add_records(op_times_records)?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_op_times_strace_workload.csv",
+                "{}_op_times_trace_workload.csv",
                 self.config.fs_names[idx]
             ));
             results.log(&file_name)?;
@@ -135,7 +135,7 @@ impl Bench for StraceWorkloadRunner {
             // plot the results
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_op_times_strace_workload.svg",
+                "{}_op_times_trace_workload.svg",
                 self.config.fs_names[idx]
             ));
             op_times_plotter.line_chart(
@@ -178,7 +178,7 @@ impl Bench for StraceWorkloadRunner {
     }
 }
 
-impl StraceWorkloadRunner {
+impl TraceWorkloadRunner {
     // replay the processes' operations in parallel
     fn replay(
         &self,
@@ -186,7 +186,7 @@ impl StraceWorkloadRunner {
         fs_name: &str,
         style: ProgressStyle,
     ) -> Result<(Vec<Record>, Vec<(usize, Vec<Record>)>, String, String), Error> {
-        self.setup(&base_path)?;
+        self.setup(&base_path, false)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);

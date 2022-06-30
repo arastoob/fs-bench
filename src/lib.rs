@@ -5,11 +5,10 @@ pub mod micro;
 pub mod plotter;
 mod progress;
 pub mod stats;
-pub mod strace_workload;
-mod timer;
+pub mod trace_workload;
 
 use crate::error::Error;
-use crate::micro::real_time::BenchFn;
+use crate::micro::BenchFn;
 use byte_unit::Byte;
 use std::fmt::{Display, Formatter};
 use std::fs::{remove_file, OpenOptions};
@@ -24,6 +23,7 @@ use std::time::{Duration, SystemTime};
 pub trait Bench {
     fn configure<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
         io_size: Option<String>,
+        file_size: Option<String>,
         fileset_size: Option<usize>,
         run_time: Option<f64>,
         workload: Option<P>,
@@ -36,6 +36,7 @@ pub trait Bench {
     {
         let config = Config::new(
             io_size,
+            file_size,
             fileset_size,
             run_time,
             workload,
@@ -50,7 +51,7 @@ pub trait Bench {
     where
         Self: Sized;
 
-    fn setup(&self, path: &PathBuf) -> Result<(), Error>;
+    fn setup(&self, path: &PathBuf, invalidate_cache: bool) -> Result<(), Error>;
 
     fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error>;
 }
@@ -60,8 +61,10 @@ pub trait Bench {
 ///
 pub struct Config {
     pub io_size: usize,
-    pub fileset_size: usize,
+    pub file_size: usize,    // the file's size in the fileset
+    pub fileset_size: usize, // number of files in the fileset
     pub run_time: f64,
+    pub warmup_time: u64,
     pub workload: PathBuf,
     pub mount_paths: Vec<PathBuf>,
     pub fs_names: Vec<String>,
@@ -71,6 +74,7 @@ pub struct Config {
 impl Config {
     fn new<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
         io_size: Option<String>,
+        file_size: Option<String>,
         fileset_size: Option<usize>,
         run_time: Option<f64>,
         workload: Option<P>,
@@ -85,10 +89,26 @@ impl Config {
             4096 // the default io_size: 4 KiB
         };
 
+        let file_size = if let Some(file_size) = file_size {
+            let file_size = Byte::from_str(file_size)?;
+            file_size.get_bytes() as usize
+        } else {
+            // 1024 * 1024 * 10 // 10 MiB
+            4096
+        };
+
+        if io_size > file_size {
+            return Err(Error::InvalidConfig(format!(
+                "The file size ({}) cannot be smaller than the io size ({})",
+                file_size, io_size
+            )));
+        }
+
         let fileset_size = if let Some(fileset_size) = fileset_size {
             fileset_size
         } else {
-            10000 // the default fileset_size: 10000
+            // 1000 // the default fileset_size: 1000
+            10_000
         };
 
         let run_time = if let Some(run_time) = run_time {
@@ -117,8 +137,10 @@ impl Config {
 
         Ok(Self {
             io_size,
+            file_size,
             fileset_size,
             run_time,
+            warmup_time: 5,
             workload,
             mount_paths,
             fs_names,
@@ -134,7 +156,7 @@ impl Config {
 pub enum BenchMode {
     Static,
     RealTime,
-    Strace,
+    Trace,
 }
 
 impl FromStr for BenchMode {
@@ -144,8 +166,8 @@ impl FromStr for BenchMode {
         match s {
             "static" => Ok(BenchMode::Static),
             "realtime" => Ok(BenchMode::RealTime),
-            "strace" => Ok(BenchMode::Strace),
-            _ => Err("valid benckmark modes are: static, realtime, strace".to_string()),
+            "trace" => Ok(BenchMode::Trace),
+            _ => Err("valid benckmark modes are: static, realtime, trace".to_string()),
         }
     }
 }
@@ -155,7 +177,7 @@ impl Display for BenchMode {
         match self {
             BenchMode::Static => write!(f, "static"),
             BenchMode::RealTime => write!(f, "realtime"),
-            BenchMode::Strace => write!(f, "strace"),
+            BenchMode::Trace => write!(f, "trace"),
         }
     }
 }
