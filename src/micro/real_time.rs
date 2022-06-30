@@ -1,6 +1,6 @@
 use crate::error::Error;
 use crate::fs::Fs;
-use crate::micro::{micro_setup, print_output, random_leaf};
+use crate::micro::{BenchFn, micro_setup, print_output, random_leaf};
 use crate::plotter::Plotter;
 use crate::progress::Progress;
 use crate::stats::Statistics;
@@ -8,54 +8,17 @@ use crate::{Bench, BenchResult, Config, ResultMode};
 use async_channel::{unbounded, Receiver, Sender};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
-use piston_window::event_id::CLOSE;
+use piston_window::event_id::{AFTER_RENDER, CLOSE};
 use piston_window::{EventLoop, GenericEvent, PistonWindow, WindowSettings};
 use plotters::prelude::{ChartBuilder, IntoDrawingArea, LineSeries, Palette, Palette99, WHITE};
 use plotters_piston::draw_piston_window;
 use rand::{thread_rng, Rng, RngCore};
 use std::collections::VecDeque;
-use std::fmt::{Display, Formatter};
+use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime};
-
-///
-/// Benchmark function that is being run in real-time
-///
-#[derive(Debug, Clone)]
-pub enum BenchFn {
-    Mkdir,
-    Mknod,
-    Read,
-    Write,
-}
-
-impl FromStr for BenchFn {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "mkdir" => Ok(BenchFn::Mkdir),
-            "mknod" => Ok(BenchFn::Mknod),
-            "read" => Ok(BenchFn::Read),
-            "write" => Ok(BenchFn::Write),
-            _ => Err("valid benckmark functions are: mkdir, mknod, read, write".to_string()),
-        }
-    }
-}
-
-impl Display for BenchFn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BenchFn::Mkdir => write!(f, "mkdir"),
-            BenchFn::Mknod => write!(f, "mknod"),
-            BenchFn::Read => write!(f, "read"),
-            BenchFn::Write => write!(f, "write"),
-        }
-    }
-}
 
 pub struct RealTimeBench {
     config: Config,
@@ -73,8 +36,8 @@ impl Bench for RealTimeBench {
         })
     }
 
-    fn setup(&self, path: &PathBuf) -> Result<(), Error> {
-        micro_setup(self.config.io_size, self.config.fileset_size, path)
+    fn setup(&self, path: &PathBuf, invalidate_cache: bool) -> Result<(), Error> {
+        micro_setup(self.config.file_size, self.config.fileset_size, path, invalidate_cache)
     }
 
     fn run(&self, bench_fn: Option<BenchFn>) -> Result<(), Error> {
@@ -82,10 +45,15 @@ impl Bench for RealTimeBench {
             "A valid bench function not provided".to_string(),
         ))?;
 
+        sudo::escalate_if_needed()?;
+
         // setup the paths before run
         let mut root_path = self.config.mount_paths[0].clone();
         root_path.push(bench_fn.to_string());
-        self.setup(&root_path)?;
+        let invalidate_cache = if bench_fn == BenchFn::ColdRead {
+            true
+        } else { false };
+        self.setup(&root_path, invalidate_cache)?;
 
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
@@ -113,6 +81,7 @@ impl Bench for RealTimeBench {
 }
 
 enum Signal {
+    Start,
     Stop,
 }
 
@@ -179,7 +148,7 @@ impl RealTimeBench {
                 .caption::<String, (&str, f64)>(capitalized_bench_fn.clone(), ("sans-serif", 30.0))
                 .x_label_area_size::<f64>(50.0)
                 .y_label_area_size::<f64>(50.0)
-                .build_cartesian_2d(0.0..n_data_points as f64, 0f64..max + 5000.0)?;
+                .build_cartesian_2d(0.0..n_data_points as f64, 0f64..max + (max * 0.1))?;
 
             cc.configure_mesh()
                 .x_label_formatter(&|x| format!("{}", -(length as f64) + (*x as f64 / fps as f64)))
@@ -204,6 +173,12 @@ impl RealTimeBench {
 
             Ok(())
         }) {
+            // if the plot window is rendered successfully, send the start signal to start benchmarking
+            if event.event_id() == AFTER_RENDER && ticks == 1 {
+                self.sender.try_send(Signal::Start)
+                    .map_err(|err| Error::SyncError(err.to_string()))?;
+            }
+            // if we have reached the max runtime or the plot window is closed, stop benchmarking
             if ticks >= max_ticks || event.event_id() == CLOSE {
                 // plotting is finished
                 let (behaviour, ops) = match self.sender.try_send(Signal::Stop) {
@@ -230,7 +205,7 @@ impl RealTimeBench {
                 }
 
                 progress.finish_with_message(&format!("{} finished", bench_fn))?;
-                print_output(ops, run_time.as_secs_f64(), &analysed_data);
+                print_output(ops, run_time.as_secs_f64(), self.config.io_size, &analysed_data);
 
                 // log behaviour result
                 let behaviour_header = ["time".to_string(), "ops".to_string()].to_vec();
@@ -280,13 +255,20 @@ impl RealTimeBench {
         let mut rand_content = vec![0u8; 8192 * io_size];
         let mut rng = rand::thread_rng();
         rng.fill_bytes(&mut rand_content);
-
+        let mut start = false;
         loop {
             match receiver.try_recv() {
                 Ok(Signal::Stop) => {
                     return Ok((behaviour, idx));
                 }
-                _ => match op {
+                Ok(Signal::Start) => {
+                    start = true;
+                }
+                _ => {},
+            }
+
+            if start {
+                match op {
                     BenchFn::Mkdir => {
                         // find a random leaf from the existing directory hierarchy and
                         // generate some (random number between 0 to 100) directories inside it
@@ -326,13 +308,13 @@ impl RealTimeBench {
                             }
                         }
                     }
-                    BenchFn::Read => {
+                    BenchFn::Read | BenchFn::ColdRead => {
                         let file = thread_rng().gen_range(0..fileset_size);
                         let mut file_name = path.clone();
                         file_name.push(file.to_string());
                         let mut read_buffer = vec![0u8; io_size];
                         let mut file = Fs::open_file(&file_name)?;
-                        match Fs::read(&mut file, &mut read_buffer) {
+                        match file.read_exact(&mut read_buffer) {
                             Ok(_) => {
                                 behaviour.push(SystemTime::now());
                                 idx += 1;
@@ -354,7 +336,7 @@ impl RealTimeBench {
                         let mut file_name = path.clone();
                         file_name.push(file.to_string());
                         let mut file = Fs::open_file(&file_name)?;
-                        match Fs::write(&mut file, &mut content) {
+                        match file.write_all(&mut content) {
                             Ok(_) => {
                                 behaviour.push(SystemTime::now());
                                 idx += 1;
@@ -365,7 +347,30 @@ impl RealTimeBench {
                             }
                         }
                     }
-                },
+                    BenchFn::WriteSync => {
+                        let rand_content_index =
+                            thread_rng().gen_range(0..(8192 * io_size) - io_size - 1);
+                        let mut content = rand_content
+                            [rand_content_index..(rand_content_index + io_size)]
+                            .to_vec();
+
+                        let file = thread_rng().gen_range(1..fileset_size);
+                        let mut file_name = path.clone();
+                        file_name.push(file.to_string());
+                        let mut file = Fs::open_file(&file_name)?;
+                        match file.write_all(&mut content) {
+                            Ok(_) => {
+                                file.sync_data()?;
+                                behaviour.push(SystemTime::now());
+                                idx += 1;
+                                *ops.write()? += 1.0;
+                            }
+                            Err(e) => {
+                                println!("error: {:?}", e);
+                            }
+                        }
+                    }
+                }
             }
         }
     }

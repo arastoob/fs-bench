@@ -1,17 +1,14 @@
 use crate::error::Error;
-use crate::format::time_format;
 use crate::fs::Fs;
 use crate::micro::{micro_setup, print_output, random_leaf};
 use crate::plotter::Plotter;
 use crate::progress::Progress;
 use crate::stats::Statistics;
-use crate::timer::Timer;
 use crate::{Bench, BenchFn, BenchResult, Config, Record, ResultMode};
-use byte_unit::Byte;
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
 use rand::{thread_rng, Rng, RngCore};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
@@ -25,15 +22,15 @@ impl Bench for OfflineBench {
         Ok(Self { config })
     }
 
-    fn setup(&self, path: &PathBuf) -> Result<(), Error> {
-        micro_setup(self.config.io_size, self.config.fileset_size, path)
+    fn setup(&self, path: &PathBuf, invalidate_cache: bool) -> Result<(), Error> {
+        micro_setup(self.config.file_size, self.config.fileset_size, path, invalidate_cache)
     }
 
     fn run(&self, _bench_fn: Option<BenchFn>) -> Result<(), Error> {
+        sudo::escalate_if_needed()?;
+
         let rt = Duration::from_secs(self.config.run_time as u64); // running time
         self.behaviour_bench(rt)?;
-        let max_rt = Duration::from_secs(60 * 5);
-        self.throughput_bench(max_rt)?;
 
         println!(
             "results logged to: {}",
@@ -51,8 +48,11 @@ impl OfflineBench {
         let mut plotter_mkdir_behaviour = Plotter::new();
         let mut plotter_mknod_behaviour = Plotter::new();
         let mut plotter_read_behaviour = Plotter::new();
+        let mut plotter_cold_read_behaviour = Plotter::new();
         let mut plotter_write_behaviour = Plotter::new();
+        let mut plotter_write_sync_behaviour = Plotter::new();
         let behaviour_header = ["time".to_string(), "ops".to_string()].to_vec();
+
 
         for (idx, mount_path) in self.config.mount_paths.iter().enumerate() {
             let (mkdir_ops_s, mkdir_behaviour, mkdir_times) = self.micro_op(
@@ -76,8 +76,22 @@ impl OfflineBench {
                 &self.config.fs_names[idx],
                 progress_style.clone(),
             )?;
+            let (cold_read_ops_s, cold_read_behaviour, cold_read_times) = self.micro_op(
+                BenchFn::ColdRead,
+                run_time,
+                mount_path,
+                &self.config.fs_names[idx],
+                progress_style.clone(),
+            )?;
             let (write_ops_s, write_behaviour, write_times) = self.micro_op(
                 BenchFn::Write,
+                run_time,
+                mount_path,
+                &self.config.fs_names[idx],
+                progress_style.clone(),
+            )?;
+            let (write_sync_ops_s, write_sync_behaviour, write_sync_times) = self.micro_op(
+                BenchFn::WriteSync,
                 run_time,
                 mount_path,
                 &self.config.fs_names[idx],
@@ -98,7 +112,9 @@ impl OfflineBench {
             ops_s_results.add_record(mkdir_ops_s)?;
             ops_s_results.add_record(mknod_ops_s)?;
             ops_s_results.add_record(read_ops_s)?;
+            ops_s_results.add_record(cold_read_ops_s)?;
             ops_s_results.add_record(write_ops_s)?;
+            ops_s_results.add_record(write_sync_ops_s)?;
 
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!("{}_ops_per_second.csv", self.config.fs_names[idx]));
@@ -148,12 +164,34 @@ impl OfflineBench {
                 &ResultMode::Behaviour,
             )?;
 
+            let mut cold_read_behaviour_results = BenchResult::new(behaviour_header.clone());
+            cold_read_behaviour_results.add_records(cold_read_behaviour)?;
+            let mut file_name = self.config.log_path.clone();
+            file_name.push(format!("{}_cold_read.csv", self.config.fs_names[idx]));
+            cold_read_behaviour_results.log(&file_name)?;
+            plotter_cold_read_behaviour.add_coordinates(
+                &file_name,
+                Some(self.config.fs_names[idx].clone()),
+                &ResultMode::Behaviour,
+            )?;
+
             let mut write_behaviour_results = BenchResult::new(behaviour_header.clone());
             write_behaviour_results.add_records(write_behaviour)?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!("{}_write.csv", self.config.fs_names[idx]));
             write_behaviour_results.log(&file_name)?;
             plotter_write_behaviour.add_coordinates(
+                &file_name,
+                Some(self.config.fs_names[idx].clone()),
+                &ResultMode::Behaviour,
+            )?;
+
+            let mut write_sync_behaviour_results = BenchResult::new(behaviour_header.clone());
+            write_sync_behaviour_results.add_records(write_sync_behaviour)?;
+            let mut file_name = self.config.log_path.clone();
+            file_name.push(format!("{}_write_sync.csv", self.config.fs_names[idx]));
+            write_sync_behaviour_results.log(&file_name)?;
+            plotter_write_sync_behaviour.add_coordinates(
                 &file_name,
                 Some(self.config.fs_names[idx].clone()),
                 &ResultMode::Behaviour,
@@ -218,6 +256,25 @@ impl OfflineBench {
                 &file_name,
             )?;
 
+            let mut cold_read_times_results = BenchResult::new(ops_s_samples_header.clone());
+            cold_read_times_results.add_records(cold_read_times)?;
+            let mut file_name = self.config.log_path.clone();
+            file_name.push(format!(
+                "{}_cold_read_ops_s_period.csv",
+                self.config.fs_names[idx]
+            ));
+            cold_read_times_results.log(&file_name)?;
+
+            let mut plotter = Plotter::new();
+            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
+            file_name.set_extension("svg");
+            plotter.point_series(
+                Some("Sampling iterations"),
+                Some("Average Ops/s"),
+                Some(&format!("Cold read ({})", self.config.fs_names[idx])),
+                &file_name,
+            )?;
+
             let mut write_times_results = BenchResult::new(ops_s_samples_header.clone());
             write_times_results.add_records(write_times)?;
             let mut file_name = self.config.log_path.clone();
@@ -234,6 +291,25 @@ impl OfflineBench {
                 Some("Sampling iterations"),
                 Some("Average Ops/s"),
                 Some(&format!("Write ({})", self.config.fs_names[idx])),
+                &file_name,
+            )?;
+
+            let mut write_sync_times_results = BenchResult::new(ops_s_samples_header.clone());
+            write_sync_times_results.add_records(write_sync_times)?;
+            let mut file_name = self.config.log_path.clone();
+            file_name.push(format!(
+                "{}_write_sync_ops_s_period.csv",
+                self.config.fs_names[idx]
+            ));
+            write_sync_times_results.log(&file_name)?;
+
+            let mut plotter = Plotter::new();
+            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
+            file_name.set_extension("svg");
+            plotter.point_series(
+                Some("Sampling iterations"),
+                Some("Average Ops/s"),
+                Some(&format!("Write_sync ({})", self.config.fs_names[idx])),
                 &file_name,
             )?;
         }
@@ -273,6 +349,17 @@ impl OfflineBench {
         )?;
 
         let mut file_name = self.config.log_path.clone();
+        file_name.push("cold_read.svg");
+        plotter_cold_read_behaviour.line_chart(
+            Some("Time (s)"),
+            Some("Ops/s"),
+            Some("Cold read"),
+            false,
+            false,
+            &file_name,
+        )?;
+
+        let mut file_name = self.config.log_path.clone();
         file_name.push("write.svg");
         plotter_write_behaviour.line_chart(
             Some("Time (s)"),
@@ -283,77 +370,14 @@ impl OfflineBench {
             &file_name,
         )?;
 
-        Ok(())
-    }
-
-    fn throughput_bench(&self, max_rt: Duration) -> Result<(), Error> {
-        let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
-
-        let throughput_header = ["file_size".to_string(), "throughput".to_string()].to_vec();
-
-        let mut read_plotter = Plotter::new();
-        let mut write_plotter = Plotter::new();
-        for (idx, mount_path) in self.config.mount_paths.iter().enumerate() {
-            let read_throughput = self.read_throughput(
-                max_rt,
-                &mount_path,
-                &self.config.fs_names[idx],
-                progress_style.clone(),
-            )?;
-            let write_throughput = self.write_throughput(
-                max_rt,
-                &mount_path,
-                &self.config.fs_names[idx],
-                progress_style.clone(),
-            )?;
-
-            let mut read_throughput_results = BenchResult::new(throughput_header.clone());
-            read_throughput_results.add_records(read_throughput)?;
-            let mut file_name = self.config.log_path.clone();
-            file_name.push(format!("{}_read_throughput.csv", self.config.fs_names[idx]));
-            read_throughput_results.log(&file_name)?;
-
-            read_plotter.add_coordinates(
-                &file_name,
-                Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Throughput,
-            )?;
-
-            let mut write_throughput_results = BenchResult::new(throughput_header.clone());
-            write_throughput_results.add_records(write_throughput)?;
-            let mut file_name = self.config.log_path.clone();
-            file_name.push(format!(
-                "{}_write_throughput.csv",
-                self.config.fs_names[idx]
-            ));
-            write_throughput_results.log(&file_name)?;
-
-            write_plotter.add_coordinates(
-                &file_name,
-                Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Throughput,
-            )?;
-        }
-
         let mut file_name = self.config.log_path.clone();
-        file_name.push("read_throughput.svg");
-        read_plotter.line_chart(
-            Some("File size (B)"),
-            Some("Throughput (B/s)"),
-            Some("Read Throughput"),
-            true,
-            true,
-            &file_name,
-        )?;
-
-        let mut file_name = self.config.log_path.clone();
-        file_name.push("write_throughput.svg");
-        write_plotter.line_chart(
-            Some("File size (B)"),
-            Some("Throughput (B/s)"),
-            Some("Write Throughput"),
-            true,
-            true,
+        file_name.push("write_sync.svg");
+        plotter_write_sync_behaviour.line_chart(
+            Some("Time (s)"),
+            Some("Ops/s"),
+            Some("Write (full sync)"),
+            false,
+            false,
             &file_name,
         )?;
 
@@ -370,25 +394,30 @@ impl OfflineBench {
     ) -> Result<(Record, Vec<Record>, Vec<Record>), Error> {
         let mut root_path = mount_path.clone();
         root_path.push(op.to_string());
-        self.setup(&root_path)?;
+
+        let invalidate_cache = if op == BenchFn::ColdRead {
+            true
+        } else { false };
+        self.setup(&root_path, invalidate_cache)?;
+
+        let io_size = self.config.io_size;
+        let fileset_size = self.config.fileset_size;
+        let operation = op.clone();
+
+        // create a big vector filled with random content
+        let mut rand_content = vec![0u8; 8192 * io_size];
+        let mut rng = rand::thread_rng();
+        rng.fill_bytes(&mut rand_content);
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{} ({})", op.to_string(), fs_name));
         let progress = Progress::start(bar.clone());
 
-        let size = self.config.io_size;
-        let fileset_size = self.config.fileset_size;
-        let operation = op.clone();
         let (sender, receiver) = channel();
         let handle = std::thread::spawn(move || -> Result<(Vec<SystemTime>, u64), Error> {
             let mut behaviour = vec![];
             let mut idx = 0;
-
-            // create a big vector filled with random content
-            let mut rand_content = vec![0u8; 8192 * size];
-            let mut rng = rand::thread_rng();
-            rng.fill_bytes(&mut rand_content);
 
             loop {
                 match receiver.try_recv() {
@@ -433,14 +462,13 @@ impl OfflineBench {
                                 }
                             }
                         }
-                        BenchFn::Read => {
+                        BenchFn::Read | BenchFn::ColdRead => {
                             let file = thread_rng().gen_range(0..fileset_size);
                             let mut file_name = root_path.clone();
                             file_name.push(file.to_string());
-
                             let mut file = Fs::open_file(&file_name)?;
-                            let mut read_buffer = vec![0u8; size];
-                            match Fs::read(&mut file, &mut read_buffer) {
+                            let mut read_buffer = vec![0u8; io_size];
+                            match file.read_exact(&mut read_buffer) {
                                 Ok(_) => {
                                     behaviour.push(SystemTime::now());
                                     idx += 1;
@@ -452,17 +480,39 @@ impl OfflineBench {
                         }
                         BenchFn::Write => {
                             let rand_content_index =
-                                thread_rng().gen_range(0..(8192 * size) - size - 1);
+                                thread_rng().gen_range(0..8192 - io_size - 1);
                             let mut content = rand_content
-                                [rand_content_index..(rand_content_index + size)]
+                                [rand_content_index..(rand_content_index + io_size)]
                                 .to_vec();
 
                             let file = thread_rng().gen_range(0..fileset_size);
                             let mut file_name = root_path.clone();
                             file_name.push(file.to_string());
                             let mut file = Fs::open_file(&file_name)?;
-                            match Fs::write(&mut file, &mut content) {
+                            match file.write_all(&mut content) {
                                 Ok(_) => {
+                                    behaviour.push(SystemTime::now());
+                                    idx += 1;
+                                }
+                                Err(e) => {
+                                    println!("error: {:?}", e);
+                                }
+                            }
+                        }
+                        BenchFn::WriteSync => {
+                            let rand_content_index =
+                                thread_rng().gen_range(0..8192 - io_size - 1);
+                            let mut content = rand_content
+                                [rand_content_index..(rand_content_index + io_size)]
+                                .to_vec();
+
+                            let file = thread_rng().gen_range(0..fileset_size);
+                            let mut file_name = root_path.clone();
+                            file_name.push(file.to_string());
+                            let mut file = Fs::open_file(&file_name)?;
+                            match file.write_all(&mut content) {
+                                Ok(_) => {
+                                    file.sync_data()?;
                                     behaviour.push(SystemTime::now());
                                     idx += 1;
                                 }
@@ -502,7 +552,7 @@ impl OfflineBench {
         let analysed_data = Statistics::new(&ops_per_seconds)?.analyse()?;
 
         progress.finish_with_message(&format!("{} ({}) finished", op.to_string(), fs_name))?;
-        print_output(idx, run_time.as_secs_f64(), &analysed_data);
+        print_output(idx, run_time.as_secs_f64(), io_size, &analysed_data);
 
         let mut behaviour_records = vec![];
         for (time, ops_s) in ops_in_window.iter() {
@@ -530,212 +580,5 @@ impl OfflineBench {
             behaviour_records,
             ops_s_samples_records,
         ))
-    }
-
-    fn read_throughput(
-        &self,
-        max_rt: Duration,
-        mount_path: &PathBuf,
-        fs_name: &str,
-        style: ProgressStyle,
-    ) -> Result<Vec<Record>, Error> {
-        let mut root_path = mount_path.clone();
-        root_path.push("read");
-        Fs::cleanup(&root_path)?;
-
-        let bar = ProgressBar::new_spinner();
-        bar.set_style(style);
-        bar.set_message(format!("read_throughput ({})", fs_name));
-        let progress = Progress::start(bar);
-
-        // creating the root directory to generate the test files inside it
-        Fs::make_dir(&root_path)?;
-
-        // create a big file filled with random content
-        let mut file_name = root_path.clone();
-        file_name.push("big_file".to_string());
-        let mut file = Fs::make_file(&file_name)?;
-
-        let file_size = 1000 * 1000 * 100 * 2; // 200 MB
-        let mut rand_buffer = vec![0u8; file_size];
-        let mut rng = rand::thread_rng();
-        rng.fill_bytes(&mut rand_buffer);
-        file.write(&rand_buffer)?;
-
-        let mut read_size = 1000;
-        let mut throughputs = vec![];
-
-        let timer = Timer::new(max_rt);
-        timer.start();
-        let mut interrupted = false;
-
-        let start = SystemTime::now();
-        // read 1000, 10000, 100000, 1000000, 10000000, 100000000 sizes from the big file
-        while read_size <= file_size / 2 {
-            let mut read_buffer = vec![0u8; read_size];
-            // process read 10 times and then log the mean of the 10 runs
-            let mut times = vec![];
-            for _ in 0..10 {
-                let rand_index = thread_rng().gen_range(0..file_size - read_size - 1) as u64;
-                let begin = SystemTime::now();
-                // random read from a random index
-                match Fs::open_read_at(&file_name, &mut read_buffer, rand_index) {
-                    Ok(_) => {
-                        let end = begin.elapsed()?.as_secs_f64();
-                        times.push(end);
-                    }
-                    Err(e) => {
-                        println!("error: {:?}", e);
-                    }
-                }
-            }
-
-            let sample = Statistics::new(&times)?;
-            let mean = sample.mean();
-            let throughput = read_size as f64 / mean; // B/s
-            throughputs.push((read_size, throughput));
-            read_size *= 10;
-
-            if timer.finished() {
-                interrupted = true;
-                break;
-            }
-        }
-
-        let end = start.elapsed()?.as_secs_f64();
-
-        if !interrupted {
-            progress.finish()?;
-        } else {
-            progress.abandon_with_message(&format!(
-                "read_throughput ({}) exceeded the max runtime",
-                fs_name
-            ))?;
-        }
-
-        println!("{:11} {}", "run time:", time_format(end));
-
-        let mut throughput_records = vec![];
-        for (size, throughput) in throughputs {
-            let size = Byte::from_bytes(size as u128);
-            let adjusted_size = size.get_appropriate_unit(false);
-
-            let throughput = Byte::from_bytes(throughput as u128);
-            let adjusted_throughput = throughput.get_appropriate_unit(false);
-            println!(
-                "[{:10} {}/s]",
-                adjusted_size.format(0),
-                adjusted_throughput.format(3)
-            );
-
-            throughput_records.push(vec![size.to_string(), throughput.to_string()].into());
-        }
-
-        println!();
-        Ok(throughput_records)
-    }
-
-    fn write_throughput(
-        &self,
-        max_rt: Duration,
-        mount_path: &PathBuf,
-        fs_name: &str,
-        style: ProgressStyle,
-    ) -> Result<Vec<Record>, Error> {
-        let mut root_path = mount_path.clone();
-        root_path.push("write");
-        Fs::cleanup(&root_path)?;
-
-        let bar = ProgressBar::new_spinner();
-        bar.set_style(style);
-        bar.set_message(format!("write_throughput ({})", fs_name));
-        let progress = Progress::start(bar);
-
-        // creating the root directory to generate the test files inside it
-        Fs::make_dir(&root_path)?;
-
-        // create a file to write into
-        let mut file_name = root_path.clone();
-        file_name.push("big_file".to_string());
-        Fs::make_file(&file_name)?;
-
-        let buffer_size = 1000 * 1000 * 100 * 2; // 200 MB
-        let mut rand_content = vec![0u8; buffer_size];
-        let mut rng = rand::thread_rng();
-        rng.fill_bytes(&mut rand_content);
-
-        let mut write_size = 1000;
-        let mut throughputs = vec![];
-
-        let timer = Timer::new(max_rt);
-        timer.start();
-        let mut interrupted = false;
-
-        let start = SystemTime::now();
-        // write 1000, 10000, 100000, 1000000, 10000000, 100000000 sizes to the big file
-        while write_size <= buffer_size / 2 {
-            // process write 10 times and then log the mean of the 10 runs
-            let mut times = vec![];
-            for _ in 0..10 {
-                let rand_content_index = thread_rng().gen_range(0..buffer_size - write_size - 1);
-                let mut content =
-                    rand_content[rand_content_index..(rand_content_index + write_size)].to_vec();
-
-                let begin = SystemTime::now();
-                // random read from a random index
-                match Fs::open_write(&file_name, &mut content) {
-                    Ok(_) => {
-                        let end = begin.elapsed()?.as_secs_f64();
-                        times.push(end);
-                    }
-                    Err(e) => {
-                        println!("error: {:?}", e);
-                    }
-                }
-            }
-
-            let sample = Statistics::new(&times)?;
-            let mean = sample.mean();
-            let throughput = write_size as f64 / mean; // B/s
-            throughputs.push((write_size, throughput));
-            write_size *= 10;
-
-            if timer.finished() {
-                interrupted = true;
-                break;
-            }
-        }
-
-        let end = start.elapsed()?.as_secs_f64();
-
-        if !interrupted {
-            progress.finish()?;
-        } else {
-            progress.abandon_with_message(&format!(
-                "write_throughput ({}) exceeded the max runtime",
-                fs_name
-            ))?;
-        }
-
-        println!("{:11} {}", "run time:", time_format(end));
-
-        let mut throughput_records = vec![];
-        for (size, throughput) in throughputs {
-            let size = Byte::from_bytes(size as u128);
-            let adjusted_size = size.get_appropriate_unit(false);
-
-            let throughput = Byte::from_bytes(throughput as u128);
-            let adjusted_throughput = throughput.get_appropriate_unit(false);
-            println!(
-                "[{:10} {}/s]",
-                adjusted_size.format(0),
-                adjusted_throughput.format(3)
-            );
-
-            throughput_records.push(vec![size.to_string(), throughput.to_string()].into());
-        }
-
-        println!();
-        Ok(throughput_records)
     }
 }
