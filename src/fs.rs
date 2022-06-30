@@ -78,12 +78,6 @@ impl Fs {
         Ok(size)
     }
 
-    pub fn write(file: &mut File, content: &mut Vec<u8>) -> Result<usize, std::io::Error> {
-        file.write_all(&content)?;
-        file.flush()?;
-        Ok(content.len())
-    }
-
     pub fn write_at(
         file: &mut File,
         content: &mut Vec<u8>,
@@ -91,9 +85,9 @@ impl Fs {
     ) -> Result<usize, std::io::Error> {
         file.seek(SeekFrom::Start(offset))?;
 
-        let size = file.write(&content)?;
+        file.write_all(&content)?;
         file.flush()?;
-        Ok(size)
+        Ok(content.len())
     }
 
     pub fn open_read<P: AsRef<Path>>(
@@ -112,11 +106,6 @@ impl Fs {
         let mut file = OpenOptions::new().read(true).open(path)?;
         file.seek(SeekFrom::Start(offset))?;
         file.read(read_buffer)
-    }
-
-    pub fn read(file: &mut File, read_buffer: &mut Vec<u8>) -> Result<usize, std::io::Error> {
-        file.read_exact(read_buffer)?;
-        Ok(read_buffer.len())
     }
 
     pub fn read_at(
