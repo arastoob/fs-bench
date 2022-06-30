@@ -2,7 +2,7 @@ use clap::Parser;
 use fs_bench::error::Error;
 use fs_bench::micro::offline::OfflineBench;
 use fs_bench::micro::real_time::RealTimeBench;
-use fs_bench::strace_workload::StraceWorkloadRunner;
+use fs_bench::trace_workload::TraceWorkloadRunner;
 use fs_bench::{Bench, BenchMode};
 use std::path::PathBuf;
 use fs_bench::micro::BenchFn;
@@ -11,7 +11,7 @@ use fs_bench::micro::BenchFn;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// The bench modes which could be micro or workload
+    /// The bench modes which could be static, real-time or trace replay
     #[clap(short, long)]
     bench_mode: BenchMode,
 
@@ -43,8 +43,8 @@ struct Args {
     #[clap(short = 'p', long)]
     log_path: PathBuf,
 
-    /// The path to the strace log file
-    #[clap(short, long, required_if_eq("bench-mode", "strace"))]
+    /// The path to the trace log file
+    #[clap(short, long, required_if_eq("bench-mode", "trace"))]
     workload: Option<PathBuf>,
 
     /// The benchmark function to be run in real-time
@@ -91,14 +91,14 @@ fn main() -> Result<(), Error> {
             )?
             .run(args.bench_fn)?;
         }
-        BenchMode::Strace => {
+        BenchMode::Trace => {
             if args.workload.is_none() {
                 return Err(Error::InvalidConfig(
-                    "a valid strace_path not provided".to_string(),
+                    "a valid trace_path not provided".to_string(),
                 ));
             }
 
-            StraceWorkloadRunner::configure(
+            TraceWorkloadRunner::configure(
                 args.io_size,
                 args.file_size,
                 args.fileset_size,

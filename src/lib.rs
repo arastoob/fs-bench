@@ -5,7 +5,7 @@ pub mod micro;
 pub mod plotter;
 mod progress;
 pub mod stats;
-pub mod strace_workload;
+pub mod trace_workload;
 mod timer;
 
 use crate::error::Error;
@@ -154,7 +154,7 @@ impl Config {
 pub enum BenchMode {
     Static,
     RealTime,
-    Strace,
+    Trace,
 }
 
 impl FromStr for BenchMode {
@@ -164,8 +164,8 @@ impl FromStr for BenchMode {
         match s {
             "static" => Ok(BenchMode::Static),
             "realtime" => Ok(BenchMode::RealTime),
-            "strace" => Ok(BenchMode::Strace),
-            _ => Err("valid benckmark modes are: static, realtime, strace".to_string()),
+            "trace" => Ok(BenchMode::Trace),
+            _ => Err("valid benckmark modes are: static, realtime, trace".to_string()),
         }
     }
 }
@@ -175,7 +175,7 @@ impl Display for BenchMode {
         match self {
             BenchMode::Static => write!(f, "static"),
             BenchMode::RealTime => write!(f, "realtime"),
-            BenchMode::Strace => write!(f, "strace"),
+            BenchMode::Trace => write!(f, "trace"),
         }
     }
 }
