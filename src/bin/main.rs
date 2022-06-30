@@ -1,10 +1,11 @@
 use clap::Parser;
 use fs_bench::error::Error;
 use fs_bench::micro::offline::OfflineBench;
-use fs_bench::micro::real_time::{BenchFn, RealTimeBench};
+use fs_bench::micro::real_time::RealTimeBench;
 use fs_bench::strace_workload::StraceWorkloadRunner;
 use fs_bench::{Bench, BenchMode};
 use std::path::PathBuf;
+use fs_bench::micro::BenchFn;
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]
@@ -18,7 +19,11 @@ struct Args {
     #[clap(short, long)]
     io_size: Option<String>,
 
-    /// Maximum number of files in a fileset, default: 10,000
+    /// The fileset's file sizes, default: 10 MiB
+    #[clap(short = 'l', long)]
+    file_size: Option<String>,
+
+    /// Maximum number of files in a fileset, default: 1000
     #[clap(short = 's', long)]
     fileset_size: Option<usize>,
 
@@ -35,7 +40,7 @@ struct Args {
     fs_name: Vec<String>,
 
     /// The path to store benchmark results
-    #[clap(short, long)]
+    #[clap(short = 'p', long)]
     log_path: PathBuf,
 
     /// The path to the strace log file
@@ -63,6 +68,7 @@ fn main() -> Result<(), Error> {
         BenchMode::Static => {
             OfflineBench::configure(
                 args.io_size,
+                args.file_size,
                 args.fileset_size,
                 args.time,
                 args.workload,
@@ -75,6 +81,7 @@ fn main() -> Result<(), Error> {
         BenchMode::RealTime => {
             RealTimeBench::configure(
                 args.io_size,
+                args.file_size,
                 args.fileset_size,
                 args.time,
                 args.workload,
@@ -93,6 +100,7 @@ fn main() -> Result<(), Error> {
 
             StraceWorkloadRunner::configure(
                 args.io_size,
+                args.file_size,
                 args.fileset_size,
                 args.time,
                 args.workload,
