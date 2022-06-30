@@ -14,12 +14,16 @@ pub fn time_format(s: f64) -> String {
         format!("{} s", second(s))
     } else if s < 3600f64 {
         let min = (s / 60f64) as i64;
+        let min = if min < 10 { format!("0{}", min) } else { min.to_string() };
         let second = second(s % 60f64);
+        let second = if second < 10.0 { format!("0{}", second) } else { second.to_string() };
         format!("{}:{}", min, second)
     } else {
         let hour = (s / 3600f64) as i64;
         let min = ((s % 3600f64) / 60f64) as i64;
+        let min = if min < 10 { format!("0{}", min) } else { min.to_string() };
         let second = second(s % 60f64);
+        let second = if second < 10.0 { format!("0{}", second) } else { second.to_string() };
         format!("{}:{}:{}", hour, min, second)
     }
 }
@@ -93,7 +97,9 @@ mod test {
         assert_eq!(time_format(0.12587), "125.87 ms".to_string());
         assert_eq!(time_format(1258.71542645), "20:58.7154".to_string());
 
-        assert_eq!(time_format(65.126543), "1:5.1265".to_string());
-        assert_eq!(time_format(3601.15236), "1:0:1.1523".to_string());
+        assert_eq!(time_format(65.126543), "01:05.1265".to_string());
+        assert_eq!(time_format(3601.15236), "1:00:01.1523".to_string());
+
+        assert_eq!(time_format(60.0), "01:00".to_string());
     }
 }
