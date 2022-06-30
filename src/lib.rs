@@ -6,7 +6,6 @@ pub mod plotter;
 mod progress;
 pub mod stats;
 pub mod trace_workload;
-mod timer;
 
 use crate::error::Error;
 use crate::micro::BenchFn;
