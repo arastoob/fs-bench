@@ -13,6 +13,7 @@ use std::str::FromStr;
 
 pub mod offline;
 pub mod real_time;
+pub mod throughput;
 
 ///
 /// Benchmark function that is being run
@@ -94,21 +95,7 @@ pub fn micro_setup(
     progress.finish_and_clear()?;
 
     if invalidate_cache {
-        // sync the cached content to disk and then invalidate the cache
-        let sync_status = std::process::Command::new("sh")
-            .arg("-c")
-            .arg("sync")
-            .output()?;
-        let invalidate_cache_status = std::process::Command::new("sh")
-            .arg("-c")
-            .arg("echo 3 | sudo tee /proc/sys/vm/drop_caches")
-            .output()?;
-
-        if !sync_status.status.success() || !invalidate_cache_status.status.success() {
-            return Err(Error::Unknown(
-                "Could not invalidate the OS cache".to_string(),
-            ));
-        }
+        clear_cache()?;
     }
 
     Ok(())
@@ -147,4 +134,29 @@ pub fn print_output(iterations: u64, run_time: f64, io_size: usize, analysed_dat
         "ops/s (95% CI):", analysed_data.mean_lb, analysed_data.mean_ub, byte_s_lb, byte_s_ub
     );
     println!();
+}
+
+pub fn clear_cache() -> Result<(), Error> {
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(ProgressStyle::default_spinner().template("{spinner} clearing the cache"));
+    let progress = Progress::start(spinner);
+
+    // sync the cached content to disk and then invalidate the cache
+    let sync_status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg("sync")
+        .output()?;
+    let invalidate_cache_status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg("echo 3 | sudo tee /proc/sys/vm/drop_caches")
+        .output()?;
+
+    if !sync_status.status.success() || !invalidate_cache_status.status.success() {
+        return Err(Error::Unknown(
+            "Could not invalidate the OS cache".to_string(),
+        ));
+    }
+
+    progress.finish_and_clear()?;
+    Ok(())
 }
