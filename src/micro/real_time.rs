@@ -213,12 +213,24 @@ impl RealTimeBench {
                 }
 
                 progress.finish_with_message(&format!("{} finished", bench_fn))?;
-                print_output(
-                    ops,
-                    run_time.as_secs_f64(),
-                    self.config.io_size,
-                    &analysed_data,
-                );
+                if bench_fn == "mkdir" || bench_fn == "mknod" {
+                    print_output(
+                        ops,
+                        run_time.as_secs_f64(),
+                        self.config.io_size,
+                        &analysed_data,
+                        false
+                    );
+                } else {
+                    print_output(
+                        ops,
+                        run_time.as_secs_f64(),
+                        self.config.io_size,
+                        &analysed_data,
+                        true
+                    );
+                }
+
 
                 // log behaviour result
                 let behaviour_header = ["time".to_string(), "ops".to_string()].to_vec();

@@ -114,7 +114,7 @@ pub fn random_leaf(path: &PathBuf) -> Result<PathBuf, Error> {
     random_leaf(&entries[random].as_ref().unwrap().path())
 }
 
-pub fn print_output(iterations: u64, run_time: f64, io_size: usize, analysed_data: &AnalysedData) {
+pub fn print_output(iterations: u64, run_time: f64, io_size: usize, analysed_data: &AnalysedData, throughput: bool) {
     println!("{:18} {}", "iterations:", iterations);
     println!("{:18} {}", "run time:", time_format(run_time));
     println!(
@@ -124,15 +124,24 @@ pub fn print_output(iterations: u64, run_time: f64, io_size: usize, analysed_dat
         time_format(1f64 / analysed_data.mean_lb),
     );
 
-    let byte_s_lb = Byte::from_bytes((analysed_data.mean_lb * io_size as f64) as u128);
-    let byte_s_lb = byte_s_lb.get_appropriate_unit(true);
+    if throughput {
+        let byte_s_lb = Byte::from_bytes((analysed_data.mean_lb * io_size as f64) as u128);
+        let byte_s_lb = byte_s_lb.get_appropriate_unit(true);
 
-    let byte_s_ub = Byte::from_bytes((analysed_data.mean_ub * io_size as f64) as u128);
-    let byte_s_ub = byte_s_ub.get_appropriate_unit(true);
-    println!(
-        "{:18} [{}, {}] ([{}/s, {}/s])",
-        "ops/s (95% CI):", analysed_data.mean_lb, analysed_data.mean_ub, byte_s_lb, byte_s_ub
-    );
+        let byte_s_ub = Byte::from_bytes((analysed_data.mean_ub * io_size as f64) as u128);
+        let byte_s_ub = byte_s_ub.get_appropriate_unit(true);
+        
+        println!(
+            "{:18} [{}, {}] ([{}/s, {}/s])",
+            "ops/s (95% CI):", analysed_data.mean_lb, analysed_data.mean_ub, byte_s_lb, byte_s_ub
+        );
+    } else {
+        println!(
+            "{:18} [{}, {}]",
+            "ops/s (95% CI):", analysed_data.mean_lb, analysed_data.mean_ub
+        );
+    }
+
     println!();
 }
 

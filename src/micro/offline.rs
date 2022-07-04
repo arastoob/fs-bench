@@ -12,6 +12,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
+use crate::BenchFn::Mknod;
 
 pub struct OfflineBench {
     config: Config,
@@ -552,7 +553,11 @@ impl OfflineBench {
         let analysed_data = Statistics::new(&ops_per_seconds)?.analyse()?;
 
         progress.finish_with_message(&format!("{} ({}) finished", op.to_string(), fs_name))?;
-        print_output(idx, run_time.as_secs_f64(), io_size, &analysed_data);
+        if op == BenchFn::Mkdir || op == Mknod {
+            print_output(idx, run_time.as_secs_f64(), io_size, &analysed_data, false);
+        } else {
+            print_output(idx, run_time.as_secs_f64(), io_size, &analysed_data, true);
+        }
 
         let mut behaviour_records = vec![];
         for (time, ops_s) in ops_in_window.iter() {
