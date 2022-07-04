@@ -157,7 +157,7 @@ pub enum BenchMode {
     Static,
     RealTime,
     Trace,
-    Throughput
+    Throughput,
 }
 
 impl FromStr for BenchMode {

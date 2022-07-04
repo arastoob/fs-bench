@@ -1,15 +1,15 @@
-use std::io::{Read, Write};
-use std::path::PathBuf;
-use std::time::SystemTime;
-use byte_unit::{Byte, ByteUnit};
-use indicatif::{ProgressBar, ProgressStyle};
-use rand::RngCore;
-use crate::{Bench, BenchFn, BenchResult, Config, Error, Record, ResultMode};
 use crate::format::time_format;
 use crate::fs::Fs;
 use crate::micro::clear_cache;
 use crate::plotter::Plotter;
 use crate::progress::Progress;
+use crate::{Bench, BenchFn, BenchResult, Config, Error, Record, ResultMode};
+use byte_unit::{Byte, ByteUnit};
+use indicatif::{ProgressBar, ProgressStyle};
+use rand::RngCore;
+use std::io::{Read, Write};
+use std::path::PathBuf;
+use std::time::SystemTime;
 
 pub struct Throughput {
     config: Config,
@@ -59,11 +59,14 @@ impl Bench for Throughput {
 
         let progress_style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
 
-        let throughput_header = ["file_size (MiB)".to_string(), "throughput (MiB/s)".to_string()].to_vec();
+        let throughput_header = [
+            "file_size (MiB)".to_string(),
+            "throughput (MiB/s)".to_string(),
+        ]
+        .to_vec();
 
         let mut read_plotter = Plotter::new();
         let mut write_plotter = Plotter::new();
-
 
         for (idx, mount_path) in self.config.mount_paths.iter().enumerate() {
             let mut root_path = mount_path.clone();
@@ -74,13 +77,15 @@ impl Bench for Throughput {
                 BenchFn::Read,
                 &root_path,
                 &self.config.fs_names[idx],
-                progress_style.clone())?;
+                progress_style.clone(),
+            )?;
 
             let write_throughput = self.throughput(
                 BenchFn::Write,
                 &root_path,
                 &self.config.fs_names[idx],
-                progress_style.clone())?;
+                progress_style.clone(),
+            )?;
 
             let mut read_throughput_results = BenchResult::new(throughput_header.clone());
             read_throughput_results.add_records(read_throughput)?;
@@ -108,7 +113,6 @@ impl Bench for Throughput {
                 Some(self.config.fs_names[idx].clone()),
                 &ResultMode::Throughput,
             )?;
-
         }
 
         let mut file_name = self.config.log_path.clone();
@@ -133,7 +137,6 @@ impl Bench for Throughput {
             &file_name,
         )?;
 
-
         println!(
             "results logged to: {}",
             Fs::path_to_str(&self.config.log_path)?
@@ -151,7 +154,6 @@ impl Throughput {
         fs_name: &str,
         style: ProgressStyle,
     ) -> Result<Vec<Record>, Error> {
-
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
         bar.set_message(format!("{} throughput ({})", op.to_string(), fs_name));
@@ -181,7 +183,7 @@ impl Throughput {
                             println!("error: {:?}", e);
                         }
                     }
-                },
+                }
                 BenchFn::Write => {
                     let mut rand_content = vec![0u8; size];
                     let mut rng = rand::thread_rng();
@@ -193,13 +195,12 @@ impl Throughput {
                             let end1 = start1.elapsed()?.as_secs_f64();
                             let throughput = size as f64 / end1; // B/s
                             throughputs.push((size, throughput));
-
                         }
                         Err(e) => {
                             println!("error: {:?}", e);
                         }
                     }
-                },
+                }
                 _ => {}
             }
 
@@ -227,23 +228,19 @@ impl Throughput {
 
             // convert the throughout to MiB
             let adjusted_throughput = match adjusted_throughput.get_unit() {
-                ByteUnit::B => {
-                    adjusted_throughput.get_value() / (1024f64 * 1024f64)
-                },
-                ByteUnit::KiB => {
-                    adjusted_throughput.get_value() / 1024f64
-                },
-                ByteUnit::MiB => {
-                    adjusted_throughput.get_value()
-                }
-                ByteUnit::GiB => {
-                    adjusted_throughput.get_value() * 1024f64
-                },
-                _ => {
-                    adjusted_throughput.get_value()
-                }
+                ByteUnit::B => adjusted_throughput.get_value() / (1024f64 * 1024f64),
+                ByteUnit::KiB => adjusted_throughput.get_value() / 1024f64,
+                ByteUnit::MiB => adjusted_throughput.get_value(),
+                ByteUnit::GiB => adjusted_throughput.get_value() * 1024f64,
+                _ => adjusted_throughput.get_value(),
             };
-            throughput_records.push(vec![adjusted_size.get_value().to_string(), adjusted_throughput.to_string()].into());
+            throughput_records.push(
+                vec![
+                    adjusted_size.get_value().to_string(),
+                    adjusted_throughput.to_string(),
+                ]
+                .into(),
+            );
         }
 
         println!();

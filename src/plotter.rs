@@ -153,8 +153,7 @@ impl Plotter {
                 .margin(30.0)
                 .caption(caption.unwrap_or(""), ("sans-serif", 30.0))
                 .build_cartesian_2d(
-                    (ticks[0]..ticks[ticks.len() - 1])
-                        .with_key_points(ticks),
+                    (ticks[0]..ticks[ticks.len() - 1]).with_key_points(ticks),
                     y_start..y_end,
                 )?;
 
