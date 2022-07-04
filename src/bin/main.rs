@@ -6,12 +6,13 @@ use fs_bench::micro::BenchFn;
 use fs_bench::trace_workload::TraceWorkloadRunner;
 use fs_bench::{Bench, BenchMode};
 use std::path::PathBuf;
+use fs_bench::micro::throughput::Throughput;
 
 /// A library for benchmarking filesystem operations
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// The bench modes which could be static, real-time or trace replay
+    /// The bench mode: static, realtime, trace, throughput
     #[clap(short, long)]
     bench_mode: BenchMode,
 
@@ -109,6 +110,19 @@ fn main() -> Result<(), Error> {
                 args.log_path,
             )?
             .run(None)?;
+        }
+        BenchMode::Throughput => {
+            Throughput::configure(
+                args.io_size,
+                args.file_size,
+                args.fileset_size,
+                args.time,
+                args.workload,
+                mount_paths,
+                fs_names,
+                args.log_path,
+            )?
+                .run(None)?;
         }
     }
 
