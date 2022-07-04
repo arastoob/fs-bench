@@ -153,9 +153,7 @@ impl Plotter {
                 .margin(30.0)
                 .caption(caption.unwrap_or(""), ("sans-serif", 30.0))
                 .build_cartesian_2d(
-                    (ticks[0]..ticks[ticks.len() - 1])
-                        .log_scale()
-                        .with_key_points(ticks),
+                    (ticks[0]..ticks[ticks.len() - 1]).with_key_points(ticks),
                     y_start..y_end,
                 )?;
 
@@ -593,12 +591,12 @@ impl Plotter {
         let file_size_idx = reader
             .headers()?
             .iter()
-            .position(|header| header == "file_size")
+            .position(|header| header.contains("file_size"))
             .ok_or(Error::CsvError("header 'file_size' not found".to_string()))?;
         let throughput_idx = reader
             .headers()?
             .iter()
-            .position(|header| header == "throughput")
+            .position(|header| header.contains("throughput"))
             .ok_or(Error::CsvError("header 'throughput' not found".to_string()))?;
 
         for record in reader.records() {

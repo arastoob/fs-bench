@@ -157,6 +157,7 @@ pub enum BenchMode {
     Static,
     RealTime,
     Trace,
+    Throughput,
 }
 
 impl FromStr for BenchMode {
@@ -167,7 +168,8 @@ impl FromStr for BenchMode {
             "static" => Ok(BenchMode::Static),
             "realtime" => Ok(BenchMode::RealTime),
             "trace" => Ok(BenchMode::Trace),
-            _ => Err("valid benckmark modes are: static, realtime, trace".to_string()),
+            "throughput" => Ok(BenchMode::Throughput),
+            _ => Err("valid benckmark modes are: static, realtime, trace, throughput".to_string()),
         }
     }
 }
@@ -178,6 +180,7 @@ impl Display for BenchMode {
             BenchMode::Static => write!(f, "static"),
             BenchMode::RealTime => write!(f, "realtime"),
             BenchMode::Trace => write!(f, "trace"),
+            BenchMode::Throughput => write!(f, "throughput"),
         }
     }
 }
