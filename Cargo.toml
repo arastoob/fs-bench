@@ -16,14 +16,12 @@ crossbeam = "0.8.1"
 csv = "1.1"
 indicatif = "0.16.2"
 log = "0.4.0"
-plotters = "0.3"
+plotters = { git = "https://github.com/plotters-rs/plotters" }
 plotters-piston = { git = "https://github.com/plotters-rs/plotters-piston" }
-plotters-backend = "0.3.2"
+#plotters-backend = "0.3.2"
 piston_window = "0.120.0"
 rand = "0.8.0"
 rayon = "1.5.1"
 serde = { version = "1", features = ["derive"] }
 sudo = "0.5"
 timer = "0.2.0"
-wasmer = "2.0"
-wasmer-wasi = "2.0"
