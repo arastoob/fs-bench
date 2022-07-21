@@ -200,6 +200,9 @@ impl Fs {
         if path.starts_with("/") {
             path = path[1..].to_string();
         }
+        if path.ends_with("/.") {
+            path = path[..path.len() - 2].to_string();
+        }
         new_path.push(path);
 
         Ok(new_path)
