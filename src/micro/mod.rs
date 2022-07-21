@@ -130,7 +130,7 @@ pub fn print_output(iterations: u64, run_time: f64, io_size: usize, analysed_dat
 
         let byte_s_ub = Byte::from_bytes((analysed_data.mean_ub * io_size as f64) as u128);
         let byte_s_ub = byte_s_ub.get_appropriate_unit(true);
-        
+
         println!(
             "{:18} [{}, {}] ([{}/s, {}/s])",
             "ops/s (95% CI):", analysed_data.mean_lb, analysed_data.mean_ub, byte_s_lb, byte_s_ub

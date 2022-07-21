@@ -11,18 +11,25 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
-use strace_parser::{FileDir, Operation, OperationType, Parser, Process};
+use strace_parser::{FileType, Operation, OperationType, Parser, Process};
 
 pub struct TraceWorkloadRunner {
     config: Config,
     processes: Vec<Arc<Mutex<Process>>>, // list of processes with their operations list
-    files: Vec<FileDir>,                 // the files and directories accessed and logged by trace
+    files: Vec<FileType>,                 // the files and directories accessed and logged by trace
 }
 
 impl Bench for TraceWorkloadRunner {
     fn new(config: Config) -> Result<Self, Error> {
         // parse the trace log file and extract the operations
         let mut parser = Parser::new(config.workload.clone());
+
+        let style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
+        let bar = ProgressBar::new_spinner();
+        bar.set_style(style);
+        bar.set_message(format!("parsing {}", Fs::path_to_str(&config.workload)?));
+        let progress = Progress::start(bar.clone());
+
         let processes = parser.parse()?;
         let processes = processes
             .into_iter()
@@ -30,8 +37,9 @@ impl Bench for TraceWorkloadRunner {
             .collect::<Vec<_>>();
         let files = parser.existing_files()?;
         let mut files = Vec::from_iter(files.into_iter());
+        files.retain(|file_type| file_type.path() != "/" && file_type.path() != ".");
 
-        files.retain(|file_dir| file_dir.path() != "/");
+        progress.finish_and_clear()?;
 
         Ok(Self {
             config,
@@ -44,11 +52,16 @@ impl Bench for TraceWorkloadRunner {
     fn setup(&self, path: &PathBuf, _invalidate_cache: bool) -> Result<(), Error> {
         Fs::cleanup(path)?;
 
-        for file_dir in self.files.iter() {
-            match file_dir {
-                FileDir::File(file_path, size) => {
-                    let new_path = Fs::map_path(path, file_path)?;
+        let style = ProgressStyle::default_bar().template("[{elapsed_precise}] {msg}");
+        let bar = ProgressBar::new_spinner();
+        bar.set_style(style);
+        bar.set_message(format!("setting up {}", Fs::path_to_str(path)?));
+        let progress = Progress::start(bar.clone());
 
+        for file_type in self.files.iter() {
+            match file_type {
+                FileType::File(file_path, size) => {
+                    let new_path = Fs::map_path(path, file_path)?;
                     // remove the file name from the path
                     let mut parents = new_path.clone();
                     parents.pop();
@@ -66,16 +79,18 @@ impl Bench for TraceWorkloadRunner {
                     let mut file = Fs::make_file(&new_path)?;
                     file.write(&mut rand_content)?;
                 }
-                FileDir::Dir(dir_path, _) => {
+                FileType::Dir(dir_path, _) => {
                     let new_path = Fs::map_path(path, dir_path)?;
-
                     // create the directory
                     if !new_path.exists() {
                         Fs::make_dir_all(&new_path)?;
                     }
-                }
+                },
+                _ => {}
             }
         }
+
+        progress.finish_and_clear()?;
 
         Ok(())
     }
@@ -89,6 +104,7 @@ impl Bench for TraceWorkloadRunner {
         for (idx, mount_path) in mount_paths.iter().enumerate() {
             let mut base_path = mount_path.clone();
             base_path.push("trace_workload");
+            base_path.push("files");
 
             let (op_times_records, accumulated_times_records, op_time_unit, accumulated_time_unit) =
                 self.replay(&base_path, &fs_names[idx], progress_style.clone())?;
