@@ -43,7 +43,7 @@ pub enum Error {
 
     ParseError(String),
 
-    WasmerError(String),
+    BoxedError(String),
 
     /// A synchronization channel experienced an error
     SyncError(String),
@@ -89,7 +89,7 @@ impl std::error::Error for Error {
 
 impl From<Box<dyn std::error::Error>> for Error {
     fn from(err: Box<dyn std::error::Error>) -> Self {
-        Error::WasmerError(err.to_string())
+        Error::BoxedError(err.to_string())
     }
 }
 
@@ -179,7 +179,7 @@ impl fmt::Display for Error {
             &Error::SystemTimeError(ref detail) => write!(f, "SystemTime error: {}", detail),
             &Error::Unknown(ref detail) => write!(f, "Unknown error: {}", detail),
             &Error::ParseError(ref detail) => write!(f, "Parse error: {}", detail),
-            &Error::WasmerError(ref detail) => write!(f, "Wasmer error: {}", detail),
+            &Error::BoxedError(ref detail) => write!(f, "Error: {}", detail),
             Error::SyncError(ref detail) => write!(f, "Sync error: {}", detail),
             &Error::PoisonError(ref detail) => {
                 write!(f, "could not acquire a lock oh shared object: {}", detail)
