@@ -253,13 +253,15 @@ impl BenchResult {
     }
 
     pub fn add_records(&mut self, records: Vec<Record>) -> Result<(), Error> {
-        if records[0].fields.len() != self.header.len() {
-            return Err(Error::Unknown(
-                "the records and header should be of the same length".to_string(),
-            ));
-        }
-        for record in records {
-            self.records.push(record);
+        if !records.is_empty() {
+            if records[0].fields.len() != self.header.len() {
+                return Err(Error::Unknown(
+                    "the records and header should be of the same length".to_string(),
+                ));
+            }
+            for record in records {
+                self.records.push(record);
+            }
         }
 
         Ok(())
