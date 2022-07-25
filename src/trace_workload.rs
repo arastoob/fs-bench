@@ -10,10 +10,8 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::sync::mpsc::channel;
 use std::time::SystemTime;
 use strace_parser::{FileType, Operation, OperationType, Parser, Process};
-use threadpool::ThreadPool;
 
 pub struct TraceWorkloadRunner {
     config: Config,
@@ -219,25 +217,24 @@ impl TraceWorkloadRunner {
 
         // replay the processes' operations in parallel
         let start_time = SystemTime::now();
-        let pool = ThreadPool::new(self.config.logical_cores);
-        let (sender, receiver) = channel();
+        let mut handles = vec![];
         for process in self.processes.iter() {
             let base_path = base_path.clone();
             let process = process.clone();
-            let sender = sender.clone();
-            pool.execute(move || {
-                let execution_result = process.lock().unwrap().run(&base_path, start_time);
-                sender.send(execution_result).unwrap();
+
+            let handle = std::thread::spawn(move || -> Result<ExecutionResult, Error> {
+                process.lock()?.run(&base_path, start_time)
             });
+
+            handles.push(handle);
         }
 
-        let execution_results = receiver.iter().take(self.processes.len()).collect::<Vec<_>>();
         let mut total_op_time = 0f64;
         let mut total_ops = 0;
-        for execution_result in execution_results {
-            match execution_result {
-                Ok(mut execution_result) => {
-                    // let mut execution_result = execution_result?;
+        for handle in handles {
+            match handle.join() {
+                Ok(execution_result) => {
+                    let mut execution_result = execution_result?;
                     op_times.append(&mut execution_result.op_times);
 
                     // accumulated_times.append(&mut execution_result.accumulated_times);
@@ -319,7 +316,7 @@ impl TraceWorkloadRunner {
             summary.sort_by(|(_, (t1, _)), (_, (t2, _))| t2.partial_cmp(t1).unwrap());
             for (op, (time, num)) in summary.iter() {
                 println!(
-                    "{:7} {:12} {:12} ({:5} of total time)",
+                    "{:7} {:12} {:12} ({:9} of total time)",
                     num,
                     op,
                     time_format(*time),
@@ -415,6 +412,9 @@ impl Executer for Operation {
         base_path: &PathBuf,
         start_time: SystemTime,
     ) -> Result<(f64, f64), Error> {
+        // mark the operation as executed
+        self.executed();
+
         let (op_time, system_time) = match self.op_type() {
             &OperationType::Mkdir(ref file, ref _mode) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
@@ -577,8 +577,35 @@ impl Executer for Operation {
             }
         };
 
-        // mark the operation as executed
-        self.executed();
         Ok((op_time, system_time))
     }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn many_spawns() {
+        let start = SystemTime::now();
+        let threads = 1500;
+        let mut handles = vec![];
+        for thread in 0..threads {
+            handles.push(std::thread::spawn(move || -> usize {
+                std::thread::sleep(Duration::from_secs(1));
+                1
+            }));
+        }
+
+        let mut finished = 0;
+        for handle in handles {
+            finished += handle.join().unwrap();
+        }
+        let end = start.elapsed().unwrap().as_secs_f64();
+        println!("finished threads: {}", finished);
+        println!("time: {}", end);
+
+    }
+
 }
