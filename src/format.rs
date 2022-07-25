@@ -70,7 +70,7 @@ pub fn time_format_by_unit(s: f64, unit: &str) -> Result<f64, Error> {
 }
 
 pub fn percent_format(p: f64) -> String {
-    format!("{:.2} %", p)
+    format!("{:.4} %", p)
 }
 
 fn micro_second(s: f64) -> f64 {
