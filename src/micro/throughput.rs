@@ -1,9 +1,9 @@
 use crate::format::time_format;
 use crate::fs::Fs;
 use crate::micro::clear_cache;
-use crate::plotter::Plotter;
+use crate::plotter::{Indexes, Plotter};
 use crate::progress::Progress;
-use crate::{Bench, BenchFn, BenchResult, Config, Error, Record, ResultMode};
+use crate::{Bench, BenchFn, BenchResult, Config, Error, Record};
 use byte_unit::{Byte, ByteUnit};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::RngCore;
@@ -88,19 +88,19 @@ impl Bench for Throughput {
             )?;
 
             let mut read_throughput_results = BenchResult::new(throughput_header.clone());
-            read_throughput_results.add_records(read_throughput)?;
+            read_throughput_results.add_records(read_throughput.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!("{}_read_throughput.csv", self.config.fs_names[idx]));
             read_throughput_results.log(&file_name)?;
 
             read_plotter.add_coordinates(
-                &file_name,
+                read_throughput,
                 Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Throughput,
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut write_throughput_results = BenchResult::new(throughput_header.clone());
-            write_throughput_results.add_records(write_throughput)?;
+            write_throughput_results.add_records(write_throughput.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_write_throughput.csv",
@@ -109,9 +109,9 @@ impl Bench for Throughput {
             write_throughput_results.log(&file_name)?;
 
             write_plotter.add_coordinates(
-                &file_name,
+                write_throughput,
                 Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Throughput,
+                Indexes::new(0, false, 1, None, None),
             )?;
         }
 

@@ -1,9 +1,9 @@
 use crate::error::Error;
 use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
 use crate::fs::Fs;
-use crate::plotter::Plotter;
+use crate::plotter::{Indexes, Plotter};
 use crate::progress::Progress;
-use crate::{Bench, BenchFn, BenchResult, Config, Record, ResultMode};
+use crate::{Bench, BenchFn, BenchResult, Config, Record};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::RngCore;
 use std::collections::HashMap;
@@ -111,8 +111,9 @@ impl Bench for TraceWorkloadRunner {
 
             let op_times_header = ["op".to_string(), format!("time ({})", op_time_unit)].to_vec();
             let accumulated_times_header = [
-                format!("time ({})", accumulated_time_unit),
-                "ops".to_string(),
+                "pid".to_string(),
+                "op".to_string(),
+                format!("accumulated_time ({})", accumulated_time_unit),
             ]
             .to_vec();
 
@@ -127,26 +128,30 @@ impl Bench for TraceWorkloadRunner {
             results.log(&file_name)?;
 
             let mut op_times_plotter = Plotter::new();
-            op_times_plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            op_times_plotter.add_coordinates(
+                results.records,
+                None,
+                Indexes::new(0, false, 1, None, None),
+            )?;
 
             let mut accumulated_times_plotter = Plotter::new();
-            for (pid, accumulated_times_records) in accumulated_times_records {
-                let mut accumulated_times_results =
-                    BenchResult::new(accumulated_times_header.clone());
-                accumulated_times_results.add_records(accumulated_times_records)?;
-                let mut file_name = self.config.log_path.clone();
-                file_name.push(format!(
-                    "{}_{}_accumulated_times.csv",
-                    self.config.fs_names[idx], pid
-                ));
-                accumulated_times_results.log(&file_name)?;
+            let mut accumulated_times_results = BenchResult::new(accumulated_times_header.clone());
+            for accumulated_times_records in accumulated_times_records.into_iter() {
+                accumulated_times_results.add_records(accumulated_times_records.clone())?;
 
                 accumulated_times_plotter.add_coordinates(
-                    &file_name,
-                    Some(pid.to_string()),
-                    &ResultMode::Behaviour,
+                    accumulated_times_records,
+                    None,
+                    Indexes::new(2, false, 1, None, None),
                 )?;
             }
+
+            let mut file_name = self.config.log_path.clone();
+            file_name.push(format!(
+                "{}_accumulated_times.csv",
+                self.config.fs_names[idx]
+            ));
+            accumulated_times_results.log(&file_name)?;
 
             // plot the results
             let mut file_name = self.config.log_path.clone();
@@ -201,7 +206,7 @@ impl TraceWorkloadRunner {
         base_path: &PathBuf,
         fs_name: &str,
         style: ProgressStyle,
-    ) -> Result<(Vec<Record>, Vec<(usize, Vec<Record>)>, String, String), Error> {
+    ) -> Result<(Vec<Record>, Vec<Vec<Record>>, String, String), Error> {
         self.setup(&base_path, false)?;
 
         let bar = ProgressBar::new_spinner();
@@ -216,11 +221,12 @@ impl TraceWorkloadRunner {
         let mut process_summaries = vec![];
 
         // replay the processes' operations in parallel
-        let mut handles = vec![];
         let start_time = SystemTime::now();
+        let mut handles = vec![];
         for process in self.processes.iter() {
             let base_path = base_path.clone();
             let process = process.clone();
+
             let handle = std::thread::spawn(move || -> Result<ExecutionResult, Error> {
                 process.lock()?.run(&base_path, start_time)
             });
@@ -236,7 +242,6 @@ impl TraceWorkloadRunner {
                     let mut execution_result = execution_result?;
                     op_times.append(&mut execution_result.op_times);
 
-                    // accumulated_times.append(&mut execution_result.accumulated_times);
                     accumulated_times
                         .push((execution_result.pid, execution_result.accumulated_times));
 
@@ -282,15 +287,16 @@ impl TraceWorkloadRunner {
             for system_time in accumulated_time.iter() {
                 accumulated_times_record.push(
                     vec![
-                        time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
+                        pid.to_string(),
                         (idx + 1).to_string(),
+                        time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
                     ]
                     .into(),
                 );
 
                 idx += 1;
             }
-            accumulated_times_records.push((*pid, accumulated_times_record));
+            accumulated_times_records.push(accumulated_times_record);
         }
         // for (idx, (pid, system_time)) in accumulated_times.iter().enumerate() {
         //     accumulated_times_records.push(
@@ -315,7 +321,7 @@ impl TraceWorkloadRunner {
             summary.sort_by(|(_, (t1, _)), (_, (t2, _))| t2.partial_cmp(t1).unwrap());
             for (op, (time, num)) in summary.iter() {
                 println!(
-                    "{:7} {:12} {:12} ({:5} of total time)",
+                    "{:7} {:12} {:12} ({:9} of total time)",
                     num,
                     op,
                     time_format(*time),
@@ -411,6 +417,9 @@ impl Executer for Operation {
         base_path: &PathBuf,
         start_time: SystemTime,
     ) -> Result<(f64, f64), Error> {
+        // mark the operation as executed
+        self.executed();
+
         let (op_time, system_time) = match self.op_type() {
             &OperationType::Mkdir(ref file, ref _mode) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
@@ -573,8 +582,33 @@ impl Executer for Operation {
             }
         };
 
-        // mark the operation as executed
-        self.executed();
         Ok((op_time, system_time))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn many_spawns() {
+        let start = SystemTime::now();
+        let threads = 1500;
+        let mut handles = vec![];
+        for thread in 0..threads {
+            handles.push(std::thread::spawn(move || -> usize {
+                std::thread::sleep(Duration::from_secs(1));
+                1
+            }));
+        }
+
+        let mut finished = 0;
+        for handle in handles {
+            finished += handle.join().unwrap();
+        }
+        let end = start.elapsed().unwrap().as_secs_f64();
+        println!("finished threads: {}", finished);
+        println!("time: {}", end);
     }
 }

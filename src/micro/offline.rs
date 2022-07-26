@@ -1,10 +1,11 @@
 use crate::error::Error;
 use crate::fs::Fs;
 use crate::micro::{micro_setup, print_output, random_leaf};
-use crate::plotter::Plotter;
+use crate::plotter::{Indexes, Plotter};
 use crate::progress::Progress;
 use crate::stats::Statistics;
-use crate::{Bench, BenchFn, BenchResult, Config, Record, ResultMode};
+use crate::BenchFn::Mknod;
+use crate::{Bench, BenchFn, BenchResult, Config, Record};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
 use rand::{thread_rng, Rng, RngCore};
@@ -12,7 +13,6 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
-use crate::BenchFn::Mknod;
 
 pub struct OfflineBench {
     config: Config,
@@ -126,7 +126,11 @@ impl OfflineBench {
             ops_s_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::OpsPerSecond)?;
+            plotter.add_coordinates(
+                ops_s_results.records,
+                None,
+                Indexes::new(0, true, 2, Some(3), Some(4)),
+            )?;
             file_name.set_extension("svg");
             plotter.bar_chart(
                 Some("Operation"),
@@ -137,75 +141,75 @@ impl OfflineBench {
 
             // log behaviour results
             let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
-            mkdir_behaviour_results.add_records(mkdir_behaviour)?;
+            mkdir_behaviour_results.add_records(mkdir_behaviour.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!("{}_mkdir.csv", self.config.fs_names[idx]));
             mkdir_behaviour_results.log(&file_name)?;
             plotter_mkdir_behaviour.add_coordinates(
-                &file_name,
+                mkdir_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Behaviour,
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
-            mknod_behaviour_results.add_records(mknod_behaviour)?;
+            mknod_behaviour_results.add_records(mknod_behaviour.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!("{}_mknod.csv", self.config.fs_names[idx]));
             mknod_behaviour_results.log(&file_name)?;
             plotter_mknod_behaviour.add_coordinates(
-                &file_name,
+                mknod_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Behaviour,
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
-            read_behaviour_results.add_records(read_behaviour)?;
+            read_behaviour_results.add_records(read_behaviour.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!("{}_read.csv", self.config.fs_names[idx]));
             read_behaviour_results.log(&file_name)?;
             plotter_read_behaviour.add_coordinates(
-                &file_name,
+                read_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Behaviour,
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut cold_read_behaviour_results = BenchResult::new(behaviour_header.clone());
-            cold_read_behaviour_results.add_records(cold_read_behaviour)?;
+            cold_read_behaviour_results.add_records(cold_read_behaviour.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!("{}_cold_read.csv", self.config.fs_names[idx]));
             cold_read_behaviour_results.log(&file_name)?;
             plotter_cold_read_behaviour.add_coordinates(
-                &file_name,
+                cold_read_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Behaviour,
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut write_behaviour_results = BenchResult::new(behaviour_header.clone());
-            write_behaviour_results.add_records(write_behaviour)?;
+            write_behaviour_results.add_records(write_behaviour.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!("{}_write.csv", self.config.fs_names[idx]));
             write_behaviour_results.log(&file_name)?;
             plotter_write_behaviour.add_coordinates(
-                &file_name,
+                write_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Behaviour,
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut write_sync_behaviour_results = BenchResult::new(behaviour_header.clone());
-            write_sync_behaviour_results.add_records(write_sync_behaviour)?;
+            write_sync_behaviour_results.add_records(write_sync_behaviour.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!("{}_write_sync.csv", self.config.fs_names[idx]));
             write_sync_behaviour_results.log(&file_name)?;
             plotter_write_sync_behaviour.add_coordinates(
-                &file_name,
+                write_sync_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                &ResultMode::Behaviour,
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             // log and plot sample iteration average ops/s
             let ops_s_samples_header = ["iterations".to_string(), "ops/s".to_string()].to_vec();
             let mut mkdir_times_results = BenchResult::new(ops_s_samples_header.clone());
-            mkdir_times_results.add_records(mkdir_times)?;
+            mkdir_times_results.add_records(mkdir_times.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_mkdir_ops_s_period.csv",
@@ -214,7 +218,7 @@ impl OfflineBench {
             mkdir_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
+            plotter.add_coordinates(mkdir_times, None, Indexes::new(0, false, 1, None, None))?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),
@@ -224,7 +228,7 @@ impl OfflineBench {
             )?;
 
             let mut mknod_times_results = BenchResult::new(ops_s_samples_header.clone());
-            mknod_times_results.add_records(mknod_times)?;
+            mknod_times_results.add_records(mknod_times.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_mknod_ops_s_period.csv",
@@ -233,7 +237,7 @@ impl OfflineBench {
             mknod_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
+            plotter.add_coordinates(mknod_times, None, Indexes::new(0, false, 1, None, None))?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),
@@ -243,7 +247,7 @@ impl OfflineBench {
             )?;
 
             let mut read_times_results = BenchResult::new(ops_s_samples_header.clone());
-            read_times_results.add_records(read_times)?;
+            read_times_results.add_records(read_times.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_read_ops_s_period.csv",
@@ -252,7 +256,7 @@ impl OfflineBench {
             read_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
+            plotter.add_coordinates(read_times, None, Indexes::new(0, false, 1, None, None))?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),
@@ -262,7 +266,7 @@ impl OfflineBench {
             )?;
 
             let mut cold_read_times_results = BenchResult::new(ops_s_samples_header.clone());
-            cold_read_times_results.add_records(cold_read_times)?;
+            cold_read_times_results.add_records(cold_read_times.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_cold_read_ops_s_period.csv",
@@ -271,7 +275,11 @@ impl OfflineBench {
             cold_read_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
+            plotter.add_coordinates(
+                cold_read_times,
+                None,
+                Indexes::new(0, false, 1, None, None),
+            )?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),
@@ -281,7 +289,7 @@ impl OfflineBench {
             )?;
 
             let mut write_times_results = BenchResult::new(ops_s_samples_header.clone());
-            write_times_results.add_records(write_times)?;
+            write_times_results.add_records(write_times.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_write_ops_s_period.csv",
@@ -290,7 +298,7 @@ impl OfflineBench {
             write_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
+            plotter.add_coordinates(write_times, None, Indexes::new(0, false, 1, None, None))?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),
@@ -300,7 +308,7 @@ impl OfflineBench {
             )?;
 
             let mut write_sync_times_results = BenchResult::new(ops_s_samples_header.clone());
-            write_sync_times_results.add_records(write_sync_times)?;
+            write_sync_times_results.add_records(write_sync_times.clone())?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_write_sync_ops_s_period.csv",
@@ -309,7 +317,11 @@ impl OfflineBench {
             write_sync_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(&file_name, None, &ResultMode::SampleOpsPerSecond)?;
+            plotter.add_coordinates(
+                write_sync_times,
+                None,
+                Indexes::new(0, false, 1, None, None),
+            )?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),

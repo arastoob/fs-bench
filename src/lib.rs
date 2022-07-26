@@ -195,6 +195,7 @@ pub enum ResultMode {
     Behaviour,
     OpTimes,
     SampleOpsPerSecond,
+    AccumulatedTimes,
 }
 
 impl FromStr for ResultMode {
@@ -207,6 +208,7 @@ impl FromStr for ResultMode {
             "behaviour" => Ok(ResultMode::Behaviour),
             "op_times" => Ok(ResultMode::OpTimes),
             "sample_ops_per_second" => Ok(ResultMode::SampleOpsPerSecond),
+            "accumulated_times" => Ok(ResultMode::AccumulatedTimes),
             _ => Err("valid result modes are: ops_per_second, throughput, behaviour".to_string()),
         }
     }
@@ -220,6 +222,7 @@ impl Display for ResultMode {
             ResultMode::Throughput => write!(f, "throughput"),
             ResultMode::OpTimes => write!(f, "op_times"),
             ResultMode::SampleOpsPerSecond => write!(f, "sample_ops_per_second"),
+            ResultMode::AccumulatedTimes => write!(f, "accumulated_times"),
         }
     }
 }
@@ -253,13 +256,15 @@ impl BenchResult {
     }
 
     pub fn add_records(&mut self, records: Vec<Record>) -> Result<(), Error> {
-        if records[0].fields.len() != self.header.len() {
-            return Err(Error::Unknown(
-                "the records and header should be of the same length".to_string(),
-            ));
-        }
-        for record in records {
-            self.records.push(record);
+        if !records.is_empty() {
+            if records[0].fields.len() != self.header.len() {
+                return Err(Error::Unknown(
+                    "the records and header should be of the same length".to_string(),
+                ));
+            }
+            for record in records {
+                self.records.push(record);
+            }
         }
 
         Ok(())
@@ -299,7 +304,7 @@ impl BenchResult {
 ///
 /// A record of data
 ///
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Record {
     pub fields: Vec<String>,
 }
