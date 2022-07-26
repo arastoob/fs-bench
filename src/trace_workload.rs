@@ -16,7 +16,7 @@ use strace_parser::{FileType, Operation, OperationType, Parser, Process};
 pub struct TraceWorkloadRunner {
     config: Config,
     processes: Vec<Arc<Mutex<Process>>>, // list of processes with their operations list
-    files: Vec<FileType>,                // the files and directories accessed and logged by trace
+    files: Vec<FileType>,                 // the files and directories accessed and logged by trace
 }
 
 impl Bench for TraceWorkloadRunner {
@@ -85,7 +85,7 @@ impl Bench for TraceWorkloadRunner {
                     if !new_path.exists() {
                         Fs::make_dir_all(&new_path)?;
                     }
-                }
+                },
                 _ => {}
             }
         }
