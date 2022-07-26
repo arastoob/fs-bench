@@ -111,8 +111,9 @@ impl Bench for TraceWorkloadRunner {
 
             let op_times_header = ["op".to_string(), format!("time ({})", op_time_unit)].to_vec();
             let accumulated_times_header = [
-                format!("time ({})", accumulated_time_unit),
-                "ops".to_string(),
+                "pid".to_string(),
+                "op".to_string(),
+                format!("accumulated_time ({})", accumulated_time_unit),
             ]
             .to_vec();
 
@@ -130,23 +131,24 @@ impl Bench for TraceWorkloadRunner {
             op_times_plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
 
             let mut accumulated_times_plotter = Plotter::new();
-            for (pid, accumulated_times_records) in accumulated_times_records {
-                let mut accumulated_times_results =
-                    BenchResult::new(accumulated_times_header.clone());
-                accumulated_times_results.add_records(accumulated_times_records)?;
-                let mut file_name = self.config.log_path.clone();
-                file_name.push(format!(
-                    "{}_{}_accumulated_times.csv",
-                    self.config.fs_names[idx], pid
-                ));
-                accumulated_times_results.log(&file_name)?;
-
-                accumulated_times_plotter.add_coordinates(
-                    &file_name,
-                    Some(pid.to_string()),
-                    &ResultMode::Behaviour,
-                )?;
+            let mut accumulated_times_results =
+                BenchResult::new(accumulated_times_header.clone());
+            for accumulated_times_records in accumulated_times_records.into_iter() {
+                accumulated_times_results.add_records(accumulated_times_records.clone())?;
             }
+
+            let mut file_name = self.config.log_path.clone();
+            file_name.push(format!(
+                "{}_accumulated_times.csv",
+                self.config.fs_names[idx]
+            ));
+            accumulated_times_results.log(&file_name)?;
+
+            accumulated_times_plotter.add_coordinates(
+                &file_name,
+                None,
+                &ResultMode::AccumulatedTimes,
+            )?;
 
             // plot the results
             let mut file_name = self.config.log_path.clone();
@@ -201,7 +203,7 @@ impl TraceWorkloadRunner {
         base_path: &PathBuf,
         fs_name: &str,
         style: ProgressStyle,
-    ) -> Result<(Vec<Record>, Vec<(usize, Vec<Record>)>, String, String), Error> {
+    ) -> Result<(Vec<Record>, Vec<Vec<Record>>, String, String), Error> {
         self.setup(&base_path, false)?;
 
         let bar = ProgressBar::new_spinner();
@@ -237,7 +239,6 @@ impl TraceWorkloadRunner {
                     let mut execution_result = execution_result?;
                     op_times.append(&mut execution_result.op_times);
 
-                    // accumulated_times.append(&mut execution_result.accumulated_times);
                     accumulated_times
                         .push((execution_result.pid, execution_result.accumulated_times));
 
@@ -283,15 +284,16 @@ impl TraceWorkloadRunner {
             for system_time in accumulated_time.iter() {
                 accumulated_times_record.push(
                     vec![
-                        time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
+                        pid.to_string(),
                         (idx + 1).to_string(),
+                        time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
                     ]
                     .into(),
                 );
 
                 idx += 1;
             }
-            accumulated_times_records.push((*pid, accumulated_times_record));
+            accumulated_times_records.push(accumulated_times_record);
         }
         // for (idx, (pid, system_time)) in accumulated_times.iter().enumerate() {
         //     accumulated_times_records.push(
