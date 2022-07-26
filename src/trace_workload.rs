@@ -16,7 +16,7 @@ use strace_parser::{FileType, Operation, OperationType, Parser, Process};
 pub struct TraceWorkloadRunner {
     config: Config,
     processes: Vec<Arc<Mutex<Process>>>, // list of processes with their operations list
-    files: Vec<FileType>,                 // the files and directories accessed and logged by trace
+    files: Vec<FileType>,                // the files and directories accessed and logged by trace
 }
 
 impl Bench for TraceWorkloadRunner {
@@ -85,7 +85,7 @@ impl Bench for TraceWorkloadRunner {
                     if !new_path.exists() {
                         Fs::make_dir_all(&new_path)?;
                     }
-                },
+                }
                 _ => {}
             }
         }
@@ -131,19 +131,18 @@ impl Bench for TraceWorkloadRunner {
             op_times_plotter.add_coordinates(
                 results.records,
                 None,
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut accumulated_times_plotter = Plotter::new();
-            let mut accumulated_times_results =
-                BenchResult::new(accumulated_times_header.clone());
+            let mut accumulated_times_results = BenchResult::new(accumulated_times_header.clone());
             for accumulated_times_records in accumulated_times_records.into_iter() {
                 accumulated_times_results.add_records(accumulated_times_records.clone())?;
 
                 accumulated_times_plotter.add_coordinates(
                     accumulated_times_records,
                     None,
-                    Indexes::new(2, false, 1, None, None)
+                    Indexes::new(2, false, 1, None, None),
                 )?;
             }
 
@@ -611,7 +610,5 @@ mod test {
         let end = start.elapsed().unwrap().as_secs_f64();
         println!("finished threads: {}", finished);
         println!("time: {}", end);
-
     }
-
 }

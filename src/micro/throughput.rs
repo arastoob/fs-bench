@@ -96,7 +96,7 @@ impl Bench for Throughput {
             read_plotter.add_coordinates(
                 read_throughput,
                 Some(self.config.fs_names[idx].clone()),
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut write_throughput_results = BenchResult::new(throughput_header.clone());
@@ -111,7 +111,7 @@ impl Bench for Throughput {
             write_plotter.add_coordinates(
                 write_throughput,
                 Some(self.config.fs_names[idx].clone()),
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
         }
 

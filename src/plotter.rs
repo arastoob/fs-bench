@@ -65,13 +65,19 @@ pub struct Indexes {
 }
 
 impl Indexes {
-    pub fn new(x: usize, x_is_str: bool, y: usize, y_lb: Option<usize>, y_ub: Option<usize>) -> Self {
+    pub fn new(
+        x: usize,
+        x_is_str: bool,
+        y: usize,
+        y_lb: Option<usize>,
+        y_ub: Option<usize>,
+    ) -> Self {
         Self {
             x,
             x_is_str,
             y,
             y_lb,
-            y_ub
+            y_ub,
         }
     }
 }
@@ -87,34 +93,32 @@ impl Plotter {
         &mut self,
         records: Vec<Record>,
         label: Option<String>,
-        indexes: Indexes
+        indexes: Indexes,
     ) -> Result<(), Error> {
-
         let mut x_axis = vec![];
         let mut y_axis = vec![];
         for record in records {
             if indexes.x_is_str {
-                x_axis.push(XAxis::from(
-                        record.fields[indexes.x].as_str()
-                ));
+                x_axis.push(XAxis::from(record.fields[indexes.x].as_str()));
             } else {
-                x_axis.push(XAxis::from(
-                    record.fields[indexes.x].parse::<f64>()?
-                ));
+                x_axis.push(XAxis::from(record.fields[indexes.x].parse::<f64>()?));
             }
-
 
             let lb = if let Some(y_lb) = indexes.y_lb {
                 Some(record.fields[y_lb].parse::<f64>()?)
-            } else { None };
+            } else {
+                None
+            };
             let ub = if let Some(y_ub) = indexes.y_ub {
                 Some(record.fields[y_ub].parse::<f64>()?)
-            } else { None };
+            } else {
+                None
+            };
 
             y_axis.push(YAxis {
                 y: record.fields[indexes.y].parse::<f64>()?,
                 lb,
-                ub
+                ub,
             });
         }
 

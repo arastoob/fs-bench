@@ -114,7 +114,13 @@ pub fn random_leaf(path: &PathBuf) -> Result<PathBuf, Error> {
     random_leaf(&entries[random].as_ref().unwrap().path())
 }
 
-pub fn print_output(iterations: u64, run_time: f64, io_size: usize, analysed_data: &AnalysedData, throughput: bool) {
+pub fn print_output(
+    iterations: u64,
+    run_time: f64,
+    io_size: usize,
+    analysed_data: &AnalysedData,
+    throughput: bool,
+) {
     println!("{:18} {}", "iterations:", iterations);
     println!("{:18} {}", "run time:", time_format(run_time));
     println!(

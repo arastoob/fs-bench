@@ -4,6 +4,7 @@ use crate::micro::{micro_setup, print_output, random_leaf};
 use crate::plotter::{Indexes, Plotter};
 use crate::progress::Progress;
 use crate::stats::Statistics;
+use crate::BenchFn::Mknod;
 use crate::{Bench, BenchFn, BenchResult, Config, Record};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -12,7 +13,6 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
-use crate::BenchFn::Mknod;
 
 pub struct OfflineBench {
     config: Config,
@@ -129,7 +129,7 @@ impl OfflineBench {
             plotter.add_coordinates(
                 ops_s_results.records,
                 None,
-                Indexes::new(0, true, 2, Some(3), Some(4))
+                Indexes::new(0, true, 2, Some(3), Some(4)),
             )?;
             file_name.set_extension("svg");
             plotter.bar_chart(
@@ -148,7 +148,7 @@ impl OfflineBench {
             plotter_mkdir_behaviour.add_coordinates(
                 mkdir_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut mknod_behaviour_results = BenchResult::new(behaviour_header.clone());
@@ -159,7 +159,7 @@ impl OfflineBench {
             plotter_mknod_behaviour.add_coordinates(
                 mknod_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut read_behaviour_results = BenchResult::new(behaviour_header.clone());
@@ -170,7 +170,7 @@ impl OfflineBench {
             plotter_read_behaviour.add_coordinates(
                 read_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut cold_read_behaviour_results = BenchResult::new(behaviour_header.clone());
@@ -181,7 +181,7 @@ impl OfflineBench {
             plotter_cold_read_behaviour.add_coordinates(
                 cold_read_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut write_behaviour_results = BenchResult::new(behaviour_header.clone());
@@ -192,7 +192,7 @@ impl OfflineBench {
             plotter_write_behaviour.add_coordinates(
                 write_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             let mut write_sync_behaviour_results = BenchResult::new(behaviour_header.clone());
@@ -203,7 +203,7 @@ impl OfflineBench {
             plotter_write_sync_behaviour.add_coordinates(
                 write_sync_behaviour,
                 Some(self.config.fs_names[idx].clone()),
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
 
             // log and plot sample iteration average ops/s
@@ -218,11 +218,7 @@ impl OfflineBench {
             mkdir_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(
-                mkdir_times,
-                None,
-                Indexes::new(0, false, 1, None, None)
-            )?;
+            plotter.add_coordinates(mkdir_times, None, Indexes::new(0, false, 1, None, None))?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),
@@ -241,11 +237,7 @@ impl OfflineBench {
             mknod_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(
-                mknod_times,
-                None,
-                Indexes::new(0, false, 1, None, None)
-            )?;
+            plotter.add_coordinates(mknod_times, None, Indexes::new(0, false, 1, None, None))?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),
@@ -264,11 +256,7 @@ impl OfflineBench {
             read_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(
-                read_times,
-                None,
-                Indexes::new(0, false, 1, None, None)
-            )?;
+            plotter.add_coordinates(read_times, None, Indexes::new(0, false, 1, None, None))?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),
@@ -290,7 +278,7 @@ impl OfflineBench {
             plotter.add_coordinates(
                 cold_read_times,
                 None,
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
             file_name.set_extension("svg");
             plotter.point_series(
@@ -310,11 +298,7 @@ impl OfflineBench {
             write_times_results.log(&file_name)?;
 
             let mut plotter = Plotter::new();
-            plotter.add_coordinates(
-                write_times,
-                None,
-                Indexes::new(0, false, 1, None, None)
-            )?;
+            plotter.add_coordinates(write_times, None, Indexes::new(0, false, 1, None, None))?;
             file_name.set_extension("svg");
             plotter.point_series(
                 Some("Sampling iterations"),
@@ -336,7 +320,7 @@ impl OfflineBench {
             plotter.add_coordinates(
                 write_sync_times,
                 None,
-                Indexes::new(0, false, 1, None, None)
+                Indexes::new(0, false, 1, None, None),
             )?;
             file_name.set_extension("svg");
             plotter.point_series(

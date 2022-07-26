@@ -219,7 +219,7 @@ impl RealTimeBench {
                         run_time.as_secs_f64(),
                         self.config.io_size,
                         &analysed_data,
-                        false
+                        false,
                     );
                 } else {
                     print_output(
@@ -227,10 +227,9 @@ impl RealTimeBench {
                         run_time.as_secs_f64(),
                         self.config.io_size,
                         &analysed_data,
-                        true
+                        true,
                     );
                 }
-
 
                 // log behaviour result
                 let behaviour_header = ["time".to_string(), "ops".to_string()].to_vec();
