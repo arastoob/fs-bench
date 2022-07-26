@@ -1,7 +1,6 @@
 use crate::error::Error;
-use crate::ResultMode;
+use crate::Record;
 use plotters::prelude::*;
-use std::fs::File;
 use std::ops::Range;
 use std::path::Path;
 
@@ -57,6 +56,26 @@ impl XAxis {
     }
 }
 
+pub struct Indexes {
+    x: usize,
+    x_is_str: bool,
+    y: usize,
+    y_lb: Option<usize>,
+    y_ub: Option<usize>,
+}
+
+impl Indexes {
+    pub fn new(x: usize, x_is_str: bool, y: usize, y_lb: Option<usize>, y_ub: Option<usize>) -> Self {
+        Self {
+            x,
+            x_is_str,
+            y,
+            y_lb,
+            y_ub
+        }
+    }
+}
+
 impl Plotter {
     pub fn new() -> Self {
         Self {
@@ -64,28 +83,39 @@ impl Plotter {
         }
     }
 
-    pub fn add_coordinates<P: AsRef<Path> + std::convert::AsRef<std::ffi::OsStr>>(
+    pub fn add_coordinates(
         &mut self,
-        data: &P,
+        records: Vec<Record>,
         label: Option<String>,
-        mode: &ResultMode,
+        indexes: Indexes
     ) -> Result<(), Error> {
-        let file = File::open(data)?;
 
-        let (x_axis, y_axis) = match mode {
-            ResultMode::OpsPerSecond => Plotter::parse_ops_per_second(&file)?,
-            ResultMode::Behaviour => Plotter::parse_timestamps(&file)?,
-            ResultMode::Throughput => Plotter::parse_throughputs(&file)?,
-            ResultMode::OpTimes => Plotter::parse_ops_timestamps(&file)?,
-            ResultMode::SampleOpsPerSecond => Plotter::parse_sample_ops(&file)?,
-        };
-
-        if !self.coordinates.is_empty() && *mode != ResultMode::Behaviour {
-            if x_axis.len() != self.coordinates[self.coordinates.len() - 1].x_axis.len() {
-                return Err(Error::PlottersError(
-                    "the x-axis lengths should be the same".to_string(),
+        let mut x_axis = vec![];
+        let mut y_axis = vec![];
+        for record in records {
+            if indexes.x_is_str {
+                x_axis.push(XAxis::from(
+                        record.fields[indexes.x].as_str()
+                ));
+            } else {
+                x_axis.push(XAxis::from(
+                    record.fields[indexes.x].parse::<f64>()?
                 ));
             }
+
+
+            let lb = if let Some(y_lb) = indexes.y_lb {
+                Some(record.fields[y_lb].parse::<f64>()?)
+            } else { None };
+            let ub = if let Some(y_ub) = indexes.y_ub {
+                Some(record.fields[y_ub].parse::<f64>()?)
+            } else { None };
+
+            y_axis.push(YAxis {
+                y: record.fields[indexes.y].parse::<f64>()?,
+                lb,
+                ub
+            });
         }
 
         self.coordinates.push(Coordinates {
@@ -472,249 +502,6 @@ impl Plotter {
         root_area.present()?;
 
         Ok(())
-    }
-
-    fn parse_ops_per_second(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
-        let mut reader = csv::Reader::from_reader(file);
-        let mut x_axis = vec![];
-        let mut y_axis = vec![];
-
-        // find the operation and ops/s columns
-        let operation_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header == "operation")
-            .ok_or(Error::CsvError("header 'operation' not found".to_string()))?;
-        let ops_per_second_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header == "ops/s")
-            .ok_or(Error::CsvError("header 'ops/s' not found".to_string()))?;
-        let ops_per_second_lb_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header == "ops/s_lb")
-            .ok_or(Error::CsvError("header 'ops/s_lb' not found".to_string()))?;
-        let ops_per_second_ub_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header == "ops/s_ub")
-            .ok_or(Error::CsvError("header 'ops/s_ub' not found".to_string()))?;
-
-        for record in reader.records() {
-            let record = record?;
-            x_axis.push(XAxis::from(record.get(operation_idx).ok_or(
-                Error::CsvError("failed to read from the csv file".to_string()),
-            )?));
-
-            let y = record
-                .get(ops_per_second_idx)
-                .ok_or(Error::CsvError(
-                    "failed to read from the csv file".to_string(),
-                ))?
-                .parse::<f64>()?;
-            let lb = record
-                .get(ops_per_second_lb_idx)
-                .ok_or(Error::CsvError(
-                    "failed to read from the csv file".to_string(),
-                ))?
-                .parse::<f64>()?;
-            let ub = record
-                .get(ops_per_second_ub_idx)
-                .ok_or(Error::CsvError(
-                    "failed to read from the csv file".to_string(),
-                ))?
-                .parse::<f64>()?;
-            y_axis.push(YAxis {
-                y,
-                lb: Some(lb),
-                ub: Some(ub),
-            });
-        }
-
-        assert_eq!(x_axis.len(), y_axis.len());
-
-        Ok((x_axis, y_axis))
-    }
-
-    fn parse_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
-        let mut reader = csv::Reader::from_reader(file);
-        let mut x_axis = vec![];
-        let mut y_axis = vec![];
-
-        // find the seconds and ops columns
-        let times_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header.contains("time"))
-            .ok_or(Error::CsvError("header 'time' not found".to_string()))?;
-        let ops_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header.contains("ops"))
-            .ok_or(Error::CsvError("header 'ops' not found".to_string()))?;
-
-        for record in reader.records() {
-            let record = record?;
-            x_axis.push(XAxis::from(
-                record
-                    .get(times_idx)
-                    .ok_or(Error::CsvError(
-                        "failed to read from the csv file".to_string(),
-                    ))?
-                    .parse::<f64>()?,
-            ));
-            let y = record
-                .get(ops_idx)
-                .ok_or(Error::CsvError(
-                    "failed to read from the csv file".to_string(),
-                ))?
-                .parse::<f64>()?;
-            y_axis.push(YAxis {
-                y,
-                lb: None,
-                ub: None,
-            });
-        }
-
-        assert_eq!(x_axis.len(), y_axis.len());
-
-        Ok((x_axis, y_axis))
-    }
-
-    fn parse_throughputs(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
-        let mut reader = csv::Reader::from_reader(file);
-        let mut x_axis = vec![];
-        let mut y_axis = vec![];
-
-        // find the seconds and ops columns
-        let file_size_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header.contains("file_size"))
-            .ok_or(Error::CsvError("header 'file_size' not found".to_string()))?;
-        let throughput_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header.contains("throughput"))
-            .ok_or(Error::CsvError("header 'throughput' not found".to_string()))?;
-
-        for record in reader.records() {
-            let record = record?;
-            x_axis.push(XAxis::from(
-                record
-                    .get(file_size_idx)
-                    .ok_or(Error::CsvError(
-                        "failed to read from the csv file".to_string(),
-                    ))?
-                    .parse::<f64>()?,
-            ));
-            let y = record
-                .get(throughput_idx)
-                .ok_or(Error::CsvError(
-                    "failed to read from the csv file".to_string(),
-                ))?
-                .parse::<f64>()?;
-            y_axis.push(YAxis {
-                y,
-                lb: None,
-                ub: None,
-            });
-        }
-
-        assert_eq!(x_axis.len(), y_axis.len());
-
-        Ok((x_axis, y_axis))
-    }
-
-    fn parse_ops_timestamps(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
-        let mut reader = csv::Reader::from_reader(file);
-        let mut x_axis = vec![];
-        let mut y_axis = vec![];
-
-        // find the seconds and ops columns
-        let op_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header == "op")
-            .ok_or(Error::CsvError("header 'op' not found".to_string()))?;
-        let time_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header.contains("time"))
-            .ok_or(Error::CsvError("header 'time' not found".to_string()))?;
-
-        for record in reader.records() {
-            let record = record?;
-            x_axis.push(XAxis::from(
-                record
-                    .get(op_idx)
-                    .ok_or(Error::CsvError(
-                        "failed to read from the csv file".to_string(),
-                    ))?
-                    .parse::<f64>()?,
-            ));
-            let y = record
-                .get(time_idx)
-                .ok_or(Error::CsvError(
-                    "failed to read from the csv file".to_string(),
-                ))?
-                .parse::<f64>()?;
-            y_axis.push(YAxis {
-                y,
-                lb: None,
-                ub: None,
-            });
-        }
-
-        assert_eq!(x_axis.len(), y_axis.len());
-
-        Ok((x_axis, y_axis))
-    }
-
-    fn parse_sample_ops(file: &File) -> Result<(Vec<XAxis>, Vec<YAxis>), Error> {
-        let mut reader = csv::Reader::from_reader(file);
-        let mut x_axis = vec![];
-        let mut y_axis = vec![];
-
-        // find the seconds and ops columns
-        let iter_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header == "iterations")
-            .ok_or(Error::CsvError("header 'iterations' not found".to_string()))?;
-        let ops_s_idx = reader
-            .headers()?
-            .iter()
-            .position(|header| header.contains("ops/s"))
-            .ok_or(Error::CsvError("header 'ops/s' not found".to_string()))?;
-
-        for record in reader.records() {
-            let record = record?;
-            x_axis.push(XAxis::from(
-                record
-                    .get(iter_idx)
-                    .ok_or(Error::CsvError(
-                        "failed to read from the csv file".to_string(),
-                    ))?
-                    .parse::<f64>()?,
-            ));
-            let y = record
-                .get(ops_s_idx)
-                .ok_or(Error::CsvError(
-                    "failed to read from the csv file".to_string(),
-                ))?
-                .parse::<f64>()?;
-            y_axis.push(YAxis {
-                y,
-                lb: None,
-                ub: None,
-            });
-        }
-
-        assert_eq!(x_axis.len(), y_axis.len());
-
-        Ok((x_axis, y_axis))
     }
 }
 

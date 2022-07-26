@@ -1,9 +1,9 @@
 use crate::error::Error;
 use crate::format::{percent_format, time_format, time_format_by_unit, time_unit};
 use crate::fs::Fs;
-use crate::plotter::Plotter;
+use crate::plotter::{Indexes, Plotter};
 use crate::progress::Progress;
-use crate::{Bench, BenchFn, BenchResult, Config, Record, ResultMode};
+use crate::{Bench, BenchFn, BenchResult, Config, Record};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::RngCore;
 use std::collections::HashMap;
@@ -128,13 +128,23 @@ impl Bench for TraceWorkloadRunner {
             results.log(&file_name)?;
 
             let mut op_times_plotter = Plotter::new();
-            op_times_plotter.add_coordinates(&file_name, None, &ResultMode::OpTimes)?;
+            op_times_plotter.add_coordinates(
+                results.records,
+                None,
+                Indexes::new(0, false, 1, None, None)
+            )?;
 
             let mut accumulated_times_plotter = Plotter::new();
             let mut accumulated_times_results =
                 BenchResult::new(accumulated_times_header.clone());
             for accumulated_times_records in accumulated_times_records.into_iter() {
                 accumulated_times_results.add_records(accumulated_times_records.clone())?;
+
+                accumulated_times_plotter.add_coordinates(
+                    accumulated_times_records,
+                    None,
+                    Indexes::new(2, false, 1, None, None)
+                )?;
             }
 
             let mut file_name = self.config.log_path.clone();
@@ -143,12 +153,6 @@ impl Bench for TraceWorkloadRunner {
                 self.config.fs_names[idx]
             ));
             accumulated_times_results.log(&file_name)?;
-
-            accumulated_times_plotter.add_coordinates(
-                &file_name,
-                None,
-                &ResultMode::AccumulatedTimes,
-            )?;
 
             // plot the results
             let mut file_name = self.config.log_path.clone();

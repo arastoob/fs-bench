@@ -1,10 +1,10 @@
 use crate::error::Error;
 use crate::fs::Fs;
 use crate::micro::{micro_setup, print_output, random_leaf, BenchFn};
-use crate::plotter::Plotter;
+use crate::plotter::{Indexes, Plotter};
 use crate::progress::Progress;
 use crate::stats::Statistics;
-use crate::{Bench, BenchResult, Config, ResultMode};
+use crate::{Bench, BenchResult, Config};
 use async_channel::{unbounded, Receiver, Sender};
 use indicatif::{ProgressBar, ProgressStyle};
 use log::error;
@@ -235,21 +235,21 @@ impl RealTimeBench {
                 // log behaviour result
                 let behaviour_header = ["time".to_string(), "ops".to_string()].to_vec();
                 let mut mkdir_behaviour_results = BenchResult::new(behaviour_header.clone());
-                mkdir_behaviour_results.add_records(behaviour_records)?;
+                mkdir_behaviour_results.add_records(behaviour_records.clone())?;
                 let mut file_name = self.config.log_path.clone();
                 file_name.push(format!("{}_{}.csv", self.config.fs_names[0], bench_fn));
                 mkdir_behaviour_results.log(&file_name)?;
-                let mut plotter_mkdir_behaviour = Plotter::new();
-                plotter_mkdir_behaviour.add_coordinates(
-                    &file_name,
+                let mut plotter = Plotter::new();
+                plotter.add_coordinates(
+                    behaviour_records,
                     None,
-                    &ResultMode::Behaviour,
+                    Indexes::new(0, false, 1, None, None),
                 )?;
 
                 // plot the behaviour result
                 let mut file_name = self.config.log_path.clone();
                 file_name.push(format!("{}.svg", bench_fn));
-                plotter_mkdir_behaviour.line_chart(
+                plotter.line_chart(
                     Some("Time (s)"),
                     Some("Ops/s"),
                     Some(&capitalized_bench_fn),
