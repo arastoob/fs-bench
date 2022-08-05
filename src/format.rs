@@ -75,25 +75,25 @@ pub fn percent_format(p: f64) -> String {
 
 fn micro_second(s: f64) -> f64 {
     let micro = s * 1e6;
-    // output to 4 floating points
-    (micro * 1e4).trunc() / 1e4
+    // output to 5 floating points
+    (micro * 1e5).trunc() / 1e5
 }
 
 fn milli_second(s: f64) -> f64 {
     let millis = s * 1e3;
-    // output to 4 floating points
-    (millis * 1e4).trunc() / 1e4
+    // output to 5 floating points
+    (millis * 1e5).trunc() / 1e5
 }
 
 fn nano_second(s: f64) -> f64 {
     let nano = s * 1e9;
-    // output to 4 floating points
-    (nano * 1e4).trunc() / 1e4
+    // output to 5 floating points
+    (nano * 1e5).trunc() / 1e5
 }
 
 fn second(s: f64) -> f64 {
-    // output to 4 floating points
-    (s * 1e4).trunc() / 1e4
+    // output to 5 floating points
+    (s * 1e5).trunc() / 1e5
 }
 
 #[cfg(test)]
@@ -111,10 +111,10 @@ mod test {
         assert_eq!(time_format(0.0012587), "1.2587 ms".to_string());
         assert_eq!(time_format(0.012587), "12.587 ms".to_string());
         assert_eq!(time_format(0.12587), "125.87 ms".to_string());
-        assert_eq!(time_format(1258.71542645), "20:58.7154".to_string());
+        assert_eq!(time_format(1258.71542645), "20:58.71542".to_string());
 
-        assert_eq!(time_format(65.126543), "01:05.1265".to_string());
-        assert_eq!(time_format(3601.15236), "1:00:01.1523".to_string());
+        assert_eq!(time_format(65.126543), "01:05.12654".to_string());
+        assert_eq!(time_format(3601.15236), "1:00:01.15236".to_string());
 
         assert_eq!(time_format(60.0), "01:00".to_string());
     }
