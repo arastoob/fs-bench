@@ -44,7 +44,7 @@ pub trait Bench {
             mount_paths,
             fs_names,
             log_path,
-            parallelism_degree
+            parallelism_degree,
         )?;
         Bench::new(config)
     }
@@ -84,7 +84,7 @@ impl Config {
         mount_paths: Vec<P>,
         fs_names: Vec<String>,
         log_path: P,
-        parallelism_degree: Option<usize>
+        parallelism_degree: Option<usize>,
     ) -> Result<Self, Error> {
         let io_size = if let Some(io_size) = io_size {
             let io_size = Byte::from_str(io_size)?;
@@ -156,7 +156,7 @@ impl Config {
             mount_paths,
             fs_names,
             log_path,
-            parallelism_degree
+            parallelism_degree,
         })
     }
 }

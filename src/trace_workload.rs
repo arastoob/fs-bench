@@ -17,8 +17,8 @@ use threadpool::ThreadPool;
 
 pub struct TraceWorkloadRunner {
     config: Config,
-    files: Vec<FileType>,                 // the files and directories accessed and logged by trace
-    available_sets: Vec<Vec<Process>>     // the set of processes that can be run in parallel
+    files: Vec<FileType>, // the files and directories accessed and logged by trace
+    available_sets: Vec<Vec<Process>>, // the set of processes that can be run in parallel
 }
 
 impl Bench for TraceWorkloadRunner {
@@ -50,7 +50,7 @@ impl Bench for TraceWorkloadRunner {
         Ok(Self {
             config,
             files,
-            available_sets
+            available_sets,
         })
     }
 
@@ -91,7 +91,7 @@ impl Bench for TraceWorkloadRunner {
                     if !new_path.exists() {
                         Fs::make_dir_all(&new_path)?;
                     }
-                },
+                }
                 _ => {}
             }
         }
@@ -122,9 +122,21 @@ impl Bench for TraceWorkloadRunner {
             base_path.push("trace_workload");
             base_path.push("files");
 
-            let (op_times_records, op_summary_records, accumulated_times_records, op_time_unit, summary_time_unit, accumulated_time_unit) =
-                self.replay(&base_path, &fs_names[idx], thread_num,
-                            self.available_sets.clone(), progress_style.clone(), &output)?;
+            let (
+                op_times_records,
+                op_summary_records,
+                accumulated_times_records,
+                op_time_unit,
+                summary_time_unit,
+                accumulated_time_unit,
+            ) = self.replay(
+                &base_path,
+                &fs_names[idx],
+                thread_num,
+                self.available_sets.clone(),
+                progress_style.clone(),
+                &output,
+            )?;
 
             let op_times_header = ["op".to_string(), format!("time ({})", op_time_unit)].to_vec();
             let accumulated_times_header = [
@@ -137,7 +149,7 @@ impl Bench for TraceWorkloadRunner {
                 "operation".to_string(),
                 format!("time ({})", summary_time_unit),
             ]
-                .to_vec();
+            .to_vec();
 
             // log and plot the results
             let mut results = BenchResult::new(op_times_header.clone());
@@ -145,8 +157,7 @@ impl Bench for TraceWorkloadRunner {
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_op_times_trace_workload_j{}.csv",
-                self.config.fs_names[idx],
-                thread_num
+                self.config.fs_names[idx], thread_num
             ));
             results.log(&file_name)?;
 
@@ -162,7 +173,11 @@ impl Bench for TraceWorkloadRunner {
                 Some(&format!("Time ({})", op_time_unit)),
                 Some(&format!(
                     "Operation times from replayed logs with {} ({})",
-                    if thread_num == 1 { "1 thread".to_string() } else { format!("{} threads", thread_num) },
+                    if thread_num == 1 {
+                        "1 thread".to_string()
+                    } else {
+                        format!("{} threads", thread_num)
+                    },
                     self.config.fs_names[idx]
                 )),
                 false,
@@ -170,14 +185,12 @@ impl Bench for TraceWorkloadRunner {
                 &file_name,
             )?;
 
-
             let mut summary_results = BenchResult::new(summary_header.clone());
             summary_results.add_records(op_summary_records)?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_op_summaries_trace_workload_j{}.csv",
-                self.config.fs_names[idx],
-                thread_num
+                self.config.fs_names[idx], thread_num
             ));
             summary_results.log(&file_name)?;
 
@@ -193,12 +206,15 @@ impl Bench for TraceWorkloadRunner {
                 Some(&format!("Time ({})", op_time_unit)),
                 Some(&format!(
                     "Total operation times from replayed logs with {} ({})",
-                    if thread_num == 1 { "1 thread".to_string() } else { format!("{} threads", thread_num) },
+                    if thread_num == 1 {
+                        "1 thread".to_string()
+                    } else {
+                        format!("{} threads", thread_num)
+                    },
                     self.config.fs_names[idx]
                 )),
                 &file_name,
             )?;
-
 
             let mut accumulated_times_plotter = Plotter::new();
             let mut accumulated_times_results = BenchResult::new(accumulated_times_header.clone());
@@ -215,8 +231,7 @@ impl Bench for TraceWorkloadRunner {
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
                 "{}_accumulated_times_j{}.csv",
-                self.config.fs_names[idx],
-                thread_num
+                self.config.fs_names[idx], thread_num
             ));
             accumulated_times_results.log(&file_name)?;
 
@@ -226,7 +241,11 @@ impl Bench for TraceWorkloadRunner {
                 Some("Operations"),
                 Some(&format!(
                     "Accumulated times of replayed logs with {} ({})",
-                    if thread_num == 1 { "1 thread".to_string() } else { format!("{} threads", thread_num) },
+                    if thread_num == 1 {
+                        "1 thread".to_string()
+                    } else {
+                        format!("{} threads", thread_num)
+                    },
                     self.config.fs_names[idx]
                 )),
                 false,
@@ -254,14 +273,30 @@ impl TraceWorkloadRunner {
         available_sets: Vec<Vec<Process>>,
         style: ProgressStyle,
         output: &File,
-    ) -> Result<(Vec<Record>, Vec<Record>, Vec<Vec<Record>>, String, String, String), Error> {
+    ) -> Result<
+        (
+            Vec<Record>,
+            Vec<Record>,
+            Vec<Vec<Record>>,
+            String,
+            String,
+            String,
+        ),
+        Error,
+    > {
         self.setup(&base_path, false)?;
 
         let bar = ProgressBar::new_spinner();
         bar.set_style(style);
-        bar.set_message(format!("replaying logs with {} ({})",
-                                if thread_num == 1 { "1 thread".to_string() } else { format!("{} threads",
-                                                                                             thread_num) }, fs_name));
+        bar.set_message(format!(
+            "replaying logs with {} ({})",
+            if thread_num == 1 {
+                "1 thread".to_string()
+            } else {
+                format!("{} threads", thread_num)
+            },
+            fs_name
+        ));
         let progress = Progress::start(bar);
 
         let start = SystemTime::now();
@@ -303,8 +338,10 @@ impl TraceWorkloadRunner {
                     // let mut execution_result = execution_result?;
                     op_times.append(&mut execution_result.op_times);
 
-                    accumulated_times
-                        .push((execution_result.pid, execution_result.accumulated_times.clone()));
+                    accumulated_times.push((
+                        execution_result.pid,
+                        execution_result.accumulated_times.clone(),
+                    ));
 
                     for (op_name, (time, num)) in execution_result.op_summaries.iter() {
                         if let Some((t, n)) = op_summaries.get_mut(op_name) {
@@ -325,7 +362,8 @@ impl TraceWorkloadRunner {
                         total_ops += num;
                     }
 
-                    process_summaries.push((execution_result.pid, execution_result.op_summaries.clone()));
+                    process_summaries
+                        .push((execution_result.pid, execution_result.op_summaries.clone()));
                 }
                 Err(_err) => {}
             }
@@ -354,7 +392,7 @@ impl TraceWorkloadRunner {
                     op_name,
                     time_format_by_unit(t, summary_time_unit)?.to_string(),
                 ]
-                    .into(),
+                .into(),
             );
         }
 
@@ -384,15 +422,27 @@ impl TraceWorkloadRunner {
         writer.write(format!("{}\n", fs_name).as_ref())?;
 
         println!("{:25} {}", "replay time:", time_format(end));
-        println!("{:25} {}", "total operations time:", time_format(total_op_time));
+        println!(
+            "{:25} {}",
+            "total operations time:",
+            time_format(total_op_time)
+        );
         println!("{:25} {}", "total operations: ", total_ops);
         println!("{:25} {}\n", "total processes: ", process_summaries.len());
 
         writer.write(format!("{:25} {}\n", "replay time:", time_format(end)).as_ref())?;
-        writer.write(format!("{:25} {}\n", "total operations time:", time_format(total_op_time)).as_ref())?;
+        writer.write(
+            format!(
+                "{:25} {}\n",
+                "total operations time:",
+                time_format(total_op_time)
+            )
+            .as_ref(),
+        )?;
         writer.write(format!("{:25} {}\n", "total operations: ", total_ops).as_ref())?;
-        writer.write(format!("{:25} {}\n\n", "total processes: ", process_summaries.len()).as_ref())?;
-
+        writer.write(
+            format!("{:25} {}\n\n", "total processes: ", process_summaries.len()).as_ref(),
+        )?;
 
         for (pid, summary) in process_summaries {
             writer.write(format!("{}\n", pid).as_ref())?;
@@ -400,7 +450,6 @@ impl TraceWorkloadRunner {
             let mut summary = summary.into_iter().collect::<Vec<(String, (f64, u16))>>();
             summary.sort_by(|(_, (t1, _)), (_, (t2, _))| t2.partial_cmp(t1).unwrap());
             for (op, (time, num)) in summary.iter() {
-
                 writer.write(
                     format!(
                         "{:7} {:12} {:12} ({:9} of total time)\n",
@@ -408,7 +457,8 @@ impl TraceWorkloadRunner {
                         op,
                         time_format(*time),
                         percent_format((time / total_op_time) * 100.0)
-                    ).as_ref()
+                    )
+                    .as_ref(),
                 )?;
             }
         }
@@ -435,19 +485,11 @@ struct ExecutionResult {
 }
 
 trait Runner {
-    fn run(
-        &self,
-        base_path: &PathBuf,
-        start_time: SystemTime,
-    ) -> Result<ExecutionResult, Error>;
+    fn run(&self, base_path: &PathBuf, start_time: SystemTime) -> Result<ExecutionResult, Error>;
 }
 
 impl Runner for Process {
-    fn run(
-        &self,
-        base_path: &PathBuf,
-        start_time: SystemTime,
-    ) -> Result<ExecutionResult, Error> {
+    fn run(&self, base_path: &PathBuf, start_time: SystemTime) -> Result<ExecutionResult, Error> {
         let mut op_times = vec![];
         let mut accumulated_times = vec![];
         // summary of operations:
@@ -481,16 +523,11 @@ impl Runner for Process {
 }
 
 trait Executer {
-    fn execute(&self, base_path: &PathBuf, start_time: SystemTime)
-        -> Result<(f64, f64), Error>;
+    fn execute(&self, base_path: &PathBuf, start_time: SystemTime) -> Result<(f64, f64), Error>;
 }
 
 impl Executer for Operation {
-    fn execute(
-        &self,
-        base_path: &PathBuf,
-        start_time: SystemTime,
-    ) -> Result<(f64, f64), Error> {
+    fn execute(&self, base_path: &PathBuf, start_time: SystemTime) -> Result<(f64, f64), Error> {
         let (op_time, system_time) = match self.op_type() {
             &OperationType::Mkdir(ref file, ref _mode) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
