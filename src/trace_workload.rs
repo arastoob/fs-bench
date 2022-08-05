@@ -347,7 +347,6 @@ impl TraceWorkloadRunner {
         }
 
         let mut op_summaries_records = vec![];
-        println!("max_summary_time: {}", max_summary_time);
         let summary_time_unit = time_unit(max_summary_time);
         for (op_name, (t, _n)) in op_summaries {
             op_summaries_records.push(
