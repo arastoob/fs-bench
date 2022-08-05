@@ -10,14 +10,15 @@ use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::channel;
 use std::time::SystemTime;
 use strace_parser::{FileType, Operation, OperationType, Parser, Process};
+use threadpool::ThreadPool;
 
 pub struct TraceWorkloadRunner {
     config: Config,
-    processes: Vec<Arc<Mutex<Process>>>, // list of processes with their operations list
     files: Vec<FileType>,                 // the files and directories accessed and logged by trace
+    available_sets: Vec<Vec<Process>>     // the set of processes that can be run in parallel
 }
 
 impl Bench for TraceWorkloadRunner {
@@ -31,21 +32,25 @@ impl Bench for TraceWorkloadRunner {
         bar.set_message(format!("parsing {}", Fs::path_to_str(&config.workload)?));
         let progress = Progress::start(bar.clone());
 
-        let processes = parser.parse()?;
-        let processes = processes
-            .into_iter()
-            .map(|process| Arc::new(Mutex::new(process)))
-            .collect::<Vec<_>>();
+        let mut dep_graph = parser.parse()?;
         let files = parser.existing_files()?;
         let mut files = Vec::from_iter(files.into_iter());
         files.retain(|file_type| file_type.path() != "/" && file_type.path() != ".");
+
+        // get the list of available processes to be scheduled for running
+        let mut available_sets = vec![];
+        let mut available_set = dep_graph.available_set()?;
+        while !available_set.is_empty() {
+            available_sets.push(available_set);
+            available_set = dep_graph.available_set()?;
+        }
 
         progress.finish_and_clear()?;
 
         Ok(Self {
             config,
-            processes,
             files,
+            available_sets
         })
     }
 
@@ -62,7 +67,7 @@ impl Bench for TraceWorkloadRunner {
         for file_type in self.files.iter() {
             match file_type {
                 FileType::File(file_path, size) => {
-                    let new_path = Fs::map_path(path, file_path)?;
+                    let new_path = Fs::map_path(path, &file_path)?;
                     // remove the file name from the path
                     let mut parents = new_path.clone();
                     parents.pop();
@@ -81,7 +86,7 @@ impl Bench for TraceWorkloadRunner {
                     file.write(&mut rand_content)?;
                 }
                 FileType::Dir(dir_path, _) => {
-                    let new_path = Fs::map_path(path, dir_path)?;
+                    let new_path = Fs::map_path(path, &dir_path)?;
                     // create the directory
                     if !new_path.exists() {
                         Fs::make_dir_all(&new_path)?;
@@ -101,10 +106,11 @@ impl Bench for TraceWorkloadRunner {
 
         let mount_paths = self.config.mount_paths.clone();
         let fs_names = self.config.fs_names.clone();
+        let thread_num = self.config.parallelism_degree;
 
         // the output file to keep the stats, which are also printed to terminal
         let mut output_path = self.config.log_path.clone();
-        output_path.push("output.txt");
+        output_path.push(format!("output_j{}.txt", thread_num));
         let output = OpenOptions::new()
             .write(true)
             .append(false)
@@ -117,7 +123,8 @@ impl Bench for TraceWorkloadRunner {
             base_path.push("files");
 
             let (op_times_records, accumulated_times_records, op_time_unit, accumulated_time_unit) =
-                self.replay(&base_path, &fs_names[idx], progress_style.clone(), &output)?;
+                self.replay(&base_path, &fs_names[idx], thread_num,
+                            self.available_sets.clone(), progress_style.clone(), &output)?;
 
             let op_times_header = ["op".to_string(), format!("time ({})", op_time_unit)].to_vec();
             let accumulated_times_header = [
@@ -132,8 +139,9 @@ impl Bench for TraceWorkloadRunner {
             results.add_records(op_times_records)?;
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_op_times_trace_workload.csv",
-                self.config.fs_names[idx]
+                "{}_op_times_trace_workload_j{}.csv",
+                self.config.fs_names[idx],
+                thread_num
             ));
             results.log(&file_name)?;
 
@@ -158,22 +166,25 @@ impl Bench for TraceWorkloadRunner {
 
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_accumulated_times.csv",
-                self.config.fs_names[idx]
+                "{}_accumulated_times_j{}.csv",
+                self.config.fs_names[idx],
+                thread_num
             ));
             accumulated_times_results.log(&file_name)?;
 
             // plot the results
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_op_times_trace_workload.svg",
-                self.config.fs_names[idx]
+                "{}_op_times_trace_workload_j{}.svg",
+                self.config.fs_names[idx],
+                thread_num
             ));
             op_times_plotter.line_chart(
                 Some("Operations"),
                 Some(&format!("Time ({})", op_time_unit)),
                 Some(&format!(
-                    "Operation times from replayed logs ({})",
+                    "Operation times from replayed logs with {} ({})",
+                    if thread_num == 1 { "1 thread".to_string() } else { format!("{} threads", thread_num) },
                     self.config.fs_names[idx]
                 )),
                 false,
@@ -184,14 +195,16 @@ impl Bench for TraceWorkloadRunner {
             // plot the accumulated results
             let mut file_name = self.config.log_path.clone();
             file_name.push(format!(
-                "{}_accumulated_times.svg",
-                self.config.fs_names[idx]
+                "{}_accumulated_times_j{}.svg",
+                self.config.fs_names[idx],
+                thread_num
             ));
             accumulated_times_plotter.line_chart(
                 Some(&format!("Time ({})", accumulated_time_unit)),
                 Some("Operations"),
                 Some(&format!(
-                    "Accumulated times from replayed logs ({})",
+                    "Accumulated times of replayed logs with {} ({})",
+                    if thread_num == 1 { "1 thread".to_string() } else { format!("{} threads", thread_num) },
                     self.config.fs_names[idx]
                 )),
                 false,
@@ -215,6 +228,8 @@ impl TraceWorkloadRunner {
         &self,
         base_path: &PathBuf,
         fs_name: &str,
+        thread_num: usize,
+        available_sets: Vec<Vec<Process>>,
         style: ProgressStyle,
         output: &File,
     ) -> Result<(Vec<Record>, Vec<Vec<Record>>, String, String), Error> {
@@ -231,30 +246,40 @@ impl TraceWorkloadRunner {
         let mut op_summaries: HashMap<String, (f64, u16)> = HashMap::new();
         let mut process_summaries = vec![];
 
-        // replay the processes' operations in parallel
+        // generate a thread pool with size from the configs
+        let (tx, rx) = channel();
+        let pool = ThreadPool::new(thread_num);
+
+        let mut execution_results = vec![];
         let start_time = SystemTime::now();
-        let mut handles = vec![];
-        for process in self.processes.iter() {
-            let base_path = base_path.clone();
-            let process = process.clone();
+        // run the set of processes
+        for available_set in available_sets {
+            let len = available_set.len();
+            for process in available_set {
+                let base_path = base_path.clone();
 
-            let handle = std::thread::spawn(move || -> Result<ExecutionResult, Error> {
-                process.lock()?.run(&base_path, start_time)
-            });
+                let tx = tx.clone();
+                pool.execute(move || {
+                    let execution_result = process.run(&base_path, start_time);
+                    tx.send(execution_result).unwrap();
+                });
+            }
 
-            handles.push(handle);
+            // get the results of the finished processes
+            let mut results = rx.iter().take(len).collect::<Vec<_>>();
+            execution_results.append(&mut results);
         }
 
         let mut total_op_time = 0f64;
         let mut total_ops = 0;
-        for handle in handles {
-            match handle.join() {
-                Ok(execution_result) => {
-                    let mut execution_result = execution_result?;
+        for execution_result in execution_results {
+            match execution_result {
+                Ok(mut execution_result) => {
+                    // let mut execution_result = execution_result?;
                     op_times.append(&mut execution_result.op_times);
 
                     accumulated_times
-                        .push((execution_result.pid, execution_result.accumulated_times));
+                        .push((execution_result.pid, execution_result.accumulated_times.clone()));
 
                     for (op_name, (time, num)) in execution_result.op_summaries.iter() {
                         if let Some((t, n)) = op_summaries.get_mut(op_name) {
@@ -268,7 +293,7 @@ impl TraceWorkloadRunner {
                         total_ops += num;
                     }
 
-                    process_summaries.push((execution_result.pid, execution_result.op_summaries));
+                    process_summaries.push((execution_result.pid, execution_result.op_summaries.clone()));
                 }
                 Err(_err) => {}
             }
@@ -309,15 +334,6 @@ impl TraceWorkloadRunner {
             }
             accumulated_times_records.push(accumulated_times_record);
         }
-        // for (idx, (pid, system_time)) in accumulated_times.iter().enumerate() {
-        //     accumulated_times_records.push(
-        //         vec![
-        //             time_format_by_unit(*system_time, accumulated_time_unit)?.to_string(),
-        //             (idx + 1).to_string(),
-        //         ]
-        //         .into(),
-        //     );
-        // }
 
         // output the stats to both terminal and a file
         let mut writer = BufWriter::new(output);
@@ -383,7 +399,7 @@ struct ExecutionResult {
 
 trait Runner {
     fn run(
-        &mut self,
+        &self,
         base_path: &PathBuf,
         start_time: SystemTime,
     ) -> Result<ExecutionResult, Error>;
@@ -391,7 +407,7 @@ trait Runner {
 
 impl Runner for Process {
     fn run(
-        &mut self,
+        &self,
         base_path: &PathBuf,
         start_time: SystemTime,
     ) -> Result<ExecutionResult, Error> {
@@ -402,29 +418,16 @@ impl Runner for Process {
         //      value: a pair of (time spend for this operation so far, number of this operation)
         let mut op_summaries: HashMap<String, (f64, u16)> = HashMap::new();
 
-        let mut ops = self.ops().clone();
-        while !ops.is_empty() {
-            // remove and take the first operation from the list
-            let shared_op = ops.remove(0);
-            match shared_op.op().lock() {
-                Ok(mut op) => {
-                    if op.can_be_executed()? {
-                        match op.execute(base_path, start_time) {
-                            Ok((op_time, system_time)) => {
-                                op_times.push(op_time);
-                                accumulated_times.push(system_time);
-                                if let Some((t, n)) = op_summaries.get_mut(&op.name()) {
-                                    *t += op_time;
-                                    *n += 1;
-                                } else {
-                                    op_summaries.insert(op.name(), (op_time, 1));
-                                }
-                            }
-                            Err(_err) => {}
-                        }
+        for op in self.ops() {
+            match op.execute(base_path, start_time) {
+                Ok((op_time, system_time)) => {
+                    op_times.push(op_time);
+                    accumulated_times.push(system_time);
+                    if let Some((t, n)) = op_summaries.get_mut(&op.name()) {
+                        *t += op_time;
+                        *n += 1;
                     } else {
-                        // add the removed operation to the end of the list to be executed later
-                        ops.push(shared_op.clone());
+                        op_summaries.insert(op.name(), (op_time, 1));
                     }
                 }
                 Err(_err) => {}
@@ -441,19 +444,16 @@ impl Runner for Process {
 }
 
 trait Executer {
-    fn execute(&mut self, base_path: &PathBuf, start_time: SystemTime)
+    fn execute(&self, base_path: &PathBuf, start_time: SystemTime)
         -> Result<(f64, f64), Error>;
 }
 
 impl Executer for Operation {
     fn execute(
-        &mut self,
+        &self,
         base_path: &PathBuf,
         start_time: SystemTime,
     ) -> Result<(f64, f64), Error> {
-        // mark the operation as executed
-        self.executed();
-
         let (op_time, system_time) = match self.op_type() {
             &OperationType::Mkdir(ref file, ref _mode) => {
                 let path = Fs::map_path(base_path, file.path()?)?;
@@ -617,32 +617,5 @@ impl Executer for Operation {
         };
 
         Ok((op_time, system_time))
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::sync::{Arc, Mutex};
-    use std::time::{Duration, SystemTime};
-
-    #[test]
-    fn many_spawns() {
-        let start = SystemTime::now();
-        let threads = 1500;
-        let mut handles = vec![];
-        for thread in 0..threads {
-            handles.push(std::thread::spawn(move || -> usize {
-                std::thread::sleep(Duration::from_secs(1));
-                1
-            }));
-        }
-
-        let mut finished = 0;
-        for handle in handles {
-            finished += handle.join().unwrap();
-        }
-        let end = start.elapsed().unwrap().as_secs_f64();
-        println!("finished threads: {}", finished);
-        println!("time: {}", end);
     }
 }
