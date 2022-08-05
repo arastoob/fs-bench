@@ -416,7 +416,7 @@ impl Plotter {
                 .zip(self.coordinates[0].y_axis.iter())
                 .map(|(x, y_axis)| {
                     EmptyElement::at((x.clone(), y_axis.y))
-                        + Text::new(y_axis.y.to_string(), (20, -5), ("sans-serif", 15))
+                        + Text::new(y_axis.y.to_string(), (5, -10), ("sans-serif", 12))
                 }),
         )?;
 
