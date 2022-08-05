@@ -48,6 +48,10 @@ struct Args {
     #[clap(short, long, required_if_eq("bench-mode", "trace"))]
     workload: Option<PathBuf>,
 
+    /// The parallelism degree to replay a trace
+    #[clap(short = 'j', long)]
+    parallelism_degree: Option<usize>,
+
     /// The benchmark function to be run in real-time
     #[clap(short = 'f', long, required_if_eq("bench-mode", "realtime"))]
     bench_fn: Option<BenchFn>,
@@ -76,6 +80,7 @@ fn main() -> Result<(), Error> {
                 mount_paths,
                 fs_names,
                 args.log_path,
+                args.parallelism_degree,
             )?
             .run(None)?;
         }
@@ -89,6 +94,7 @@ fn main() -> Result<(), Error> {
                 mount_paths,
                 fs_names,
                 args.log_path,
+                args.parallelism_degree,
             )?
             .run(args.bench_fn)?;
         }
@@ -108,6 +114,7 @@ fn main() -> Result<(), Error> {
                 mount_paths,
                 fs_names,
                 args.log_path,
+                args.parallelism_degree,
             )?
             .run(None)?;
         }
@@ -121,6 +128,7 @@ fn main() -> Result<(), Error> {
                 mount_paths,
                 fs_names,
                 args.log_path,
+                args.parallelism_degree,
             )?
             .run(None)?;
         }

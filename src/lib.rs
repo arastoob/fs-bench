@@ -30,6 +30,7 @@ pub trait Bench {
         mount_paths: Vec<P>,
         fs_names: Vec<String>,
         log_path: P,
+        parallelism_degree: Option<usize>,
     ) -> Result<Self, Error>
     where
         Self: Sized,
@@ -43,6 +44,7 @@ pub trait Bench {
             mount_paths,
             fs_names,
             log_path,
+            parallelism_degree
         )?;
         Bench::new(config)
     }
@@ -69,6 +71,7 @@ pub struct Config {
     pub mount_paths: Vec<PathBuf>,
     pub fs_names: Vec<String>,
     pub log_path: PathBuf,
+    pub parallelism_degree: usize,
 }
 
 impl Config {
@@ -81,6 +84,7 @@ impl Config {
         mount_paths: Vec<P>,
         fs_names: Vec<String>,
         log_path: P,
+        parallelism_degree: Option<usize>
     ) -> Result<Self, Error> {
         let io_size = if let Some(io_size) = io_size {
             let io_size = Byte::from_str(io_size)?;
@@ -109,6 +113,13 @@ impl Config {
         } else {
             // 1000 // the default fileset_size: 1000
             10_000
+        };
+
+        let parallelism_degree = if let Some(parallelism_degree) = parallelism_degree {
+            parallelism_degree
+        } else {
+            // the default parallelism_degree: 4
+            4
         };
 
         let run_time = if let Some(run_time) = run_time {
@@ -145,6 +156,7 @@ impl Config {
             mount_paths,
             fs_names,
             log_path,
+            parallelism_degree
         })
     }
 }
