@@ -1,15 +1,15 @@
 # FS-Bench: file and storage system benchmarking framework
 
-FS-Bench is an open source becnhmarking and plotting framework that is
+FS-Bench is an open-source benchmarking and plotting framework that is
 configurable and easy to use for evaluating the file and storage
 systems' performance by executing the pre-defined micro-benchmarks that
 capture the effect of caching and buffering whenever applicable, or
 replaying any trace logs.
 
-FS-Bench generates more accurate statistics in comparison to other
+FS-Bench generates more accurate statistics compared to other
 benchmarks and plots the results. Also, FS-Bench provides real-time
-benchmarks to reveals the system's behaviour during time. Such real-time
-plots provides useful information about the system's sync periods, the
+benchmarks to reveal the system's behaviour over time. Such real-time
+plots provide useful information about the system's sync periods,
 performance degradation, and the operations' execution times.
 
 FS-Bench also supports benchmarking multiple systems in a single run and
@@ -18,7 +18,7 @@ case for a user rather than separate runs, separate results and the
 usage of another plotting tool to compare the results.
 
 ## <a name="example"></a>Examples
-Bellow are some benchmark results plotted by FS-Bench:
+Below are some benchmark results plotted by FS-Bench:
 
 #### Static plots
 <img width="400px;" src="readme-images/mkdir.svg">
@@ -42,7 +42,7 @@ Bellow are some benchmark results plotted by FS-Bench:
 <img width="500px;" src="readme-images/cold_read_realtime.gif">
 
 ## Configuration
-FS-Bench can be configured with just a few command-line arguments. The list of arguments are:
+FS-Bench can be configured with just a few command-line arguments. The list of input arguments are:
 <pre>
 -b, --bench-mode <BENCH_MODE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The bench mode: static, realtime, trace, throughput
 -f, --bench-fn <BENCH_FN>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;The benchmark function to be run in real-time
@@ -59,16 +59,16 @@ FS-Bench can be configured with just a few command-line arguments. The list of a
 </pre>
 
 ## Supported benchmark modes
-FS-Bench supports static, real-time and trace replay modes:
+FS-Bench supports static, realtime and trace replay modes:
 - static: this mode evaluates the cost of creating files and directories and reading and writing from/into files. The
   basic operations that can be benchmarked in static mode are _mkdir_, _mknod_, _read_, _write_, _cold-read_ and
-  _write-full-sync_. In this mode, each benchmark function is run for 60 seconds with 4 KiB as io size as default. The
-   runtime and io size can be configured with `-t` and `-i` input arguments, respectively. 
+  _write-full-sync_. Each benchmark function is run for 60 seconds in this mode with 4 KiB as io size as default. The
+  runtime and io size can be configured with `-t` and `-i` input arguments, respectively.
 - realtime: this mode benchmark the same operations as the static mode with similar default arguments; however, this mode
-  shows the benchmark results in real-time on live plots. The plot is updated each 200 milliseconds. In this mode the
-  benchmark function should be  specified by `-f` input argument. The valid benchmark functions are: `mkdir`, `mknod`,
+  shows the benchmark results in realtime on live plots. The plot is updated every 200 milliseconds. In this mode, the
+  benchmark function should be specified by `-f` input argument. The valid benchmark functions are: `mkdir`, `mknod`,
   `read`, `cold_read`, `write`, `write_sync`.
-- throughput: the read and write throughput of the system is benchmarked. In this mode, a fileset is created including 
+- throughput: the read and write throughput of the system is benchmarked. In this mode, a fileset is created, including
   10,000 files, each of size 4 KiB as default. The fileset size and the file sizes can be configured with `-s` and `-l`
   input arguments, respectively.
 - trace: in this mode, a trace log of a system call level of a real-world workload is replayed. The trace log is
@@ -77,24 +77,24 @@ FS-Bench supports static, real-time and trace replay modes:
   thread pool that replay the processes in parallel.
 
 ## Run
-To run the strace-parser, execute the following command:
+To run FS-Bench, execute the following command:
 <br />
 <pre>
 cargo run --release -- -n {the-system-name} -m {mount-path} -o {path-to-output-file} -p {log-result-path} -b {bench-mode} [options]
 </pre>
 
 As mentioned earlier, FS-Bench can benchmark more than one file system in a run. For example, for benchmarking three 
-file systems with names _fs1_, _fs2_, _fs3_:
+file systems with names fs1, fs2, fs3:
 <br />
 <pre>
 cargo run --release -- -n fs1 -m {mount-path-of-fs1} -n fs2 -m {mount-path-of-fs2} -n fs3 -m {mount-path-of-fs3} -o {path-to-output-file} -p {log-result-path} -b {bench-mode} [options]
 </pre>
 
 ## Outputs
-In addition to the plots shown as [examples](#example) before, FS-Bench generates `.csv` files including the detailed 
-statistics about the benchmark results, that are logged in the path specified by the `-p` input argument. Also, in the 
-trace replay mode, FS-Bench outputs statistics about the operation times per each process to `.txt` files. As example is
-shown bellow, that is a portion of such a file:
+In addition to the plots shown as [examples](#example) before, FS-Bench generates `.csv` files, including the detailed
+statistics about the benchmark results, that are logged in the path specified by the `-p` input argument. Also, in the
+trace replay mode, FS-Bench outputs statistics about the operation times per each process to `.txt` files. An example is
+shown below, that is a portion of such a file:
 <pre>
 919117
     114 Read         212.587 us   (0.1516 %  of total time)
