@@ -20,11 +20,11 @@ struct Args {
     #[clap(short, long)]
     io_size: Option<String>,
 
-    /// The fileset's file sizes, default: 10 MiB
+    /// The fileset's file sizes, default: 4 KiB
     #[clap(short = 'l', long)]
     file_size: Option<String>,
 
-    /// Maximum number of files in a fileset, default: 1000
+    /// Maximum number of files in a fileset, default: 10000
     #[clap(short = 's', long)]
     fileset_size: Option<usize>,
 
@@ -48,7 +48,7 @@ struct Args {
     #[clap(short, long, required_if_eq("bench-mode", "trace"))]
     workload: Option<PathBuf>,
 
-    /// The parallelism degree to replay a trace
+    /// The parallelism degree to replay a trace, default: 4
     #[clap(short = 'j', long)]
     parallelism_degree: Option<usize>,
 

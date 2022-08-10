@@ -97,7 +97,7 @@ impl Config {
             let file_size = Byte::from_str(file_size)?;
             file_size.get_bytes() as usize
         } else {
-            // 1024 * 1024 * 10 // 10 MiB
+            // 4096
             4096
         };
 
@@ -111,7 +111,7 @@ impl Config {
         let fileset_size = if let Some(fileset_size) = fileset_size {
             fileset_size
         } else {
-            // 1000 // the default fileset_size: 1000
+            // 10000 // the default fileset_size: 10000
             10_000
         };
 
