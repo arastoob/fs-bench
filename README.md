@@ -80,6 +80,8 @@ FS-Bench supports static, realtime and trace replay modes:
 To run FS-Bench, execute the following command:
 <br />
 <pre>
+git clone https://gitlab.com/arastoob/fs-bench.git
+cd fs-bench/
 cargo run --release -- -n {the-system-name} -m {mount-path} -o {path-to-output-file} -p {log-result-path} -b {bench-mode} [options]
 </pre>
 
