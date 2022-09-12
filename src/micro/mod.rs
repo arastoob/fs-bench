@@ -161,9 +161,17 @@ pub fn clear_cache() -> Result<(), Error> {
         .arg("-c")
         .arg("sync")
         .output()?;
+
+    #[cfg(target_os = "linux")]
     let invalidate_cache_status = std::process::Command::new("sh")
         .arg("-c")
         .arg("echo 3 | sudo tee /proc/sys/vm/drop_caches")
+        .output()?;
+
+    #[cfg(target_os = "macos")]
+    let invalidate_cache_status = std::process::Command::new("sh")
+        .arg("-c")
+        .arg("sudo purge")
         .output()?;
 
     if !sync_status.status.success() || !invalidate_cache_status.status.success() {
