@@ -58,7 +58,7 @@ FS-Bench can be configured with just a few command-line arguments. The list of i
 </pre>
 
 ## Supported benchmark modes
-FS-Bench supports static, realtime and trace replay modes:
+FS-Bench supports static, realtime, throughput and trace replay modes:
 - static: this mode evaluates the cost of creating files and directories and reading and writing from/into files. The
   basic operations that can be benchmarked in static mode are _mkdir_, _mknod_, _read_, _write_, _cold-read_ and
   _write-full-sync_. Each benchmark function is run for 60 seconds in this mode with 4 KiB as io size as default. The
