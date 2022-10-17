@@ -1,16 +1,15 @@
-# FS-Bench: file and storage system benchmarking framework
+# FS-Bench: filesystem benchmarking framework
 
 FS-Bench is an open-source benchmarking and plotting framework that is
-configurable and easy to use for evaluating the file and storage
-systems' performance by executing the pre-defined micro-benchmarks that
+configurable and easy to use for evaluating the filesystems performance by executing the pre-defined micro-benchmarks that
 capture the effect of caching and buffering whenever applicable, or
-replaying any trace logs.
+replaying system call level trace logs.
 
-FS-Bench generates more accurate statistics compared to other
-benchmarks and plots the results. Also, FS-Bench provides real-time
-benchmarks to reveal the system's behaviour over time. Such real-time
-plots provide useful information about the system's sync periods,
-performance degradation, and the operations' execution times.
+FS-Bench generates precise statistics compared to other
+benchmarks and visualize the filesystem performance into descriptive plots. Also, FS-Bench provides real-time
+benchmarks to reveal the system behaviour over time. Such real-time
+plots provide useful information about the system sync periods,
+performance degradation, and the operations execution times.
 
 FS-Bench also supports benchmarking multiple systems in a single run and
 it generates combined plots for better comparison, which is the ideal
